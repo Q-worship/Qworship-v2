@@ -82,7 +82,7 @@ export default function OrganizationSetup() {
         description: "User session not found. Please sign up again.",
         variant: "destructive",
       });
-      setLocation('/signin');
+      setLocation('/login');
       return;
     }
     

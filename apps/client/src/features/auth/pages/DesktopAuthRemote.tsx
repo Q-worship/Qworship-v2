@@ -40,6 +40,7 @@ export default function DesktopAuthRemote() {
       sessionStorage.setItem("desktop_auth_pipeline", "true");
       sessionStorage.setItem("desktop_auth_token", token);
       sessionStorage.setItem("qworship_user_data", JSON.stringify(user));
+      if (user?.id) sessionStorage.setItem("qworship_user_id", user.id.toString());
       
       // Update global Zustand store so `<AuthGuard>` doesn't immediately bounce us out!
       localStorage.setItem("token", token);
