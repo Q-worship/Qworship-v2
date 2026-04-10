@@ -40,8 +40,12 @@ export default function DesktopAuthRemote() {
       sessionStorage.setItem("desktop_auth_token", token);
       sessionStorage.setItem("qworship_user_data", JSON.stringify(user));
       
+      // Update global Zustand store so `<AuthGuard>` doesn't immediately bounce us out!
+      localStorage.setItem("token", token);
+      useAuthStore.getState().setAuth(user);
+      
       toast({
-        title: "Account Created",
+        title: "Authentication Successful",
         description: "Let's set up your organization before returning to the desktop app.",
       });
       setLocation("/organization-setup");
@@ -60,6 +64,7 @@ export default function DesktopAuthRemote() {
       return await response.json();
     },
     onSuccess: (response) => {
+      setShowErrorModal(false);
       handleDesktopAuthPipeline(response.user, response.token);
     },
     onError: (error: any) => {
@@ -79,6 +84,7 @@ export default function DesktopAuthRemote() {
       setShowErrorModal(true);
       return;
     }
+    setShowErrorModal(false);
     signInMutation.mutate(formData);
   };
 
@@ -108,6 +114,7 @@ export default function DesktopAuthRemote() {
   const handleSignUpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUpData.firstName || !signUpData.email || !signUpData.password) return;
+    setShowErrorModal(false);
     signUpMutation.mutate(signUpData);
   };
 
