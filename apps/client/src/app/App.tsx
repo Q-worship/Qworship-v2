@@ -21,6 +21,7 @@ import RefundPolicy from "@/features/web/pages/RefundPolicy";
 import { DocsPage } from "@/features/web/pages/DocsPage";
 import SignInPage from "@/features/auth/pages/SignInPage";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
+import DesktopAuthRemote from "@/features/auth/pages/DesktopAuthRemote";
 import { LivePresentationV2 } from "@/features/dashboard/live/LivePresentationV2";
 import OrganizationSetup from "@/features/onboarding/pages/OrganizationSetup";
 import PlanSelection from "@/features/onboarding/pages/PlanSelection";
@@ -146,6 +147,7 @@ export const AppRouter = () => {
           <Route path="/eula" component={EndUserLicense} />
           <Route path="/login" component={SignInPage} />
           <Route path="/signup" component={SignInPage} />
+          <Route path="/desktop-auth" component={DesktopAuthRemote} />
           <Route path="/admin/login" component={AdminSignInPage} />
 
           {/* Standalone authenticated routes like Super Admin */}
