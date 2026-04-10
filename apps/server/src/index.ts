@@ -26,18 +26,9 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (
-        !origin || 
-        allowedOrigins.includes(origin) ||
-        (origin && origin.startsWith("http://localhost:"))
-      ) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 ); // Connect to Vite App
 app.use(express.json());
