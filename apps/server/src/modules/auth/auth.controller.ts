@@ -60,7 +60,8 @@ export const signUp = async (req: Request, res: Response) => {
         email: newUser.email,
         firstName: newUser.firstName,
         lastName: newUser.lastName,
-        role: newUser.role
+        role: newUser.role,
+        organizationName: newUser.organizationName
       },
       nextStep: '/dashboard'
     });
@@ -107,7 +108,8 @@ export const signIn = async (req: Request, res: Response) => {
         id: user._id,
         email: user.email,
         firstName: user.firstName,
-        role: user.role
+        role: user.role,
+        organizationName: user.organizationName
       },
       admin: user.role !== 'user' ? { adminType: user.role } : undefined,
       nextStep

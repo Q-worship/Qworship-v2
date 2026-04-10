@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+// removed duplicate line
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AuthDuplicateEmailModal } from "@/features/auth/components/AuthDuplicateEmailModal";
 import { AuthErrorModal } from "@/features/auth/components/AuthErrorModal";
@@ -56,26 +56,68 @@ export default function DesktopAuthRemote() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const signInMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const response = await apiRequest("POST", "/api/auth/signin", {
-        username: data.username, password: data.password,
+  const [isPending, setIsPending] = useState(false);
+  const [isSignUpPending, setIsSignUpPending] = useState(false);
+
+  const handleSignIn = async (data: typeof formData) => {
+    setIsPending(true);
+    setShowErrorModal(false);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${baseUrl}/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: data.username, password: data.password })
       });
-      return await response.json();
-    },
-    onSuccess: (response) => {
-      setShowErrorModal(false);
-      handleDesktopAuthPipeline(response.user, response.token);
-    },
-    onError: (error: any) => {
+      const json = await response.json();
+      
+      if (!response.ok || !json.success) {
+        throw new Error(json.message || "Invalid credentials");
+      }
+      
+      handleDesktopAuthPipeline(json.user, json.token);
+    } catch (error: any) {
+      console.error("🔥 DESKTOP AUTH PIPELINE CRASHED:", error);
       setErrorModalContent({
         title: "Sign-in Failed",
-        message: "Invalid credentials. Please check your username and password and try again.",
+        message: "Network Error: " + (error?.message || "Unknown error occurred"),
         type: "invalid-credentials",
       });
       setShowErrorModal(true);
-    },
-  });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleSignUpData = async (data: typeof signUpData) => {
+    setIsSignUpPending(true);
+    setShowErrorModal(false);
+    try {
+      const userData = {
+        username: data.email, email: data.email, password: data.password,
+        firstName: data.firstName, lastName: data.lastName, countryCode: data.countryCode,
+        phoneNumber: data.phoneNumber, agreeToMarketing: data.agreeToMarketing,
+        role: "user", accountType: "free", isActive: true, emailVerified: false,
+      };
+      
+      const response = await fetch(import.meta.env.VITE_API_URL || 'http://localhost:5000/api' + '/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+      const json = await response.json();
+      
+      if (!response.ok || !json.success) {
+        throw new Error(json.message || "Failed to create account");
+      }
+      
+      handleDesktopAuthPipeline(json.user, json.token);
+    } catch (error: any) {
+      toast({ title: "Sign-up Failed", description: "There was an error creating your account. Please try again.", variant: "destructive" });
+    } finally {
+      setIsSignUpPending(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,38 +126,13 @@ export default function DesktopAuthRemote() {
       setShowErrorModal(true);
       return;
     }
-    setShowErrorModal(false);
-    signInMutation.mutate(formData);
+    handleSignIn(formData);
   };
-
-  const handleSignUpInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSignUpData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const signUpMutation = useMutation({
-    mutationFn: async (data: typeof signUpData) => {
-      const userData = {
-        username: data.email, email: data.email, password: data.password,
-        firstName: data.firstName, lastName: data.lastName, countryCode: data.countryCode,
-        phoneNumber: data.phoneNumber, agreeToMarketing: data.agreeToMarketing,
-        role: "user", accountType: "free", isActive: true, emailVerified: false,
-      };
-      const response = await apiRequest("POST", "/api/auth/register", userData);
-      return await response.json();
-    },
-    onSuccess: (response) => {
-      handleDesktopAuthPipeline(response.user, response.token);
-    },
-    onError: (error: any) => {
-        toast({ title: "Sign-up Failed", description: "There was an error creating your account. Please try again.", variant: "destructive" });
-    },
-  });
 
   const handleSignUpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUpData.firstName || !signUpData.email || !signUpData.password) return;
-    setShowErrorModal(false);
-    signUpMutation.mutate(signUpData);
+    handleSignUpData(signUpData);
   };
 
   return (
@@ -134,13 +151,13 @@ export default function DesktopAuthRemote() {
                 <div className="max-w-md mx-auto w-full">
                   {!isSignUp ? (
                     <AuthSignInForm
-                      formData={formData} isPending={signInMutation.isPending}
+                      formData={formData} isPending={isPending}
                       onInputChange={handleInputChange} onSubmit={handleSubmit}
                       onSwitchToSignUp={() => setIsSignUp(true)}
                     />
                   ) : (
                     <AuthSignUpForm
-                      signUpData={signUpData} isPending={signUpMutation.isPending}
+                      signUpData={signUpData} isPending={isSignUpPending}
                       onInputChange={handleSignUpInputChange} onCountryCodeChange={(v) => setSignUpData((p) => ({ ...p, countryCode: v }))}
                       onCheckboxChange={(c) => setSignUpData((p) => ({ ...p, agreeToMarketing: c }))}
                       onSubmit={handleSignUpSubmit} onSwitchToSignIn={() => setIsSignUp(false)}
