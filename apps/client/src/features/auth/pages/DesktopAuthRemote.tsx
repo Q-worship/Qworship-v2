@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function DesktopAuthRemote() {
+  const [, setLocation] = useLocation();
   const [isSignUp, setIsSignUp] = useState(false);
   const { toast } = useToast();
   const [showDuplicateEmailModal, setShowDuplicateEmailModal] = useState(false);
