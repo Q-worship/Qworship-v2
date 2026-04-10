@@ -24,19 +24,28 @@ export default function DesktopAuthRemote() {
     firstName: "", lastName: "", countryCode: "+44", phoneNumber: "", email: "", password: "", agreeToMarketing: false,
   });
 
-  const handleDeepLinkRedirect = (user: any, token: string) => {
-    toast({
-      title: "Authenticated!",
-      description: "Redirecting you back to Qworship Desktop...",
-    });
-    // Fire the deep link protocol
-    const userPayload = encodeURIComponent(JSON.stringify(user));
-    window.location.href = `qworship://auth?token=${token}&user=${userPayload}`;
-    
-    // Fallback if they ignore the prompt
-    setTimeout(() => {
-        // Just let them know it's safe to close
-    }, 2000);
+  const handleDesktopAuthPipeline = (user: any, token: string) => {
+    // If the user already has an organization configured, deep-link immediately
+    if (user.organizationId || user.organizationName || user.organization) {
+      toast({
+        title: "Authenticated!",
+        description: "Redirecting you back to Qworship Desktop...",
+      });
+      const userPayload = encodeURIComponent(JSON.stringify(user));
+      window.location.href = `qworship://auth?token=${token}&user=${userPayload}`;
+    } else {
+      // NEW USER/NO ORG: We must route them to the web organization setup first.
+      // We store the session tokens they'll need for the final handoff at PlanSelection / Checkout
+      sessionStorage.setItem("desktop_auth_pipeline", "true");
+      sessionStorage.setItem("desktop_auth_token", token);
+      sessionStorage.setItem("qworship_user_data", JSON.stringify(user));
+      
+      toast({
+        title: "Account Created",
+        description: "Let's set up your organization before returning to the desktop app.",
+      });
+      setLocation("/organization-setup");
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,7 +60,7 @@ export default function DesktopAuthRemote() {
       return await response.json();
     },
     onSuccess: (response) => {
-      handleDeepLinkRedirect(response.user, response.token);
+      handleDesktopAuthPipeline(response.user, response.token);
     },
     onError: (error: any) => {
       setErrorModalContent({
@@ -89,7 +98,7 @@ export default function DesktopAuthRemote() {
       return await response.json();
     },
     onSuccess: (response) => {
-      handleDeepLinkRedirect(response.user, response.token);
+      handleDesktopAuthPipeline(response.user, response.token);
     },
     onError: (error: any) => {
         toast({ title: "Sign-up Failed", description: "There was an error creating your account. Please try again.", variant: "destructive" });
