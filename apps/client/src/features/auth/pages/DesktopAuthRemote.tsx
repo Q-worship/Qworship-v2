@@ -142,22 +142,34 @@ export default function DesktopAuthRemote() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#5A4B7C] via-[#6B5B95] to-[#7B6BAE] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md bg-[#2A2438]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
-        {!isSignUp ? (
-          <AuthSignInForm
-            formData={formData} isPending={isPending}
-            onInputChange={handleInputChange} onSubmit={handleSubmit}
-            onSwitchToSignUp={() => setIsSignUp(true)}
-          />
-        ) : (
-          <AuthSignUpForm
-            signUpData={signUpData} isPending={isSignUpPending}
-            onInputChange={handleSignUpInputChange} onCountryCodeChange={(v) => setSignUpData((p) => ({ ...p, countryCode: v }))}
-            onCheckboxChange={(c) => setSignUpData((p) => ({ ...p, agreeToMarketing: c }))}
-            onSubmit={handleSignUpSubmit} onSwitchToSignIn={() => setIsSignUp(false)}
-          />
-        )}
+    <div className="min-h-screen bg-gradient-to-br from-[#5A4B7C] via-[#6B5B95] to-[#7B6BAE]">
+      <div className="flex-1 flex items-center justify-center px-6 pt-24 pb-12">
+        <div className="w-full max-w-6xl mx-auto">
+          
+          <div className="bg-gradient-to-r from-[#5A4B7C] via-[#6B5B95] to-[#7B6BAE] rounded-3xl p-0 overflow-hidden shadow-2xl">
+            <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[600px]">
+              <div className="bg-gradient-to-br from-[#4A4570] to-[#6B5B95] p-12 flex flex-col justify-center">
+                <div className="max-w-md mx-auto w-full">
+                  {!isSignUp ? (
+                    <AuthSignInForm
+                      formData={formData} isPending={isPending}
+                      onInputChange={handleInputChange} onSubmit={handleSubmit}
+                      onSwitchToSignUp={() => setIsSignUp(true)}
+                    />
+                  ) : (
+                    <AuthSignUpForm
+                      signUpData={signUpData} isPending={isSignUpPending}
+                      onInputChange={handleSignUpInputChange} onCountryCodeChange={(v) => setSignUpData((p) => ({ ...p, countryCode: v }))}
+                      onCheckboxChange={(c) => setSignUpData((p) => ({ ...p, agreeToMarketing: c }))}
+                      onSubmit={handleSignUpSubmit} onSwitchToSignIn={() => setIsSignUp(false)}
+                    />
+                  )}
+                </div>
+              </div>
+              <AuthMarketingCarousel isSignUp={isSignUp} />
+            </div>
+          </div>
+        </div>
       </div>
       <AuthErrorModal open={showErrorModal} onOpenChange={setShowErrorModal} title={errorModalContent.title} message={errorModalContent.message} type={errorModalContent.type} onTryAgain={() => setShowErrorModal(false)} />
     </div>
