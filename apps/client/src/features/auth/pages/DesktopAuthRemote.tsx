@@ -58,6 +58,18 @@ export default function DesktopAuthRemote() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleSignUpInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSignUpData({ ...signUpData, [e.target.name]: e.target.value });
+  };
+
+  const handleSignUpInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSignUpData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSignUpInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSignUpData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
   const [isPending, setIsPending] = useState(false);
   const [isSignUpPending, setIsSignUpPending] = useState(false);
 
@@ -142,11 +154,6 @@ export default function DesktopAuthRemote() {
       <div className="flex-1 flex items-center justify-center px-6 pt-24 pb-12">
         <div className="w-full max-w-6xl mx-auto">
           
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-400">Desktop Authentication Gateway</h2>
-            <p className="text-muted-foreground text-sm">Please sign in to connect your Qworship Desktop Application.</p>
-          </div>
-
           <div className="bg-gradient-to-r from-[#5A4B7C] via-[#6B5B95] to-[#7B6BAE] rounded-3xl p-0 overflow-hidden shadow-2xl">
             <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[600px]">
               <div className="bg-gradient-to-br from-[#4A4570] to-[#6B5B95] p-12 flex flex-col justify-center">
