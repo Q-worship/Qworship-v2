@@ -106,7 +106,8 @@ export default function DesktopAuthRemote() {
         role: "user", accountType: "free", isActive: true, emailVerified: false,
       };
       
-      const response = await fetch(import.meta.env.VITE_API_URL || 'http://localhost:5000/api' + '/auth/register', {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${baseUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
