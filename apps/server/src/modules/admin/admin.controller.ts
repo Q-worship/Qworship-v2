@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { MediaCategory, MediaCollection } from "../media/media.model.js";
+import { BibleVerse } from "../bible/bible.model.js";
 
 export const getSystemStatus = (req: Request, res: Response) => {
   res.status(200).json({
@@ -115,5 +116,89 @@ export const createMediaCollection = async (req: Request, res: Response) => {
     res.status(201).json(collection);
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// ── Bible Translation Seed (Admin Only) ───────────────────────────────────────
+
+const OT_BOOKS = new Set([
+  'Genesis','Exodus','Leviticus','Numbers','Deuteronomy','Joshua','Judges','Ruth',
+  '1 Samuel','2 Samuel','1 Kings','2 Kings','1 Chronicles','2 Chronicles','Ezra',
+  'Nehemiah','Esther','Job','Psalms','Proverbs','Ecclesiastes','Song of Solomon',
+  'Isaiah','Jeremiah','Lamentations','Ezekiel','Daniel','Hosea','Joel','Amos',
+  'Obadiah','Jonah','Micah','Nahum','Habakkuk','Zephaniah','Haggai','Zechariah','Malachi',
+]);
+
+/**
+ * POST /api/admin/seed-bible
+ * Body: { version: 'amp'|'msg', verses: [{ book, chapter, verse, text }] }
+ *
+ * Accepts pre-converted flat verse data and upserts it into MongoDB.
+ * Use this to push AMP/MSG text to the deployed production server.
+ */
+export const seedBibleTranslation = async (req: Request, res: Response) => {
+  try {
+    const { version, verses } = req.body;
+    const validVersions = ['amp', 'msg', 'kjv', 'nkjv', 'esv', 'niv'];
+
+    if (!validVersions.includes(version)) {
+      return res.status(400).json({ success: false, message: `Invalid version. Must be one of: ${validVersions.join(', ')}` });
+    }
+    if (!Array.isArray(verses) || verses.length === 0) {
+      return res.status(400).json({ success: false, message: 'verses array is required and must not be empty' });
+    }
+
+    const nonEmpty = verses.filter((v: any) => v.text && v.text.trim().length > 0);
+    console.log(`[Bible Seed] Upserting ${nonEmpty.length} ${version.toUpperCase()} verses...`);
+
+    const BATCH_SIZE = 1000;
+    let written = 0;
+
+    for (let i = 0; i < nonEmpty.length; i += BATCH_SIZE) {
+      const batch = nonEmpty.slice(i, i + BATCH_SIZE);
+      const operations = batch.map((v: any) => ({
+        updateOne: {
+          filter: { bookName: v.book, chapter: v.chapter, verse: v.verse },
+          update: {
+            $set: {
+              bookName: v.book,
+              testament: OT_BOOKS.has(v.book) ? 'old' : 'new',
+              chapter: v.chapter,
+              verse: v.verse,
+              [version]: v.text,
+            },
+          },
+          upsert: true,
+        },
+      }));
+      await BibleVerse.bulkWrite(operations, { ordered: false });
+      written += batch.length;
+    }
+
+    console.log(`[Bible Seed] ✅ ${version.toUpperCase()}: ${written} verses written to DB`);
+    res.status(200).json({ success: true, version, written });
+  } catch (error: any) {
+    console.error('[Bible Seed] Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/admin/bible-coverage
+ * Returns verse counts per version to check what's missing in the DB.
+ */
+export const getBibleCoverage = async (req: Request, res: Response) => {
+  try {
+    const versions = ['kjv', 'nkjv', 'amp', 'msg', 'esv', 'niv'];
+    const coverage: Record<string, number> = {};
+
+    for (const v of versions) {
+      coverage[v] = await BibleVerse.countDocuments({ [v]: { $exists: true, $ne: '' } });
+    }
+
+    const total = await BibleVerse.countDocuments();
+    res.json({ success: true, total, coverage });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
