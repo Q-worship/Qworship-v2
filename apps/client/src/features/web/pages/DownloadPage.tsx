@@ -135,12 +135,12 @@ export const DownloadPage = (): JSX.Element => {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#ee85ff]/10 rounded-full blur-[120px]"></div>
           </div>
           <div className="relative z-10 max-w-4xl mx-auto">
-            <h1 className="text-5xl md:text-7xl [font-family:'Manrope',sans-serif] font-extrabold tracking-tight text-white mb-6 leading-tight">
-              Start changing your worship <br className="hidden md:block" />
+            <h1 className="text-4xl md:text-5xl lg:text-[54px] [font-family:'Manrope',sans-serif] font-bold tracking-tight text-white mb-6 leading-[1.15]">
+              Start changing your worship <br />
               experience with <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ee85ff] to-[#c57eff]">Q-worship Desktop</span>
             </h1>
-            <p className="text-xl md:text-2xl text-[#afa7c2] font-light max-w-2xl mx-auto leading-relaxed">
-              Professional worship presentation software with Hands-free <br className="hidden md:block" />
+            <p className="text-base md:text-lg lg:text-[19px] text-[#afa7c2] font-normal max-w-2xl mx-auto leading-relaxed">
+              Professional worship presentation software with Hands-free <br />
               Bible for Windows and macOS.
             </p>
           </div>
@@ -156,11 +156,11 @@ export const DownloadPage = (): JSX.Element => {
               </div>
               <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">WINDOWS</h3>
               <div className="flex flex-col gap-1 mb-8">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">Current Version: v2.4.0</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">File Size: 412 MB</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">CURRENT VERSION: V2.4.0</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">FILE SIZE: 412 MB</span>
               </div>
               <button className="w-full py-4 rounded-xl bg-gradient-to-r from-[#6a0baa] to-[#ee85ff] text-white [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest hover:shadow-[0_0_30px_rgba(238,133,255,0.3)] transition-all active:scale-95">
-                Download for Windows
+                DOWNLOAD FOR WINDOWS
               </button>
               <p className="mt-4 text-xs text-slate-500">Requires Windows 10 or 11 (64-bit)</p>
             </div>
@@ -172,11 +172,11 @@ export const DownloadPage = (): JSX.Element => {
               </div>
               <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">MAC</h3>
               <div className="flex flex-col gap-1 mb-8">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">Current Version: v2.4.0</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">File Size: 389 MB</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">CURRENT VERSION: V2.4.0</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">FILE SIZE: 389 MB</span>
               </div>
               <button className="w-full py-4 rounded-xl border border-[#4b455c] bg-[#221b36] text-white [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest hover:bg-[#28213e] transition-all active:scale-95">
-                Download for macOS
+                DOWNLOAD FOR MACOS
               </button>
               <p className="mt-4 text-xs text-slate-500">Apple Silicon &amp; Intel (macOS 12.0+)</p>
             </div>
