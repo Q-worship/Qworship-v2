@@ -94,9 +94,9 @@ export default function Features() {
                   Get Started
                 </Button>
               </Link>
-              <Link href="/contact">
+              <Link href="/download">
                 <Button className="h-12 px-6 rounded-lg bg-[#7a5af8] text-white [font-family:'Lufga-Medium',Helvetica] font-medium text-sm hover:bg-[#6949e8] transition-colors">
-                  Book Demo
+                  Download
                 </Button>
               </Link>
             </div>
