@@ -195,7 +195,24 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                   </>
                 ) : selectedSlide.slide.type === "media" ? (
                   <div className="absolute inset-0 w-full h-full">
-                    {(selectedSlide.slide as any).subtype === "video" ? (
+                    {(selectedSlide.slide as any).subtype === "webpage" ? (
+                      <div className="w-full h-full flex items-center justify-center bg-white">
+                        {selectedSlide.slide.content && typeof selectedSlide.slide.content === "string" && selectedSlide.slide.content.length > 5 ? (
+                          <iframe
+                            src={selectedSlide.slide.content}
+                            title="Web Page Preview"
+                            className="w-full h-full border-0"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a0f2e]">
+                            <div className="text-4xl mb-4">ðŸŒ</div>
+                            <div className="text-teal-300 text-xl font-medium">Web Page</div>
+                            <div className="text-gray-400 text-sm mt-2">Ready for content</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (selectedSlide.slide as any).subtype === "video" ? (
                       <video
                         src={resolveMediaUrl(selectedSlide.slide.content) || (selectedSlide.slide.content && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : undefined)}
                         autoPlay={(selectedSlide.slide as any).videoSettings?.autoPlay ?? true}
@@ -377,7 +394,24 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                 {currentlyDisplayedSlide ? (
                   currentlyDisplayedSlide.type === "media" ? (
                     <div className="absolute inset-0 w-full h-full">
-                      {(currentlyDisplayedSlide as any).subtype === "video" ? (
+                      {(currentlyDisplayedSlide as any).subtype === "webpage" ? (
+                      <div className="w-full h-full flex items-center justify-center bg-white">
+                        {currentlyDisplayedSlide.content && typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content.length > 5 ? (
+                          <iframe
+                            src={currentlyDisplayedSlide.content}
+                            title="Web Page Live"
+                            className="w-full h-full border-0"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a0f2e]">
+                            <div className="text-6xl mb-6">ðŸŒ</div>
+                            <div className="text-teal-300 text-3xl font-medium">Web Page</div>
+                            <div className="text-gray-400 text-lg mt-3">Ready for content</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (currentlyDisplayedSlide as any).subtype === "video" ? (
                         <video
                           src={resolveMediaUrl(currentlyDisplayedSlide.content) || (currentlyDisplayedSlide.content && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : undefined)}
                           autoPlay={(currentlyDisplayedSlide as any).videoSettings?.autoPlay ?? true}

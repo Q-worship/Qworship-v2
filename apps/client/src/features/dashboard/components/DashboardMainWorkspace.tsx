@@ -20,6 +20,8 @@ import { SlideGridRenderer } from "@/features/dashboard/components/SlideGridRend
 import { EditAndPreparationArea } from "@/features/dashboard/components/EditAndPreparationArea";
 import { SidebarOpen, SidebarClose } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { WebPageEditor } from "@/features/dashboard/components/WebPageEditor";
+import { SlideCanvasEditor } from "@/features/dashboard/components/SlideCanvasEditor";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 
@@ -3792,7 +3794,24 @@ import type { Slide } from "@/types";\n${text}`,
                             </div>
                           </div>
                         )}
+
+                        {/* Web Page Editor */}
+                        {editingContent.type === "media" && editingContent.subtype === "webpage" && (
+                          <WebPageEditor
+                            editingContent={editingContent}
+                            updateItemContent={updateItemContent}
+                          />
+                        )}
                       </div>
+
+                        {/* Slide Canvas Editor */}
+                        {editingContent.type === "media" && editingContent.subtype === "canvas" && (
+                          <SlideCanvasEditor
+                            editingContent={editingContent}
+                            updateItemContent={updateItemContent}
+                            setEditingContent={setEditingContent}
+                          />
+                        )}
                     </div>
                   ) : insertedItems.length > 0 ? (
                     /* Content List */
@@ -4702,6 +4721,22 @@ import type { Slide } from "@/types";\n${text}`,
                         );
                       })()}
                     </>
+                  ) : editingContent.subtype === "webpage" ? (
+                    <div className="absolute inset-0 w-full h-full bg-white flex items-center justify-center relative z-10 pointer-events-auto">
+                      {(typeof editingContent.content === 'string' ? editingContent.content : editingContent.content?.url) && typeof (typeof editingContent.content === 'string' ? editingContent.content : editingContent.content?.url) === 'string' && (typeof editingContent.content === 'string' ? editingContent.content : editingContent.content?.url).length > 5 ? (
+                        <iframe
+                          src={typeof editingContent.content === 'string' ? editingContent.content : editingContent.content?.url}
+                          title="Web Page Preview"
+                          className="w-full h-full border-0 pointer-events-auto"
+                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a0f2e]">
+                          <span className="text-teal-400 text-6xl mb-4">ðŸŒ</span>
+                          <span className="text-teal-300 text-2xl font-medium">Web Page Editor</span>
+                        </div>
+                      )}
+                    </div>
                   ) : editingContent.subtype === "video" ? (
                     <video
                       src={resolveMediaUrl(typeof editingContent.content === 'string' ? editingContent.content : (editingContent.content?.url || editingContent.slides?.[0]?.content?.split('#')[0] || undefined))}
@@ -4737,7 +4772,7 @@ import type { Slide } from "@/types";\n${text}`,
                       />
                     </>
                   )}
-                  {editingContent.subtype !== "video" && (
+                  {editingContent.subtype !== "video" && editingContent.subtype !== "webpage" && (
                     <h3 className="absolute top-6 w-full text-center text-white/80 font-bold text-xl z-20" style={{ textShadow: "2px 2px 4px rgba(0,0,0,0.8)" }}>
                       {editingContent.title || "Media File"}
                     </h3>
