@@ -832,6 +832,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // Clear slide editor state so the announcement editor shows
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
+      } else if (parentItem.type === "media" && parentItem.subtype === "webpage") {
+        // For webpage items, route to the WebPage Editor
+        setEditingContent(parentItem);
+        setSelectedContentType("webpage");
+        setSelectedSlide(null);
+        setIsSlideEditorOpen(false);
       } else if (parentItem.type === "media" && (parentItem.subtype === "slideshow" || parentItem.subtype === "image" || parentItem.subtype === "video")) {
         setEditingContent(parentItem);
         setSelectedContentType(parentItem.subtype === "slideshow" ? "slideshow" : parentItem.subtype === "video" ? "video" : "image");
@@ -1863,15 +1869,14 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     },
     {
       name: "Slide Canvas",
-      shortcut: "coming soon",
       iconComponent: Palette,
       hasSubmenu: false,
       action: () =>
         addItemToPreparation({
           id: `slide-${Date.now()}`,
           type: "media",
-          subtype: "slideshow",
-          title: "Custom Slide",
+          subtype: "canvas",
+          title: "Slide Canvas",
           content: "Custom presentation slide",
         }),
     },
@@ -1906,7 +1911,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     },
     {
       name: "Web Page",
-      shortcut: "coming soon",
+      shortcut: "Ctrl + Shift + W",
       iconComponent: Globe,
       hasSubmenu: false,
       action: () =>
@@ -1915,7 +1920,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           type: "media",
           subtype: "webpage",
           title: "Web Page",
-          content: "External web page content",
+          content: { url: "" },
         }),
     },
     {

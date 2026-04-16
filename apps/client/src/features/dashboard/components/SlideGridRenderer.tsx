@@ -148,6 +148,20 @@ export const SlideGridRenderer = (props: any) => {
                                       {slide.title || "Scripture"}
                                     </div>
                                   </div>
+                                ) : slide.type === "media" && (slide as any).subtype === "webpage" ? (
+                                  <div className="text-center">
+                                    <div className="text-teal-300 text-xs font-semibold mb-1">
+                                      🌐 WEB
+                                    </div>
+                                    <div
+                                      className="text-gray-300 text-xs overflow-hidden"
+                                      style={{ fontSize: "8px" }}
+                                    >
+                                      {slide.content && typeof slide.content === "string" && slide.content.length > 5
+                                        ? new URL(slide.content).hostname
+                                        : "Web Page"}
+                                    </div>
+                                  </div>
                                 ) : (
                                   <div className="text-center">
                                     <div className="text-white text-xs font-semibold">
@@ -171,7 +185,9 @@ export const SlideGridRenderer = (props: any) => {
                                     ? "bg-blue-500"
                                     : slide.type === "bible"
                                       ? "bg-green-500"
-                                      : "bg-gray-500"
+                                      : slide.type === "media" && (slide as any).subtype === "webpage"
+                                        ? "bg-teal-500"
+                                        : "bg-gray-500"
                                 }`}
                               ></div>
                             </div>
@@ -528,6 +544,18 @@ export const SlideGridRenderer = (props: any) => {
                                             </div>
                                             <div className="text-[10px] text-gray-300">
                                               Video Content
+                                            </div>
+                                          </div>
+                                        ) : (slide.type === "media" && (slide as any).subtype === "webpage") ? (
+                                          <div className="h-full flex flex-col justify-center items-center">
+                                            <div className="text-2xl mb-1">🌐</div>
+                                            <div className="text-[10px] text-teal-300 font-medium">
+                                              Web Page
+                                            </div>
+                                            <div className="text-[8px] text-gray-400 mt-0.5 max-w-full truncate px-2">
+                                              {slide.content && typeof slide.content === "string" && slide.content.length > 5
+                                                ? (() => { try { return new URL(slide.content).hostname; } catch { return "Ready for content"; } })()
+                                                : "Ready for content"}
                                             </div>
                                           </div>
                                         ) : (slide.type === "media" && (slide as any).subtype === "video") ? (
