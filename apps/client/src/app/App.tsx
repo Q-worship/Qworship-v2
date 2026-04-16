@@ -19,6 +19,7 @@ const Features = lazy(() => import("@/features/web/pages/Features"));
 const PrivacyPolicy = lazy(() => import("@/features/web/pages/PrivacyPolicy"));
 const RefundPolicy = lazy(() => import("@/features/web/pages/RefundPolicy"));
 const DocsPage = lazy(() => import("@/features/web/pages/DocsPage").then(m => ({ default: m.DocsPage })));
+const DownloadPage = lazy(() => import("@/features/web/pages/DownloadPage").then(m => ({ default: m.DownloadPage })));
 import SignInPage from "@/features/auth/pages/SignInPage";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
 import DesktopAuthRemote from "@/features/auth/pages/DesktopAuthRemote";
@@ -146,6 +147,7 @@ export const AppRouter = () => {
           <Route path="/privacy-policy" component={PrivacyPolicy} />
           <Route path="/refund-policy" component={RefundPolicy} />
           <Route path="/eula" component={EndUserLicense} />
+          <Route path="/download" component={DownloadPage} />
           <Route path="/login" component={SignInPage} />
           <Route path="/signup" component={SignInPage} />
           <Route path="/desktop-auth" component={DesktopAuthRemote} />

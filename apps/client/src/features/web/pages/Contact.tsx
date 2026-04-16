@@ -382,9 +382,11 @@ export default function Contact() {
                   Sign Up
                 </Button>
               </Link>
-              <Button className="h-12 px-6 rounded-lg bg-[#7a5af8] text-white [font-family:'Lufga-Medium',Helvetica] font-medium text-sm hover:bg-[#6949e8] transition-colors cursor-default">
-                Book Demo
-              </Button>
+              <Link href="/download">
+                <Button className="h-12 px-6 rounded-lg bg-[#7a5af8] text-white [font-family:'Lufga-Medium',Helvetica] font-medium text-sm hover:bg-[#6949e8] transition-colors">
+                  Download
+                </Button>
+              </Link>
             </div>
           </div>
         </header>
