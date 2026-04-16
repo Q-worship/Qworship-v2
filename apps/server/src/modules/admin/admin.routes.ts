@@ -12,6 +12,7 @@ import {
   createMediaCollection,
   seedBibleTranslation,
   getBibleCoverage,
+  migrateBibleBookNames,
 } from "./admin.controller.js";
 import { authorizeAdmin } from "../auth/auth.middleware.js";
 
@@ -36,5 +37,6 @@ router.post("/media/collections", createMediaCollection);
 // Bible Translation Seeding (Admin Only)
 router.get("/bible-coverage", getBibleCoverage);
 router.post("/seed-bible", seedBibleTranslation);
+router.post("/migrate-bible-books", migrateBibleBookNames);
 
 export default router;
