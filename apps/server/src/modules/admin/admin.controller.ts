@@ -166,7 +166,7 @@ export const seedBibleTranslation = async (req: Request, res: Response) => {
               chapter: v.chapter,
               verse: v.verse,
               [version]: v.text,
-            },
+            } as any,
           },
           upsert: true,
         },
