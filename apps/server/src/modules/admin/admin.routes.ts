@@ -9,7 +9,9 @@ import {
   getMediaCategories,
   createMediaCategory,
   getMediaCollections,
-  createMediaCollection
+  createMediaCollection,
+  seedBibleTranslation,
+  getBibleCoverage,
 } from "./admin.controller.js";
 import { authorizeAdmin } from "../auth/auth.middleware.js";
 
@@ -30,5 +32,9 @@ router.get("/media/categories", getMediaCategories);
 router.post("/media/categories", createMediaCategory);
 router.get("/media/collections", getMediaCollections);
 router.post("/media/collections", createMediaCollection);
+
+// Bible Translation Seeding (Admin Only)
+router.get("/bible-coverage", getBibleCoverage);
+router.post("/seed-bible", seedBibleTranslation);
 
 export default router;

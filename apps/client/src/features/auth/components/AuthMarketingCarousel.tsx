@@ -31,6 +31,8 @@ export const AuthMarketingCarousel: React.FC<AuthMarketingCarouselProps> = ({ is
               <img 
                 src={qWorshipLogoLarge} 
                 alt="Q-worship logo" 
+                loading="eager"
+                fetchPriority="high"
                 className="w-20 h-20"
               />
             </div>
@@ -44,6 +46,8 @@ export const AuthMarketingCarousel: React.FC<AuthMarketingCarouselProps> = ({ is
               <img 
                 src={qWorshipInterface} 
                 alt="Q-worship interface preview" 
+                loading="eager"
+                fetchPriority="high"
                 className="w-full max-w-md rounded-2xl"
               />
             </div>
@@ -58,38 +62,41 @@ export const AuthMarketingCarousel: React.FC<AuthMarketingCarouselProps> = ({ is
         ) : (
           <>
             {/* Slide Content */}
-            <div className="transition-all duration-500 ease-in-out">
-              {currentSlide === 0 ? (
-                <>
-                  <h2 className="text-white text-3xl font-bold mb-8 leading-tight [font-family:'Lufga-Medium',Helvetica]">
-                    Built with tools to support the entire team
-                  </h2>
+            <div className="grid w-full place-items-center mb-8">
+              {/* Slide 0 */}
+              <div className={`col-start-1 row-start-1 w-full transition-opacity duration-500 ease-in-out flex flex-col items-center ${currentSlide === 0 ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'}`}>
+                <h2 className="text-white text-3xl font-bold mb-8 leading-tight [font-family:'Lufga-Medium',Helvetica]">
+                  Built with tools to support the entire team
+                </h2>
 
-                  {/* Tech Team Interface Preview */}
-                  <div className="mb-8 shadow-xl">
-                    <img 
-                      src={techTeamImage} 
-                      alt="Q-worship tech team interface" 
-                      className="w-full max-w-md rounded-2xl"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-white text-3xl font-bold mb-8 leading-tight [font-family:'Lufga-Medium',Helvetica]">
-                    Sign up today and elevate your church experience with your free Q-worship mic
-                  </h2>
+                {/* Tech Team Interface Preview */}
+                <div className="shadow-xl w-full max-w-md">
+                  <img 
+                    src={techTeamImage} 
+                    alt="Q-worship tech team interface" 
+                    loading="eager"
+                    fetchPriority="high"
+                    className="w-full h-auto rounded-2xl"
+                  />
+                </div>
+              </div>
 
-                  {/* Q-worship Microphone Preview */}
-                  <div className="mb-8 shadow-xl">
-                    <img 
-                      src={qWorshipMicrophone} 
-                      alt="Q-worship microphone system" 
-                      className="w-full max-w-md rounded-2xl"
-                    />
-                  </div>
-                </>
-              )}
+              {/* Slide 1 */}
+              <div className={`col-start-1 row-start-1 w-full transition-opacity duration-500 ease-in-out flex flex-col items-center ${currentSlide === 1 ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'}`}>
+                <h2 className="text-white text-3xl font-bold mb-8 leading-tight [font-family:'Lufga-Medium',Helvetica]">
+                  Sign up today and elevate your church experience with your free Q-worship mic
+                </h2>
+
+                {/* Q-worship Microphone Preview */}
+                <div className="shadow-xl w-full max-w-md">
+                  <img 
+                    src={qWorshipMicrophone} 
+                    alt="Q-worship microphone system" 
+                    loading="eager"
+                    className="w-full h-auto rounded-2xl"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Navigation Dots */}

@@ -68,6 +68,60 @@ export const createPresentation = async (req: Request, res: Response) => {
   }
 };
 
+export const bulkCreatePresentations = async (req: Request, res: Response) => {
+  try {
+    const { presentations } = req.body;
+    const userId = (req as any).user.id;
+
+    if (!Array.isArray(presentations) || presentations.length === 0) {
+      return res.status(400).json({ error: 'presentations array is required and must not be empty' });
+    }
+
+    // Find user's org once (reuse across all inserts)
+    const org = await Organization.findOne({ ownerId: userId });
+    const orgId = org ? org._id : userId;
+
+    const created: any[] = [];
+
+    for (const p of presentations) {
+      const localId = p.id; // original local_ temp ID from the client
+      try {
+        const newPresentation = await Presentation.create({
+          name: p.name,
+          date: p.presentationDate ? new Date(p.presentationDate) : new Date(),
+          sections: [],
+          serviceData: p.serviceData ? (typeof p.serviceData === 'string' ? JSON.parse(p.serviceData) : p.serviceData) : null,
+          organizationId: orgId,
+          createdBy: userId,
+        });
+
+        created.push({
+          localId, // echo back so client can remap
+          presentation: {
+            id: newPresentation._id.toString(),
+            name: newPresentation.name,
+            description: p.description || '',
+            presentationDate: newPresentation.date?.toISOString() || new Date().toISOString(),
+            createdAt: newPresentation.createdAt.toISOString(),
+            updatedAt: newPresentation.updatedAt.toISOString(),
+            slideCount: 0,
+            status: 'active',
+            serviceData: newPresentation.serviceData || null,
+          },
+        });
+      } catch (itemErr) {
+        console.error(`[Bulk Sync] Failed to create presentation "${p.name}":`, itemErr);
+        // Skip this item, don't abort the whole batch
+      }
+    }
+
+    res.status(201).json({ success: true, created });
+  } catch (error) {
+    console.error('Error bulk creating presentations:', error);
+    res.status(500).json({ error: 'Failed to bulk create presentations' });
+  }
+};
+
 export const getPresentationById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

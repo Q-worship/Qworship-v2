@@ -10,6 +10,7 @@ presentationRouter.get('/:id', protect, presentationController.getPresentationBy
 
 // Creation
 presentationRouter.post('/', protect, presentationController.createPresentation);
+presentationRouter.post('/bulk', protect, presentationController.bulkCreatePresentations);
 
 // Modification
 presentationRouter.put('/:id', protect, presentationController.updatePresentation);
