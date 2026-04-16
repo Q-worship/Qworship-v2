@@ -202,3 +202,55 @@ export const getBibleCoverage = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * POST /api/admin/migrate-bible-books
+ * Renames mismatched bookName values in the BibleVerse collection to canonical names.
+ * Fixes: Psalm→Psalms, Song of Songs→Song of Solomon, I Samuel→1 Samuel, etc.
+ * Safe to run multiple times.
+ */
+export const migrateBibleBookNames = async (req: Request, res: Response) => {
+  const RENAMES: { from: string; to: string }[] = [
+    { from: 'Psalm',           to: 'Psalms' },
+    { from: 'Song of Songs',   to: 'Song of Solomon' },
+    { from: 'I Samuel',        to: '1 Samuel' },
+    { from: 'II Samuel',       to: '2 Samuel' },
+    { from: 'I Kings',         to: '1 Kings' },
+    { from: 'II Kings',        to: '2 Kings' },
+    { from: 'I Chronicles',    to: '1 Chronicles' },
+    { from: 'II Chronicles',   to: '2 Chronicles' },
+    { from: 'I Corinthians',   to: '1 Corinthians' },
+    { from: 'II Corinthians',  to: '2 Corinthians' },
+    { from: 'I Thessalonians', to: '1 Thessalonians' },
+    { from: 'II Thessalonians',to: '2 Thessalonians' },
+    { from: 'I Timothy',       to: '1 Timothy' },
+    { from: 'II Timothy',      to: '2 Timothy' },
+    { from: 'I Peter',         to: '1 Peter' },
+    { from: 'II Peter',        to: '2 Peter' },
+    { from: 'I John',          to: '1 John' },
+    { from: 'II John',         to: '2 John' },
+    { from: 'III John',        to: '3 John' },
+  ];
+
+  try {
+    const results: { from: string; to: string; count: number }[] = [];
+    let totalRenamed = 0;
+
+    for (const { from, to } of RENAMES) {
+      const result = await BibleVerse.updateMany(
+        { bookName: from },
+        { $set: { bookName: to } }
+      );
+      if (result.modifiedCount > 0) {
+        results.push({ from, to, count: result.modifiedCount });
+        totalRenamed += result.modifiedCount;
+      }
+    }
+
+    console.log(`[Bible Migration] ✅ Renamed ${totalRenamed} documents across ${results.length} book name fixes`);
+    res.json({ success: true, totalRenamed, results });
+  } catch (error: any) {
+    console.error('[Bible Migration] Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

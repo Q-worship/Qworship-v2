@@ -226,7 +226,7 @@ const BIBLE_BOOKS: BibleBook[] = [
   },
   {
     id: 22,
-    name: "Song of Songs",
+    name: "Song of Solomon",
     aliases: [
       "song of songs",
       "song of solomon",
