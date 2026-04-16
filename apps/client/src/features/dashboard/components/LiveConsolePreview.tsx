@@ -165,7 +165,23 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
           if (currentSlideData.type === "media") {
             return (
               <>
-                {(currentSlideData as any).subtype === "video" ? (
+                {(currentSlideData as any).subtype === "webpage" ? (
+                  <div className="absolute inset-0 w-full h-full z-10 bg-white">
+                    {currentSlideData.content && typeof currentSlideData.content === "string" && currentSlideData.content.length > 5 ? (
+                      <iframe
+                        src={currentSlideData.content}
+                        title="Web Page Preview"
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+                        style={{ pointerEvents: "none" }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[#1a0f2e]">
+                        <span className="text-teal-400 text-[8px]">ðŸŒ Web Page</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (currentSlideData as any).subtype === "video" ? (
                   <video
                     src={resolveMediaUrl(currentSlideData.content)}
                     autoPlay={(currentSlideData as any).videoSettings?.autoPlay ?? true}

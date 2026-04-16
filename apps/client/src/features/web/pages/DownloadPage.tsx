@@ -1,7 +1,22 @@
 import React, { useEffect } from "react";
 import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+} from "@/components/ui/navigation-menu";
 
 export const DownloadPage = (): JSX.Element => {
+  // Navigation menu items data
+  const navItems = [
+    { name: "Home", isActive: false },
+    { name: "About", isActive: false },
+    { name: "Features", isActive: false },
+    { name: "Pricing", isActive: false },
+  ];
+
   useEffect(() => {
     // Add Google Fonts
     const link1 = document.createElement('link');
@@ -22,7 +37,8 @@ export const DownloadPage = (): JSX.Element => {
 
   return (
     <div className="min-h-screen bg-[#0d0d1a] text-[#ebe1fe] [font-family:'Inter',sans-serif] selection:bg-[#ee85ff]/30 selection:text-[#ee85ff]">
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .glass-card {
             background: rgba(28, 22, 46, 0.6);
             backdrop-filter: blur(12px);
@@ -37,27 +53,79 @@ export const DownloadPage = (): JSX.Element => {
       `}} />
 
       {/* TopAppBar */}
-      <header className="fixed top-0 w-full z-50 bg-[#100B1F]/60 backdrop-blur-xl border-b border-white/10 shadow-2xl shadow-purple-900/20 h-20">
-        <nav className="flex justify-between items-center px-8 h-full max-w-full mx-auto">
-          <Link href="/">
-            <div className="text-xl font-extrabold text-white tracking-tight [font-family:'Manrope',sans-serif] cursor-pointer">
-              Qworship
-            </div>
-          </Link>
-          <div className="hidden md:flex flex-1 justify-center items-center gap-8">
-            <Link href="/features" className="[font-family:'Manrope',sans-serif] font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors">Features</Link>
-            <Link href="/pricing" className="[font-family:'Manrope',sans-serif] font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors">Pricing</Link>
-            <Link href="/about" className="[font-family:'Manrope',sans-serif] font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors">About</Link>
-            <Link href="/contact" className="[font-family:'Manrope',sans-serif] font-bold uppercase tracking-wider text-slate-400 hover:text-white transition-colors">Support</Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/signup">
-              <button className="bg-[#9D4EDD] text-white px-6 py-2 rounded-full [font-family:'Manrope',sans-serif] font-bold uppercase tracking-wider text-sm hover:brightness-110 active:scale-95 duration-200 transition-all">
-                Sign Up
-              </button>
+      <header className="fixed top-0 w-full z-50 bg-[#100B1F]/60 backdrop-blur-xl border-b border-white/10 shadow-2xl shadow-purple-900/20 flex items-center min-h-20">
+        <div className="container mx-auto px-4 md:px-6 lg:px-8 py-2">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <Link href="/">
+              <div className="flex items-center cursor-pointer">
+                <div className="relative h-[45px] w-[46px]">
+                  <img
+                    className="w-[43px] h-[43px]"
+                    alt="Q-worship logo"
+                    src="/figmaAssets/ellipse-3.svg"
+                  />
+                  <div className="absolute w-[8px] h-[8px] top-[37px] left-[37px] bg-[#fd348f] rounded-[4px]" />
+                </div>
+                <h1 className="ml-4 [font-family:'Lufga-Medium',Helvetica] font-bold text-white text-xl md:text-2xl lg:text-3xl">
+                  Q-worship
+                </h1>
+              </div>
             </Link>
+
+            {/* Navigation */}
+            <NavigationMenu className="hidden lg:flex">
+              <NavigationMenuList className="flex space-x-6">
+                {navItems.map((item) => (
+                  <NavigationMenuItem key={item.name}>
+                    <NavigationMenuLink
+                      className={`[font-family:'Lufga-Medium',Helvetica] font-medium text-base hover:text-[#fd348f] transition-colors ${item.isActive ? "text-[#fd348f]" : "text-white"
+                        }`}
+                      asChild
+                    >
+                      <Link
+                        href={
+                          item.name === "Home"
+                            ? "/"
+                            : `/${item.name.toLowerCase()}`
+                        }
+                      >
+                        {item.name}
+                      </Link>
+                    </NavigationMenuLink>
+                  </NavigationMenuItem>
+                ))}
+              </NavigationMenuList>
+            </NavigationMenu>
+
+            {/* Mobile Menu Button */}
+            <button className="md:hidden text-white p-2">
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+
+            {/* CTA Buttons */}
+            <div className="hidden md:flex space-x-3">
+
+              <Link href="/download">
+                <Button className="h-12 px-6 rounded-lg bg-[#7a5af8] text-white [font-family:'Lufga-Medium',Helvetica] font-medium text-sm hover:bg-[#6949e8] transition-colors">
+                  Download Now
+                </Button>
+              </Link>
+            </div>
           </div>
-        </nav>
+        </div>
       </header>
 
       <main className="pt-20">
@@ -67,11 +135,13 @@ export const DownloadPage = (): JSX.Element => {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#ee85ff]/10 rounded-full blur-[120px]"></div>
           </div>
           <div className="relative z-10 max-w-4xl mx-auto">
-            <h1 className="text-5xl md:text-7xl [font-family:'Manrope',sans-serif] font-extrabold tracking-tight text-white mb-6">
-              Powering the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ee85ff] to-[#c57eff]">Electric Sanctuary</span>
+            <h1 className="text-5xl md:text-7xl [font-family:'Manrope',sans-serif] font-extrabold tracking-tight text-white mb-6 leading-tight">
+              Start changing your worship <br className="hidden md:block" />
+              experience with <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ee85ff] to-[#c57eff]">Q-worship Desktop</span>
             </h1>
-            <p className="text-xl md:text-2xl text-[#afa7c2] font-light max-w-2xl mx-auto">
-              Professional worship presentation software for Windows and macOS.
+            <p className="text-xl md:text-2xl text-[#afa7c2] font-light max-w-2xl mx-auto leading-relaxed">
+              Professional worship presentation software with Hands-free <br className="hidden md:block" />
+              Bible for Windows and macOS.
             </p>
           </div>
         </section>
@@ -84,7 +154,7 @@ export const DownloadPage = (): JSX.Element => {
               <div className="w-16 h-16 rounded-full bg-[#28213e] flex items-center justify-center mb-6 text-[#ee85ff] shadow-lg">
                 <span className="material-symbols-outlined text-4xl" data-icon="desktop_windows">desktop_windows</span>
               </div>
-              <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">Windows Installer</h3>
+              <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">WINDOWS</h3>
               <div className="flex flex-col gap-1 mb-8">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">Current Version: v2.4.0</span>
                 <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">File Size: 412 MB</span>
@@ -100,7 +170,7 @@ export const DownloadPage = (): JSX.Element => {
               <div className="w-16 h-16 rounded-full bg-[#28213e] flex items-center justify-center mb-6 text-[#ee85ff] shadow-lg">
                 <span className="material-symbols-outlined text-4xl" data-icon="laptop_mac">laptop_mac</span>
               </div>
-              <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">macOS Universal</h3>
+              <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">MAC</h3>
               <div className="flex flex-col gap-1 mb-8">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">Current Version: v2.4.0</span>
                 <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">File Size: 389 MB</span>
@@ -190,12 +260,17 @@ export const DownloadPage = (): JSX.Element => {
         <section className="py-24 px-8 border-t border-white/5">
           <div className="max-w-4xl mx-auto glass-card rounded-3xl p-12 text-center overflow-hidden relative">
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#ee85ff]/20 blur-[80px] rounded-full"></div>
-            <h2 className="text-4xl [font-family:'Manrope',sans-serif] font-extrabold text-white mb-6 relative z-10">Ready to transform your sanctuary?</h2>
-            <p className="text-[#afa7c2] mb-10 relative z-10">Join 5,000+ worship teams delivering high-fidelity visual experiences every Sunday.</p>
+            <h2 className="text-4xl [font-family:'Manrope',sans-serif] font-extrabold text-white mb-6 relative z-10">Ready to transform your experience ?</h2>
+            <p className="text-[#afa7c2] mb-10 relative z-10">Join 1000+ churches using Q-worship to deliver high-fidelity visual experiences every Sunday.</p>
             <div className="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
               <Link href="/signup">
                 <button className="bg-[#9D4EDD] text-white px-10 py-4 rounded-full [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest hover:shadow-[0_0_40px_rgba(157,78,221,0.4)] transition-all">
-                  Get Started Free
+                  GET STARTED FREE
+                </button>
+              </Link>
+              <Link href="/contact">
+                <button className="bg-[#28213e] text-white px-10 py-4 rounded-full [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest hover:bg-[#32294e] border border-white/10 transition-all">
+                  BOOK DEMO
                 </button>
               </Link>
             </div>
