@@ -98,9 +98,9 @@ export const HeroSection = (): JSX.Element => {
                 Sign Up
               </Button>
             </Link>
-            <Link href="/contact">
+            <Link href="/download">
               <Button className="h-12 px-6 rounded-lg bg-[#7a5af8] text-white [font-family:'Lufga-Medium',Helvetica] font-medium text-sm hover:bg-[#6949e8] transition-colors">
-                Book Demo
+                Download
               </Button>
             </Link>
           </div>
@@ -125,9 +125,9 @@ export const HeroSection = (): JSX.Element => {
               Sign Up
             </Button>
           </Link>
-          <Link href="/contact">
+          <Link href="/download">
             <Button className="h-12 w-full rounded-lg bg-[#7a5af8] text-white [font-family:'Lufga-Medium',Helvetica] font-medium text-sm hover:bg-[#6949e8] transition-colors">
-              Book Demo
+              Download
             </Button>
           </Link>
         </div>

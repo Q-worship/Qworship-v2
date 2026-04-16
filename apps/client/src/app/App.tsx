@@ -19,6 +19,7 @@ import Features from "@/features/web/pages/Features";
 import PrivacyPolicy from "@/features/web/pages/PrivacyPolicy";
 import RefundPolicy from "@/features/web/pages/RefundPolicy";
 import { DocsPage } from "@/features/web/pages/DocsPage";
+import { DownloadPage } from "@/features/web/pages/DownloadPage";
 import SignInPage from "@/features/auth/pages/SignInPage";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
 import { LivePresentationV2 } from "@/features/dashboard/live/LivePresentationV2";
@@ -121,6 +122,7 @@ export const AppRouter = () => {
           <Route path="/privacy-policy" component={PrivacyPolicy} />
           <Route path="/refund-policy" component={RefundPolicy} />
           <Route path="/eula" component={EndUserLicense} />
+          <Route path="/download" component={DownloadPage} />
           <Route path="/login" component={SignInPage} />
           <Route path="/signup" component={SignInPage} />
           <Route path="/admin/login" component={AdminSignInPage} />
