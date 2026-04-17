@@ -21,6 +21,7 @@ import { EditAndPreparationArea } from "@/features/dashboard/components/EditAndP
 import { SidebarOpen, SidebarClose } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { WebPageEditor } from "@/features/dashboard/components/WebPageEditor";
+import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
 import { SlideCanvasEditor } from "@/features/dashboard/components/SlideCanvasEditor";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
@@ -2348,6 +2349,15 @@ import type { Slide } from "@/types";\n${text}`,
                         )}
                       </div>
                     </div>
+                  ) : editingContent?.type === "media" && editingContent?.subtype === "canvas" ? (
+                    /* Slide Canvas Editor Full Screen */
+                    <div className="w-full h-full overflow-hidden">
+                      <SlideCanvasEditor
+                        editingContent={editingContent}
+                        updateItemContent={updateItemContent}
+                        setEditingContent={setEditingContent}
+                      />
+                    </div>
                   ) : editingContent ? (
                     /* Other Item Editors */
                     <div className="p-6 h-full overflow-y-auto">
@@ -3803,15 +3813,6 @@ import type { Slide } from "@/types";\n${text}`,
                           />
                         )}
                       </div>
-
-                        {/* Slide Canvas Editor */}
-                        {editingContent.type === "media" && editingContent.subtype === "canvas" && (
-                          <SlideCanvasEditor
-                            editingContent={editingContent}
-                            updateItemContent={updateItemContent}
-                            setEditingContent={setEditingContent}
-                          />
-                        )}
                     </div>
                   ) : insertedItems.length > 0 ? (
                     /* Content List */
@@ -4166,7 +4167,11 @@ import type { Slide } from "@/types";\n${text}`,
                           </h1>
                         )}
                         <div className="w-full flex justify-center items-center rounded-xl overflow-hidden shadow-2xl relative" style={{ maxHeight: "calc(100% - 2rem)", height: "100%" }}>
-                          {(selectedSlide.slide as any).subtype === "video" ? (
+                          {(selectedSlide.slide as any).subtype === "webpage" ? (
+                            <div className="absolute inset-0 w-full h-full bg-white rounded-xl overflow-hidden">
+                              <iframe src={selectedSlide.slide.content} className="w-full h-full border-0" />
+                            </div>
+                          ) : (selectedSlide.slide as any).subtype === "video" ? (
                             <video
                               src={typeof selectedSlide.slide.content === "string" && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : (selectedSlide.slide.videoSettings?.url || undefined)}
                               autoPlay={(selectedSlide.slide as any).videoSettings?.autoPlay ?? true}
@@ -4190,6 +4195,10 @@ import type { Slide } from "@/types";\n${text}`,
                                 }
                               }}
                             />
+                          ) : (selectedSlide.slide as any).subtype === "canvas" ? (
+                            <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
+                              <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} />
+                            </div>
                           ) : (
                             <img
                               src={typeof selectedSlide.slide.content === "string" && selectedSlide.slide.content.length > 5 && selectedSlide.slide.content !== "Worship background image" && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
@@ -4709,11 +4718,17 @@ import type { Slide } from "@/types";\n${text}`,
                         const slideIdx = editingContent.slides.findIndex((s: any) => s.id === displaySlide?.id);
                         return (
                           <>
+                            {(displaySlide as any)?.subtype === "canvas" ? (
+                              <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
+                                <SlideCanvasRenderer content={displaySlide?.content} background={{type: 'transparent'}} />
+                              </div>
+                            ) : (
                             <img
                               src={resolveMediaUrl(displaySlide?.content) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
                               alt={displaySlide?.title || editingContent.title}
                               className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black"
                             />
+                            )}
                             <div className="absolute bottom-3 right-3 bg-black/70 text-white text-xs px-2.5 py-1 rounded-md border border-gray-600 z-10 font-medium">
                               Slide {slideIdx + 1} / {editingContent.slides.length}
                             </div>
@@ -4732,7 +4747,7 @@ import type { Slide } from "@/types";\n${text}`,
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-[#1a0f2e]">
-                          <span className="text-teal-400 text-6xl mb-4">ðŸŒ</span>
+                          <span className="text-teal-400 text-6xl mb-4">🌐</span>
                           <span className="text-teal-300 text-2xl font-medium">Web Page Editor</span>
                         </div>
                       )}
@@ -4913,7 +4928,11 @@ import type { Slide } from "@/types";\n${text}`,
                         {currentlyDisplayedSlide.title}
                       </h1>
                       <div className="w-full flex-1 flex justify-center items-center rounded-xl overflow-hidden shadow-2xl relative z-10 p-4">
-                        {(currentlyDisplayedSlide as any).subtype === "video" ? (
+                        {(currentlyDisplayedSlide as any).subtype === "webpage" ? (
+                          <div className="absolute inset-0 w-full h-full bg-white rounded-xl overflow-hidden">
+                            <iframe src={currentlyDisplayedSlide.content} className="w-full h-full border-0" />
+                          </div>
+                        ) : (currentlyDisplayedSlide as any).subtype === "video" ? (
                           <video
                             src={resolveMediaUrl(typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : ((currentlyDisplayedSlide as any).videoSettings?.url || undefined))}
                             autoPlay={(currentlyDisplayedSlide as any).videoSettings?.autoPlay ?? true}
@@ -4938,6 +4957,10 @@ import type { Slide } from "@/types";\n${text}`,
                               }
                             }}
                           />
+                        ) : (currentlyDisplayedSlide as any).subtype === "canvas" ? (
+                          <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
+                            <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} />
+                          </div>
                         ) : (
                           <img
                             src={resolveMediaUrl(typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content.length > 5 && currentlyDisplayedSlide.content !== "Worship background image" && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : undefined) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
@@ -5647,8 +5670,13 @@ import type { Slide } from "@/types";\n${text}`,
                                     />
                                   </div>
                                 ) : slide.type === "media" ? (
-                                  <div className="absolute inset-0 flex items-center justify-center">
-                                    {(slide as any).subtype === "video" ? (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black">
+                                    {(slide as any).subtype === "webpage" ? (
+                                      <div className="absolute inset-0 w-full h-full bg-white overflow-hidden">
+                                        <div className="absolute inset-0 z-20 cursor-pointer" />
+                                        <iframe src={slide.content} scrolling="no" className="w-full h-full border-0 pointer-events-none scale-[1.5] origin-top-left" style={{ width: '150%', height: '150%' }} />
+                                      </div>
+                                    ) : (slide as any).subtype === "video" ? (
                                       <video
                                         src={resolveMediaUrl(typeof slide.content === 'string' ? slide.content : undefined) || (typeof slide.content === 'string' && slide.content !== "Inspirational worship video" ? slide.content : ((slide as any).videoSettings?.url || undefined))}
                                         className={(slide as any).videoSettings?.displayMode === "center" ? "w-full h-full object-contain bg-black" : "w-full h-full object-cover"}
@@ -5656,6 +5684,10 @@ import type { Slide } from "@/types";\n${text}`,
                                         muted
                                         playsInline
                                       />
+                                    ) : (slide as any).subtype === "canvas" ? (
+                                      <div className="relative z-10 w-full h-full object-contain bg-black border border-purple-500/30">
+                                        <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} />
+                                      </div>
                                     ) : (
                                       <img
                                         src={resolveMediaUrl(typeof slide.content === 'string' ? slide.content : undefined) || (typeof slide.content === 'string' && slide.content.length > 5 && slide.content !== "Worship background image" && slide.content !== "Inspirational worship video" ? slide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop")}

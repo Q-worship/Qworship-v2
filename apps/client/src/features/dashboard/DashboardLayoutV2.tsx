@@ -695,7 +695,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   const getItemBackground = (itemId: string) => {
     // If it is a media item, its content is effectively the background for the live window!
     const item = serviceItems.find((i) => i.id === itemId);
-    if (item && item.type === "media") {
+    if (item && item.type === "media" && (item.subtype === "image" || item.subtype === "video" || item.subtype === "slideshow")) {
       // For slideshow/image items with multiple slides, use the currently displayed slide's content
       let mediaUrl: string | undefined;
       if ((item.subtype === "slideshow" || item.subtype === "image") && item.slides?.length > 0) {
@@ -836,6 +836,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // For webpage items, route to the WebPage Editor
         setEditingContent(parentItem);
         setSelectedContentType("webpage");
+        setSelectedSlide(null);
+        setIsSlideEditorOpen(false);
+      } else if (parentItem.type === "media" && parentItem.subtype === "canvas") {
+        // For canvas items, route to the full Slide Canvas Editor
+        setEditingContent(parentItem);
+        setSelectedContentType("canvas");
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
       } else if (parentItem.type === "media" && (parentItem.subtype === "slideshow" || parentItem.subtype === "image" || parentItem.subtype === "video")) {
@@ -1151,6 +1157,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           type: s.type,
           sectionLabel: s.sectionLabel,
           itemId: s.itemId,
+          subtype: s.subtype,
         })),
         itemBackgrounds,
       });
@@ -2854,6 +2861,17 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             sectionLabel: "Announcement",
           };
           allSlides.push(announcementSlide);
+        } else if (item.type === "media" || item.type === "liturgy") {
+          const mediaSlide = {
+            id: `item-${item.id}-${Date.now()}`,
+            type: item.type as any,
+            subtype: item.subtype,
+            title: item.title || "Untitled",
+            content: item.content,
+            sectionLabel: item.type === "media" ? "Media" : "Content",
+            itemId: item.id,
+          };
+          allSlides.push(mediaSlide);
         } else {
           // For other non-song items, create a single slide
           const singleSlide = {

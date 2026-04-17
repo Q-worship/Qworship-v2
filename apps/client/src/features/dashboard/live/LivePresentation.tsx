@@ -23,6 +23,7 @@ import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 
 import { OBSControlPanel } from "@/features/dashboard/components/OBSControlPanel";
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
+import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
@@ -2771,9 +2772,39 @@ export const LivePresentation = (): JSX.Element => {
                 {liveProjection}
               </div>
             </div>
-          ) : slides.length > 0 &&
-            slides[currentSlide - 1] &&
-            activeMode === "slides" ? (
+          ) : /* Webpage & Canvas Full Screen Output */
+            activeMode === "slides" &&
+              slides &&
+              slides.length > 0 &&
+              currentSlide > 0 &&
+              slides[currentSlide - 1] &&
+              slides[currentSlide - 1].type === "media" &&
+              (slides[currentSlide - 1].subtype === "canvas" ||
+                slides[currentSlide - 1].subtype === "webpage") ? (
+              <div key={`slide-${currentSlide}-${animationKey}`} className="absolute top-0 left-0 w-screen h-screen z-10 overflow-hidden bg-black">
+                {slides[currentSlide - 1].subtype === "canvas" && (
+                  <div className="w-full h-full relative drop-shadow-2xl flex justify-center items-center">
+                    <SlideCanvasRenderer content={slides[currentSlide - 1].content} background={{ type: "transparent" }} />
+                  </div>
+                )}
+                {slides[currentSlide - 1].subtype === "webpage" && (
+                  <div className="w-full h-full relative bg-white">
+                    {slides[currentSlide - 1].content &&
+                      ((typeof slides[currentSlide - 1].content === "string" && slides[currentSlide - 1].content.length > 5) || 
+                      (typeof slides[currentSlide - 1].content === "object" && slides[currentSlide - 1].content.url)) && (
+                        <iframe
+                          src={typeof slides[currentSlide - 1].content === "string" ? slides[currentSlide - 1].content : slides[currentSlide - 1].content.url}
+                          title="Web Page Live Output"
+                          className="w-full h-full border-0 overflow-auto"
+                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        />
+                      )}
+                  </div>
+                )}
+              </div>
+            ) : activeMode === "slides" &&
+              slides.length > 0 &&
+              slides[currentSlide - 1] ? (
             /* Display Current Slide from Dashboard - only when activeMode is 'slides' */
             <div
               key={`slide-${currentSlide}-${animationKey}`}
@@ -2873,8 +2904,8 @@ export const LivePresentation = (): JSX.Element => {
                 </>
               ) : slides[currentSlide - 1].type === "media" ? (
                 <>
-                  {/* Media content (the video/image) renders natively in the background via getBackgroundStyle()!
-                      No text or title overlay - images fill the entire screen. */}
+                  {/* Media slides normally have their visual content in the background style 
+                      or video background element, so no text overlay is needed. */}
                 </>
               ) : (
                 <>

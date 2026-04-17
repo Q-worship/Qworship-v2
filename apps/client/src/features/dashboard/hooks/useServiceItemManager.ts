@@ -360,6 +360,18 @@ export function useServiceItemManager({
       ];
     }
 
+    if (item.type === "media" || item.type === "liturgy") {
+      return [
+        {
+          id: `item-${item.id}-${Date.now()}`,
+          type: item.type as any,
+          subtype: item.subtype,
+          title: item.title || "Untitled",
+          content: item.content,
+        },
+      ];
+    }
+
     return [
       {
         id: `item-${item.id}-${Date.now()}`,

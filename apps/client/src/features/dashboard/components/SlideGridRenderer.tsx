@@ -1,6 +1,7 @@
 import React from "react";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
 
 export const SlideGridRenderer = (props: any) => {
   const { 
@@ -557,6 +558,11 @@ export const SlideGridRenderer = (props: any) => {
                                                 ? (() => { try { return new URL(slide.content).hostname; } catch { return "Ready for content"; } })()
                                                 : "Ready for content"}
                                             </div>
+                                          </div>
+                                        ) : (slide.type === "media" && (slide as any).subtype === "canvas") ? (
+                                          <div className="h-full w-full relative">
+                                            <div className="absolute inset-0 z-20 pointer-events-none border border-purple-500/30"></div>
+                                            <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} />
                                           </div>
                                         ) : (slide.type === "media" && (slide as any).subtype === "video") ? (
                                           <div className="h-full flex flex-col justify-center items-center z-20">

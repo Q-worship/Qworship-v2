@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { SlideCanvasRenderer } from '@/features/dashboard/components/SlideCanvasRenderer';
 
 interface SlideContent {
-  type: 'song' | 'bible' | 'announcement' | 'custom';
+  type: 'song' | 'bible' | 'announcement' | 'custom' | 'media';
+  subtype?: 'canvas' | 'webpage' | 'video' | 'image';
   title?: string;
   sectionTitle?: string;
   content: string;
@@ -293,6 +295,46 @@ export default function OBSPresentationView() {
                 >
                   {currentSlide.content}
                 </div>
+              </>
+            )}
+
+            {currentSlide.type === 'media' && (
+              <>
+                {(currentSlide as any).subtype === 'canvas' ? (
+                  <div className="absolute inset-0 w-full h-full z-10">
+                    <SlideCanvasRenderer content={currentSlide.content} />
+                  </div>
+                ) : (currentSlide as any).subtype === 'webpage' ? (
+                  <div className="absolute inset-0 w-full h-full z-10 bg-white">
+                    {currentSlide.content && typeof currentSlide.content === "string" && currentSlide.content.length > 5 ? (
+                      <iframe
+                        src={currentSlide.content}
+                        title="Web Page Preview"
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[#1a0f2e]">
+                        <span className="text-teal-400" style={{ fontSize: `calc(${fontSize} * 1.5)` }}>🌍 Web Page</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (currentSlide as any).subtype === 'video' ? (
+                  <video
+                    src={currentSlide.content}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover z-10"
+                  />
+                ) : (
+                  <img
+                    src={currentSlide.content}
+                    alt={currentSlide.title || "Media slide"}
+                    className="absolute inset-0 w-full h-full object-cover z-10"
+                  />
+                )}
               </>
             )}
           </div>
