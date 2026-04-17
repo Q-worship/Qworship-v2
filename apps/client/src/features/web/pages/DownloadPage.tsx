@@ -135,9 +135,9 @@ export const DownloadPage = (): JSX.Element => {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#ee85ff]/10 rounded-full blur-[120px]"></div>
           </div>
           <div className="relative z-10 max-w-4xl mx-auto">
-            <h1 className="text-4xl md:text-5xl lg:text-[54px] [font-family:'Manrope',sans-serif] font-bold tracking-tight text-white mb-6 leading-[1.15]">
-              Start changing your worship <br />
-              experience with <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ee85ff] to-[#c57eff]">Q-worship Desktop</span>
+            <h1 className="text-4xl md:text-5xl lg:text-[54px] [font-family:'Manrope',sans-serif] font-bold text-white mb-6 tracking-normal flex flex-col gap-4 md:gap-6">
+              <span>Start changing your worship</span>
+              <span className="whitespace-nowrap">experience with&nbsp;&nbsp;<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ee85ff] to-[#ea7aff]">Q-worship Desktop</span></span>
             </h1>
             <p className="text-base md:text-lg lg:text-[19px] text-[#afa7c2] font-normal max-w-2xl mx-auto leading-relaxed">
               Professional worship presentation software with Hands-free <br />

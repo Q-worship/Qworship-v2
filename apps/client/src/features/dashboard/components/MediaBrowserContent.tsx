@@ -1,6 +1,6 @@
 import React from "react";
 import type { MediaAsset, User } from "@/types";
-import { DynamicMediaSections } from "@/features/dashboard/components/sections/DynamicMediaSections";
+import { DynamicMediaSections } from "@/components/sections/DynamicMediaSections";
 
 // Enhanced media browser component for background selection - matches Assets page design
 export const MediaBrowserContent: React.FC<{
@@ -62,7 +62,7 @@ export const MediaBrowserContent: React.FC<{
           hasUsedAssets={false}
           hasUploadedAssets={true}
           selectedMedia={selectedMedia}
-          onMediaSelect={(selectedItem) => {
+          onMediaSelect={(selectedItem: any) => {
             setSelectedMedia(selectedItem);
             if (selectedItem?.asset) {
               onSelectMedia(selectedItem.asset);

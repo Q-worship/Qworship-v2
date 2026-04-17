@@ -2,7 +2,7 @@ import React from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import qworshipLogo from "@/assets/logo.png";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
-
+import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
 
 interface SlideDisplayAreaProps {
   isBuildMode: boolean;
@@ -212,6 +212,10 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                           </div>
                         )}
                       </div>
+                    ) : (selectedSlide.slide as any).subtype === "canvas" ? (
+                      <div className="absolute inset-0 w-full h-full z-10">
+                        <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} />
+                      </div>
                     ) : (selectedSlide.slide as any).subtype === "video" ? (
                       <video
                         src={resolveMediaUrl(selectedSlide.slide.content) || (selectedSlide.slide.content && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : undefined)}
@@ -411,6 +415,10 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                           </div>
                         )}
                       </div>
+                    ) : (currentlyDisplayedSlide as any).subtype === "canvas" ? (
+                        <div className="absolute inset-0 w-full h-full z-10">
+                          <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} />
+                        </div>
                     ) : (currentlyDisplayedSlide as any).subtype === "video" ? (
                         <video
                           src={resolveMediaUrl(currentlyDisplayedSlide.content) || (currentlyDisplayedSlide.content && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : undefined)}

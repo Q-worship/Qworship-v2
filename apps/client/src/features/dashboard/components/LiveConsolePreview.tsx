@@ -4,6 +4,7 @@ import facebookIcon from "@assets/R (2)_1756733484236.png";
 import instagramIcon from "@assets/1658586823instagram-logo-transparent_1756733484234.png";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
 
 
 export interface LiveConsolePreviewProps {
@@ -222,6 +223,10 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
                         }
                     }}
                   />
+                ) : (currentSlideData as any).subtype === "canvas" ? (
+                  <div className="absolute inset-0 w-full h-full z-10">
+                     <SlideCanvasRenderer content={currentSlideData.content} />
+                  </div>
                 ) : (
                   <img
                     src={resolveMediaUrl(currentSlideData.content) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}

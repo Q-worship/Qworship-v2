@@ -1,7 +1,7 @@
 import React from "react";
 import { useLivePresentationState } from "../useLivePresentationState";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
-
+import { SlideCanvasRenderer } from "../../components/SlideCanvasRenderer";
 
 export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState>> = (props) => {
   const {
@@ -152,7 +152,22 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                 className={`${getSlideTransitionClass()}`}
                 style={{ position: 'fixed', inset: 0, zIndex: 10 }}
               >
-                {(slides[currentSlide - 1] as any).subtype === "video" ? (
+                {(slides[currentSlide - 1] as any).subtype === "canvas" ? (
+                  <div className="w-full h-full relative drop-shadow-2xl flex justify-center items-center">
+                      <SlideCanvasRenderer content={slides[currentSlide - 1].content} background={{ type: "transparent" }} />
+                  </div>
+                ) : (slides[currentSlide - 1] as any).subtype === "webpage" ? (
+                  <div className="w-full h-full relative bg-white">
+                      {slides[currentSlide - 1].content && (
+                          <iframe
+                            src={typeof slides[currentSlide - 1].content === "string" ? slides[currentSlide - 1].content : slides[currentSlide - 1].content.url}
+                            title="Web Page Live Output"
+                            className="w-full h-full border-0 overflow-auto"
+                            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                          />
+                      )}
+                  </div>
+                ) : (slides[currentSlide - 1] as any).subtype === "video" ? (
                   <video
                     src={resolveMediaUrl(slides[currentSlide - 1].content) || (slides[currentSlide - 1].content && slides[currentSlide - 1].content !== "Inspirational worship video" ? slides[currentSlide - 1].content : undefined)}
                     autoPlay={(slides[currentSlide - 1] as any).videoSettings?.autoPlay ?? true}
