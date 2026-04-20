@@ -21,6 +21,8 @@ import { EditAndPreparationArea } from "@/features/dashboard/components/EditAndP
 import { SidebarOpen, SidebarClose } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
+import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+
 export const DashboardMainWorkspace = (props: any) => {
   const {
     isBuildMode, editingContent, selectedServiceSection, handleSlideClick,
@@ -2686,7 +2688,7 @@ import type { Slide } from "@/types";\n${text}`,
                                         setCurrentlyDisplayedSlide(slide);
                                       }
                                     }}>
-                                    <img src={slide.content} className="w-full h-full object-cover" />
+                                    <img src={resolveMediaUrl(slide.content) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"} className="w-full h-full object-cover" />
                                     <div className="absolute top-0 right-0 left-0 bg-black/70 p-2 flex justify-between opacity-100 transition-opacity backdrop-blur-sm">
                                       <div className="flex space-x-1">
                                         <button disabled={idx === 0} className="bg-gray-700/80 hover:bg-gray-500 text-white p-1 rounded disabled:opacity-30 disabled:cursor-not-allowed"
@@ -2768,7 +2770,7 @@ import type { Slide } from "@/types";\n${text}`,
                                 </button>
                               </div>
                             </div>
-                            
+
                             {/* Import Media Modal for Image Editor */}
                             <ImportFilesModal
                               open={isImageImportModalOpen}
@@ -2779,7 +2781,7 @@ import type { Slide } from "@/types";\n${text}`,
                                     id: `slide-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                     type: "media" as const,
                                     subtype: "image" as const,
-                                    title: editingContent.title || asset.title || "Imported Image",
+                                    title: asset.title || asset.fileName || editingContent.title || "Imported Image",
                                     content: asset.fileUrl,
                                     itemId: editingContent.id
                                   }
@@ -2797,64 +2799,64 @@ import type { Slide } from "@/types";\n${text}`,
 
                             {/* Inline Playback Settings */}
                             <div className="flex flex-wrap items-center bg-[#2a1f3d] p-3 rounded-lg border border-gray-600 gap-x-6 gap-y-2 text-sm">
-                               <label className="flex items-center space-x-2 text-white cursor-pointer w-max m-0">
-                                 <input
-                                   type="checkbox"
-                                   className="rounded bg-[#0f0624] border-gray-600 text-purple-600 focus:ring-purple-500 w-4 h-4 m-0 p-0"
-                                   checked={editingContent.content?.autoAdvance ?? true}
-                                   onChange={(e) => {
-                                     const nextContent = { ...((typeof editingContent.content === 'object' && editingContent.content) ? editingContent.content : {}), autoAdvance: e.target.checked };
-                                     updateItemContent(editingContent.id, editingContent.title, nextContent, editingContent.slides);
-                                     setEditingContent({...editingContent, content: nextContent});
-                                   }}
-                                 />
-                                 <span>Auto-advance sequence</span>
-                               </label>
-                               
-                               <div className="flex items-center space-x-2 text-gray-300 border-l border-gray-600 pl-6">
-                                 <span>Timer (sec):</span>
-                                 <input
-                                    type="number"
-                                    className="h-7 w-14 bg-[#0f0624] border border-gray-600 text-center rounded text-white"
-                                    value={typeof editingContent.content?.timer === 'number' ? editingContent.content.timer : 5}
-                                    min={1}
-                                    onChange={(e) => {
-                                      const nextContent = { ...((typeof editingContent.content === 'object' && editingContent.content) ? editingContent.content : {}), timer: parseInt(e.target.value) || 5 };
-                                      updateItemContent(editingContent.id, editingContent.title, nextContent, editingContent.slides);
-                                      setEditingContent({...editingContent, content: nextContent});
-                                    }}
-                                 />
-                               </div>
-                               
-                               <div className="flex items-center space-x-2 text-gray-300 border-l border-gray-600 pl-6">
-                                 <span>Transition:</span>
-                                 <select
-                                    className="h-7 bg-[#0f0624] border border-gray-600 rounded px-1 text-white outline-none w-28"
-                                    value={editingContent.content?.transition ?? "fade"}
-                                    onChange={(e) => {
-                                      const nextContent = { ...((typeof editingContent.content === 'object' && editingContent.content) ? editingContent.content : {}), transition: e.target.value };
-                                      updateItemContent(editingContent.id, editingContent.title, nextContent, editingContent.slides);
-                                      setEditingContent({...editingContent, content: nextContent});
-                                    }}
-                                 >
-                                   <option value="none">None</option>
-                                   <option value="fade">Fade In/Out</option>
-                                   <option value="slide">Slide Left</option>
-                                 </select>
-                               </div>
+                              <label className="flex items-center space-x-2 text-white cursor-pointer w-max m-0">
+                                <input
+                                  type="checkbox"
+                                  className="rounded bg-[#0f0624] border-gray-600 text-purple-600 focus:ring-purple-500 w-4 h-4 m-0 p-0"
+                                  checked={editingContent.content?.autoAdvance ?? true}
+                                  onChange={(e) => {
+                                    const nextContent = { ...((typeof editingContent.content === 'object' && editingContent.content) ? editingContent.content : {}), autoAdvance: e.target.checked };
+                                    updateItemContent(editingContent.id, editingContent.title, nextContent, editingContent.slides);
+                                    setEditingContent({ ...editingContent, content: nextContent });
+                                  }}
+                                />
+                                <span>Auto-advance sequence</span>
+                              </label>
+
+                              <div className="flex items-center space-x-2 text-gray-300 border-l border-gray-600 pl-6">
+                                <span>Timer (sec):</span>
+                                <input
+                                  type="number"
+                                  className="h-7 w-14 bg-[#0f0624] border border-gray-600 text-center rounded text-white"
+                                  value={typeof editingContent.content?.timer === 'number' ? editingContent.content.timer : 5}
+                                  min={1}
+                                  onChange={(e) => {
+                                    const nextContent = { ...((typeof editingContent.content === 'object' && editingContent.content) ? editingContent.content : {}), timer: parseInt(e.target.value) || 5 };
+                                    updateItemContent(editingContent.id, editingContent.title, nextContent, editingContent.slides);
+                                    setEditingContent({ ...editingContent, content: nextContent });
+                                  }}
+                                />
+                              </div>
+
+                              <div className="flex items-center space-x-2 text-gray-300 border-l border-gray-600 pl-6">
+                                <span>Transition:</span>
+                                <select
+                                  className="h-7 bg-[#0f0624] border border-gray-600 rounded px-1 text-white outline-none w-28"
+                                  value={editingContent.content?.transition ?? "fade"}
+                                  onChange={(e) => {
+                                    const nextContent = { ...((typeof editingContent.content === 'object' && editingContent.content) ? editingContent.content : {}), transition: e.target.value };
+                                    updateItemContent(editingContent.id, editingContent.title, nextContent, editingContent.slides);
+                                    setEditingContent({ ...editingContent, content: nextContent });
+                                  }}
+                                >
+                                  <option value="none">None</option>
+                                  <option value="fade">Fade In/Out</option>
+                                  <option value="slide">Slide Left</option>
+                                </select>
+                              </div>
                             </div>
 
                             {/* Image Sequence Grid */}
                             <h4 className="text-white font-medium mt-2 border-b border-gray-600 pb-2 flex items-center justify-between">
-                               <span>Image Sequence</span>
-                               <span className="text-purple-300 font-medium text-xs bg-purple-900/30 px-2 py-1 rounded border border-purple-500/30">{editingContent.slides?.length || 0} Slides Total</span>
+                              <span>Image Sequence</span>
+                              <span className="text-purple-300 font-medium text-xs bg-purple-900/30 px-2 py-1 rounded border border-purple-500/30">{editingContent.slides?.length || 0} Slides Total</span>
                             </h4>
 
                             {editingContent.slides?.length > 0 ? (
                               <div className="flex flex-row overflow-x-auto gap-4 custom-scrollbar p-4 bg-[#0f0624] rounded-lg border border-gray-600 shadow-inner max-w-full">
                                 {editingContent.slides.map((slide: any, idx: number) => (
                                   <div key={slide.id} className="relative group bg-black border border-gray-600 shadow-md rounded-lg overflow-hidden flex flex-col flex-shrink-0 w-[240px] aspect-video hover:border-purple-500 transition-colors">
-                                    <img src={slide.content} alt={slide.title || `Slide ${idx + 1}`} className="relative z-10 w-full h-full object-contain bg-black" />
+                                    <img src={resolveMediaUrl(slide.content) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"} alt={slide.title || `Slide ${idx + 1}`} className="relative z-10 w-full h-full object-contain bg-black" />
                                     <div className="absolute z-20 top-0 right-0 left-0 bg-black/70 p-2 flex justify-between opacity-100 transition-opacity backdrop-blur-sm">
                                       <div className="flex space-x-1">
                                         <button disabled={idx === 0} className="bg-gray-700 hover:bg-gray-500 text-white p-1 rounded disabled:opacity-30 disabled:cursor-not-allowed"
@@ -2917,7 +2919,7 @@ import type { Slide } from "@/types";\n${text}`,
                                   id: `slide-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                   type: "media" as const,
                                   subtype: "image" as const,
-                                  title: editingContent.title || bg.name || "Cloud Image",
+                                  title: bg.name || editingContent.title || "Cloud Image",
                                   content: bg.value,
                                   itemId: editingContent.id
                                 };
@@ -2990,7 +2992,7 @@ import type { Slide } from "@/types";\n${text}`,
                                     id: `slide-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                     type: "media" as const,
                                     subtype: "video" as const,
-                                    title: editingContent.title || asset.title || "Imported Video",
+                                    title: asset.title || asset.fileName || editingContent.title || "Imported Video",
                                     content: url,
                                     videoSettings: { ...contentObj, url },
                                     itemId: editingContent.id
@@ -3004,7 +3006,7 @@ import type { Slide } from "@/types";\n${text}`,
                                 const updatedSlides = [...existingRealSlides, ...newSlides];
                                 const finalContentObj = { ...contentObj, url: newSlides[0]?.content };
                                 updateItemContent(editingContent.id, editingContent.title, finalContentObj, updatedSlides);
-                                setEditingContent({...editingContent, content: finalContentObj, slides: updatedSlides});
+                                setEditingContent({ ...editingContent, content: finalContentObj, slides: updatedSlides });
                                 setIsVideoImportModalOpen(false);
                               }}
                             />
@@ -3056,9 +3058,9 @@ import type { Slide } from "@/types";\n${text}`,
                                     setEditingContent({ ...editingContent, content: nextContent, slides: nextSlides });
                                   }}
                                 >
-                                  <option value="loop">Loop</option>
-                                  <option value="nothing">Stop</option>
-                                  <option value="advance">Next</option>
+                                  <option value="loop">Loop continuously</option>
+                                  <option value="nothing">Do Nothing</option>
+                                  <option value="advance">Advance To Next Slide</option>
                                 </select>
                               </div>
 
@@ -3124,7 +3126,7 @@ import type { Slide } from "@/types";\n${text}`,
                                   id: `slide-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                                   type: "media" as const,
                                   subtype: "video" as const,
-                                  title: editingContent.title || bg.name || "Cloud Video",
+                                  title: bg.name || editingContent.title || "Cloud Video",
                                   content: bg.value,
                                   videoSettings: contentObj,
                                   itemId: editingContent.id
@@ -3939,26 +3941,19 @@ import type { Slide } from "@/types";\n${text}`,
                     itemBackground.type === "image" ||
                     itemBackground.type === "video"
                   ) {
-                    // Ensure URL is properly formatted with absolute path
-                    let backgroundUrl = itemBackground.value;
-                    if (
-                      !backgroundUrl.startsWith("http") &&
-                      !backgroundUrl.startsWith("data:")
-                    ) {
-                      backgroundUrl = `${window.location.origin}${backgroundUrl.startsWith("/") ? "" : "/"}${backgroundUrl}`;
+                    const backgroundUrl = resolveMediaUrl(itemBackground.value);
+                    if (backgroundUrl) {
+                      return {
+                        backgroundImage: `url("${backgroundUrl}")`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                        backgroundRepeat: "no-repeat",
+                        backgroundColor: "#000000",
+                        minHeight: "100%",
+                        width: "100%",
+                      };
                     }
-
-                    const backgroundStyle = {
-                      backgroundImage: `url("${backgroundUrl}")`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                      backgroundRepeat: "no-repeat",
-                      backgroundColor: "#000000", // Black fallback
-                      minHeight: "100%",
-                      width: "100%",
-                    };
-
-                    return backgroundStyle;
+                    return { backgroundColor: "#000000" };
                   } else {
                     return {
                       backgroundColor:
@@ -4156,9 +4151,25 @@ import type { Slide } from "@/types";\n${text}`,
                             <video
                               src={typeof selectedSlide.slide.content === "string" && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : (selectedSlide.slide.videoSettings?.url || undefined)}
                               autoPlay={(selectedSlide.slide as any).videoSettings?.autoPlay ?? true}
-                              loop={(selectedSlide.slide as any).videoSettings?.endAction !== "nothing"}
+                              loop={(selectedSlide.slide as any).videoSettings?.endAction === "loop"}
                               muted
                               className={(selectedSlide.slide as any).videoSettings?.displayMode === "center" ? "max-w-full max-h-full object-contain rounded-xl" : "w-full h-full object-cover rounded-xl"}
+                              onTimeUpdate={(e) => {
+                                const videoSettings = (selectedSlide.slide as any).videoSettings;
+                                if (!videoSettings) return;
+                                const videoEle = e.currentTarget;
+                                const endTime = videoSettings.endTime;
+                                const startTime = videoSettings.startTime || 0;
+                                if (videoEle.currentTime < startTime - 0.5) videoEle.currentTime = startTime;
+                                if (endTime && videoEle.currentTime >= endTime) {
+                                  if (videoSettings.endAction === "loop") {
+                                    videoEle.currentTime = startTime;
+                                    videoEle.play().catch(console.error);
+                                  } else {
+                                    videoEle.pause();
+                                  }
+                                }
+                              }}
                             />
                           ) : (
                             <img
@@ -4680,7 +4691,7 @@ import type { Slide } from "@/types";\n${text}`,
                         return (
                           <>
                             <img
-                              src={displaySlide?.content}
+                              src={resolveMediaUrl(displaySlide?.content) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
                               alt={displaySlide?.title || editingContent.title}
                               className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black"
                             />
@@ -4693,16 +4704,34 @@ import type { Slide } from "@/types";\n${text}`,
                     </>
                   ) : editingContent.subtype === "video" ? (
                     <video
-                      src={typeof editingContent.content === 'string' ? editingContent.content : (editingContent.content?.url || editingContent.slides?.[0]?.content?.split('#')[0] || undefined)}
-                      autoPlay loop muted
+                      src={resolveMediaUrl(typeof editingContent.content === 'string' ? editingContent.content : (editingContent.content?.url || editingContent.slides?.[0]?.content?.split('#')[0] || undefined))}
+                      autoPlay={(typeof editingContent.content !== 'string' && editingContent.content?.autoPlay !== undefined) ? editingContent.content.autoPlay : true}
+                      loop={(typeof editingContent.content !== 'string' && editingContent.content?.endAction === "loop")}
+                      muted
                       controls
                       className={editingContent.content?.displayMode === "center" ? "absolute inset-0 w-full h-full object-contain" : "absolute inset-0 w-full h-full object-cover"}
+                      onTimeUpdate={(e) => {
+                        const videoSettings = typeof editingContent.content !== 'string' ? editingContent.content : null;
+                        if (!videoSettings) return;
+                        const videoEle = e.currentTarget;
+                        const endTime = videoSettings.endTime;
+                        const startTime = videoSettings.startTime || 0;
+                        if (videoEle.currentTime < startTime - 0.5) videoEle.currentTime = startTime;
+                        if (endTime && videoEle.currentTime >= endTime) {
+                          if (videoSettings.endAction === "loop") {
+                            videoEle.currentTime = startTime;
+                            videoEle.play().catch(console.error);
+                          } else {
+                            videoEle.pause();
+                          }
+                        }
+                      }}
                     />
                   ) : (
                     /* Single image fallback */
                     <>
                       <img
-                        src={typeof editingContent.content === 'string' && editingContent.content.length > 5 && editingContent.content !== "Worship background image" ? editingContent.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
+                        src={resolveMediaUrl(typeof editingContent.content === 'string' && editingContent.content.length > 5 && editingContent.content !== "Worship background image" ? editingContent.content : undefined) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
                         alt={editingContent.title}
                         className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black"
                       />
@@ -4802,14 +4831,8 @@ import type { Slide } from "@/types";\n${text}`,
                       itemBackground.type === "image" ||
                       itemBackground.type === "video"
                     ) {
-                      // Ensure URL is properly formatted with absolute path
-                      let backgroundUrl = itemBackground.value;
-                      if (
-                        !backgroundUrl.startsWith("http") &&
-                        !backgroundUrl.startsWith("data:")
-                      ) {
-                        backgroundUrl = `${window.location.origin}${backgroundUrl.startsWith("/") ? "" : "/"}${backgroundUrl}`;
-                      }
+                      // Ensure URL is properly resolved for media rendering
+                      let backgroundUrl = resolveMediaUrl(itemBackground.value) || itemBackground.value;
 
                       console.log(
                         "🌄 Main preview applying media background URL:",
@@ -4857,16 +4880,32 @@ import type { Slide } from "@/types";\n${text}`,
                       <div className="w-full flex-1 flex justify-center items-center rounded-xl overflow-hidden shadow-2xl relative z-10 p-4">
                         {(currentlyDisplayedSlide as any).subtype === "video" ? (
                           <video
-                            src={typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : ((currentlyDisplayedSlide as any).videoSettings?.url || undefined)}
+                            src={resolveMediaUrl(typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : ((currentlyDisplayedSlide as any).videoSettings?.url || undefined))}
                             autoPlay={(currentlyDisplayedSlide as any).videoSettings?.autoPlay ?? true}
-                            loop={(currentlyDisplayedSlide as any).videoSettings?.endAction !== "nothing"}
+                            loop={(currentlyDisplayedSlide as any).videoSettings?.endAction === "loop"}
                             muted
                             controls
                             className={(currentlyDisplayedSlide as any).videoSettings?.displayMode === "center" ? "w-full h-full object-contain rounded-xl bg-black" : "absolute inset-0 w-full h-full object-cover rounded-none"}
+                            onTimeUpdate={(e) => {
+                              const videoSettings = (currentlyDisplayedSlide as any).videoSettings;
+                              if (!videoSettings) return;
+                              const videoEle = e.currentTarget;
+                              const endTime = videoSettings.endTime;
+                              const startTime = videoSettings.startTime || 0;
+                              if (videoEle.currentTime < startTime - 0.5) videoEle.currentTime = startTime;
+                              if (endTime && videoEle.currentTime >= endTime) {
+                                if (videoSettings.endAction === "loop") {
+                                  videoEle.currentTime = startTime;
+                                  videoEle.play().catch(console.error);
+                                } else {
+                                  videoEle.pause();
+                                }
+                              }
+                            }}
                           />
                         ) : (
                           <img
-                            src={typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content.length > 5 && currentlyDisplayedSlide.content !== "Worship background image" && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
+                            src={resolveMediaUrl(typeof currentlyDisplayedSlide.content === "string" && currentlyDisplayedSlide.content.length > 5 && currentlyDisplayedSlide.content !== "Worship background image" && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : undefined) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
                             alt={currentlyDisplayedSlide.title || "Media preview"}
                             className="max-w-full max-h-full object-contain rounded-xl"
                           />
@@ -5072,22 +5111,16 @@ import type { Slide } from "@/types";\n${text}`,
                           background.type === "image" ||
                           background.type === "video"
                         ) {
-                          // Ensure URL is properly formatted with absolute path
-                          let backgroundUrl = background.value;
-                          if (
-                            !backgroundUrl.startsWith("http") &&
-                            !backgroundUrl.startsWith("data:")
-                          ) {
-                            backgroundUrl = `${window.location.origin}${backgroundUrl.startsWith("/") ? "" : "/"}${backgroundUrl}`;
+                          const backgroundUrl = resolveMediaUrl(background.value);
+                          if (backgroundUrl) {
+                            return {
+                              backgroundImage: `url("${backgroundUrl}")`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                              backgroundRepeat: "no-repeat",
+                              backgroundColor: "#000000",
+                            };
                           }
-
-                          return {
-                            backgroundImage: `url("${backgroundUrl}")`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                            backgroundRepeat: "no-repeat",
-                            backgroundColor: "#000000",
-                          };
                         }
 
                         return {
@@ -5269,48 +5302,42 @@ import type { Slide } from "@/types";\n${text}`,
                 >
                   {/* Slide Thumbnails with uniform background and external titles */}
                   {slides.map((slide, index) => {
-                    // Group slides by content type and item to calculate item slide numbers
+                    // Group slides intelligently
                     let itemSlideNumber = 1;
                     let totalItemSlides = 1;
 
-                    if (
+                    // Group by itemId to ensure seamless continuous tracks for media, verses, and bibles
+                    if (slide.itemId) {
+                      const parentItem = serviceItems.find((item) => item.id === slide.itemId);
+                      if (parentItem) {
+                        const sameItemSlides = parentItem.slides || [];
+                        itemSlideNumber = sameItemSlides.findIndex((s: any) => s.id === slide.id) + 1;
+                        totalItemSlides = sameItemSlides.length;
+                      } else {
+                        const sameItemSlides = slides.filter((s: any) => s.itemId === slide.itemId);
+                        itemSlideNumber = sameItemSlides.findIndex((s: any) => s.id === slide.id) + 1;
+                        totalItemSlides = sameItemSlides.length;
+                      }
+                    } else if (
                       slide.type === "verse" ||
                       slide.type === "chorus"
                     ) {
-                      // For songs, group by song name
-                      const songName =
-                        slide.songTitle || slide.title.split(" - ")[0];
+                      const songName = slide.songTitle || slide.title.split(" - ")[0];
                       const sameTypeSlides = slides.filter(
-                        (s) =>
-                          (s.type === "verse" || s.type === "chorus") &&
-                          (s.songTitle || s.title.split(" - ")[0]) ===
-                          songName,
+                        (s) => (s.type === "verse" || s.type === "chorus") && (s.songTitle || s.title.split(" - ")[0]) === songName,
                       );
-                      itemSlideNumber =
-                        sameTypeSlides.findIndex(
-                          (s: any) => s.id === slide.id,
-                        ) + 1;
+                      itemSlideNumber = sameTypeSlides.findIndex((s: any) => s.id === slide.id) + 1;
                       totalItemSlides = sameTypeSlides.length;
                     } else if (slide.type === "bible") {
-                      // For Bible verses, group by chapter
                       const bibleRef = slide.title.split(":")[0];
-                      const bibleSameChapterSlides = slides.filter(
-                        (s) =>
-                          s.type === "bible" &&
-                          s.title.split(":")[0] === bibleRef,
-                      );
-                      itemSlideNumber =
-                        bibleSameChapterSlides.findIndex(
-                          (s: any) => s.id === slide.id,
-                        ) + 1;
+                      const bibleSameChapterSlides = slides.filter((s) => s.type === "bible" && s.title.split(":")[0] === bibleRef);
+                      itemSlideNumber = bibleSameChapterSlides.findIndex((s: any) => s.id === slide.id) + 1;
                       totalItemSlides = bibleSameChapterSlides.length;
                     }
 
-                    // Get item title (song name, bible reference, etc.)
-                    const itemTitle =
-                      slide.songTitle ||
-                      slide.title.split(" - ")[0] ||
-                      slide.title;
+                    // Dynamically get live title from the updated service item to ensure edits reflect instantly
+                    const liveItem = slide.itemId ? serviceItems.find((item: any) => item.id === slide.itemId) : null;
+                    const itemTitle = liveItem ? liveItem.title : (slide.songTitle || slide.title.split(" - ")[0] || slide.title);
 
                     // Determine if this is the first slide of an item (should show title)
                     const isFirstSlideOfItem = itemSlideNumber === 1;
@@ -5423,35 +5450,17 @@ import type { Slide } from "@/types";\n${text}`,
                                     itemBackground.type === "image" ||
                                     itemBackground.type === "video"
                                   ) {
-                                    // Ensure URL is properly formatted with absolute path
-                                    let backgroundUrl =
-                                      itemBackground.value;
-                                    if (
-                                      !backgroundUrl.startsWith(
-                                        "http",
-                                      ) &&
-                                      !backgroundUrl.startsWith("data:")
-                                    ) {
-                                      // Convert relative path to absolute
-                                      backgroundUrl = `${window.location.origin}${backgroundUrl.startsWith("/") ? "" : "/"}${backgroundUrl}`;
+                                    const backgroundUrl = resolveMediaUrl(itemBackground.value);
+                                    if (backgroundUrl) {
+                                      return {
+                                        backgroundImage: `url("${backgroundUrl}")`,
+                                        backgroundSize: "cover",
+                                        backgroundPosition: "center",
+                                        backgroundRepeat: "no-repeat",
+                                        backgroundColor: "#1a0f2e",
+                                      };
                                     }
-
-                                    const styles = {
-                                      backgroundImage: `url("${backgroundUrl}")`,
-                                      backgroundSize: "cover",
-                                      backgroundPosition: "center",
-                                      backgroundRepeat: "no-repeat",
-                                      backgroundColor: "#1a0f2e", // Dark purple fallback
-                                    };
-                                    console.log(
-                                      "🎨 Applying slide thumbnail image background styles:",
-                                      styles,
-                                    );
-                                    console.log(
-                                      "🔗 Final thumbnail background URL:",
-                                      backgroundUrl,
-                                    );
-                                    return styles;
+                                    return { backgroundColor: "#2E2D39" };
                                   } else if (
                                     itemBackground.type ===
                                     "gradient" ||
@@ -5606,7 +5615,7 @@ import type { Slide } from "@/types";\n${text}`,
                                   <div className="absolute inset-0 flex items-center justify-center">
                                     {(slide as any).subtype === "video" ? (
                                       <video
-                                        src={typeof slide.content === 'string' && slide.content !== "Inspirational worship video" ? slide.content : ((slide as any).videoSettings?.url || undefined)}
+                                        src={resolveMediaUrl(typeof slide.content === 'string' ? slide.content : undefined) || (typeof slide.content === 'string' && slide.content !== "Inspirational worship video" ? slide.content : ((slide as any).videoSettings?.url || undefined))}
                                         className={(slide as any).videoSettings?.displayMode === "center" ? "w-full h-full object-contain bg-black" : "w-full h-full object-cover"}
                                         preload="metadata"
                                         muted
@@ -5614,7 +5623,7 @@ import type { Slide } from "@/types";\n${text}`,
                                       />
                                     ) : (
                                       <img
-                                        src={typeof slide.content === 'string' && slide.content.length > 5 && slide.content !== "Worship background image" && slide.content !== "Inspirational worship video" ? slide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
+                                        src={resolveMediaUrl(typeof slide.content === 'string' ? slide.content : undefined) || (typeof slide.content === 'string' && slide.content.length > 5 && slide.content !== "Worship background image" && slide.content !== "Inspirational worship video" ? slide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop")}
                                         alt={slide.title}
                                         className="relative z-10 w-full h-full object-contain bg-black"
                                       />

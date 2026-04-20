@@ -167,6 +167,7 @@ export const HeroSection = (): JSX.Element => {
           loop
           muted
           playsInline
+          preload="none"
         >
           <source src="/worship-loop.mp4" type="video/mp4" />
           Your browser does not support the video tag.

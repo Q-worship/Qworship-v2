@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -11,31 +11,32 @@ import { useSongRAMCache } from "@/features/dashboard/hooks/useSongRAMCache";
 import { SyncLoadingOverlay } from "@/features/dashboard/components/SyncLoadingOverlay";
 
 import { Home } from "@/features/web/pages/Home";
-import About from "@/features/web/pages/About";
-import { Pricing } from "@/features/web/pages/Pricing";
-import Contact from "@/features/web/pages/Contact";
-import EndUserLicense from "@/features/web/pages/EndUserLicense";
-import Features from "@/features/web/pages/Features";
-import PrivacyPolicy from "@/features/web/pages/PrivacyPolicy";
-import RefundPolicy from "@/features/web/pages/RefundPolicy";
-import { DocsPage } from "@/features/web/pages/DocsPage";
+const About = lazy(() => import("@/features/web/pages/About"));
+const Pricing = lazy(() => import("@/features/web/pages/Pricing").then(m => ({ default: m.Pricing })));
+const Contact = lazy(() => import("@/features/web/pages/Contact"));
+const EndUserLicense = lazy(() => import("@/features/web/pages/EndUserLicense"));
+const Features = lazy(() => import("@/features/web/pages/Features"));
+const PrivacyPolicy = lazy(() => import("@/features/web/pages/PrivacyPolicy"));
+const RefundPolicy = lazy(() => import("@/features/web/pages/RefundPolicy"));
+const DocsPage = lazy(() => import("@/features/web/pages/DocsPage").then(m => ({ default: m.DocsPage })));
 import SignInPage from "@/features/auth/pages/SignInPage";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
-import { LivePresentationV2 } from "@/features/dashboard/live/LivePresentationV2";
-import OrganizationSetup from "@/features/onboarding/pages/OrganizationSetup";
-import PlanSelection from "@/features/onboarding/pages/PlanSelection";
-import { ProjectSelection } from "@/features/onboarding/pages/ProjectSelection";
-import { QworshipHomeV2Wrapper } from "@/features/dashboard/DashboardLayoutV2";
+import DesktopAuthRemote from "@/features/auth/pages/DesktopAuthRemote";
+const LivePresentationV2 = lazy(() => import("@/features/dashboard/live/LivePresentationV2").then(m => ({ default: m.LivePresentationV2 })));
+const OrganizationSetup = lazy(() => import("@/features/onboarding/pages/OrganizationSetup"));
+const PlanSelection = lazy(() => import("@/features/onboarding/pages/PlanSelection"));
+const ProjectSelection = lazy(() => import("@/features/onboarding/pages/ProjectSelection").then(m => ({ default: m.ProjectSelection })));
+const QworshipHomeV2Wrapper = lazy(() => import("@/features/dashboard/DashboardLayoutV2").then(m => ({ default: m.QworshipHomeV2Wrapper })));
 
 import { AppLayout } from "./Layout";
 import { useAuthStore } from "@/features/auth/auth.store";
-import { BibleWorkspace } from "@/features/bible-reader/components/BibleWorkspace";
-import AssetsPage from "@/features/dashboard/pages/AssetsPage";
-import HelpSupportPage from "@/features/dashboard/pages/HelpSupportPage";
-import GuidesPage from "@/features/web/pages/GuidesPage";
+const BibleWorkspace = lazy(() => import("@/features/bible-reader/components/BibleWorkspace").then(m => ({ default: m.BibleWorkspace })));
+const AssetsPage = lazy(() => import("@/features/dashboard/pages/AssetsPage"));
+const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSupportPage"));
+const GuidesPage = lazy(() => import("@/features/web/pages/GuidesPage"));
+const SuperAdminSidebar = lazy(() => import("@/features/super-admin/components/SuperAdminSidebar"));
 import { LowerThirdEditorPage, LowerThirdSettingsPage } from "@/features/lowerThird";
 import { MainPresentationSettingsPage } from "@/features/mainPresentation";
-import SuperAdminSidebar from "@/features/super-admin/components/SuperAdminSidebar";
 
 const DashboardMock = () => (
   <div className="flex flex-col gap-4">
@@ -66,6 +67,28 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   const { isSyncing: isSongSyncing } = useSongSync();
 
   const isSyncing = isBibleSyncing || isSongSyncing;
+  const [showSync, setShowSync] = React.useState(false);
+  const [isSuccess, setIsSuccess] = React.useState(false);
+
+  React.useEffect(() => {
+    // Only start tracking sync state once authentication is verified
+    if (!isAuthenticated) return;
+    
+    if (isSyncing) {
+      setShowSync(true);
+      setIsSuccess(false);
+    } else if (showSync && !isSyncing) {
+      // Finished syncing
+      setIsSuccess(true);
+      const timer = setTimeout(() => {
+         setShowSync(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+    // Note: We intentionally only want this to run after hydration is started,
+    // we don't want it to flash true on initial mount if it's already cached.
+    // If both hooks initialize as false, showSync will remain false.
+  }, [isSyncing, isAuthenticated]);
 
   // Instantly dump the IndexedDB offline safehouse into the 0.00ms Memory dictionary
   // ONLY after the initial synchronization completes to prevent thread locking
@@ -78,11 +101,12 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 
   if (!isAuthenticated) return <Redirect to="/login" />;
   
-  if (isSyncing) {
-    return <SyncLoadingOverlay />;
-  }
-  
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {showSync && <SyncLoadingOverlay isSyncing={!isSuccess} isSuccess={isSuccess} />}
+    </>
+  );
 };
 
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
@@ -111,7 +135,8 @@ export const AppRouter = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <Switch>
+        <Suspense fallback={<div className="flex h-screen items-center justify-center bg-[#0d071d]"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>}>
+          <Switch>
           <Route path="/" component={Home} />
           <Route path="/about" component={About} />
           <Route path="/pricing" component={Pricing} />
@@ -123,6 +148,7 @@ export const AppRouter = () => {
           <Route path="/eula" component={EndUserLicense} />
           <Route path="/login" component={SignInPage} />
           <Route path="/signup" component={SignInPage} />
+          <Route path="/desktop-auth" component={DesktopAuthRemote} />
           <Route path="/admin/login" component={AdminSignInPage} />
 
           {/* Standalone authenticated routes like Super Admin */}
@@ -142,7 +168,8 @@ export const AppRouter = () => {
           <Route>
             <AuthGuard>
               <AppLayout>
-                <Switch>
+                <Suspense fallback={<div className="flex h-screen items-center justify-center bg-[#1a0f2e]"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>}>
+                  <Switch>
                   <Route path="/organization-setup" component={OrganizationSetup} />
                   <Route path="/plan-selection" component={PlanSelection} />
                   <Route path="/project-selection" component={ProjectSelection} />
@@ -162,11 +189,13 @@ export const AppRouter = () => {
                       404 - Page not found in workspace
                     </div>
                   </Route>
-                </Switch>
+                  </Switch>
+                </Suspense>
               </AppLayout>
             </AuthGuard>
           </Route>
         </Switch>
+        </Suspense>
       </TooltipProvider>
     </QueryClientProvider>
   );

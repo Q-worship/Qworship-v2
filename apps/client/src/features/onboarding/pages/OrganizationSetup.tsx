@@ -45,7 +45,19 @@ export default function OrganizationSetup() {
       const response = await apiRequest('POST', '/api/organizations', data);
       return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      try {
+        const stored = sessionStorage.getItem('qworship_user_data');
+        if (stored) {
+          const user = JSON.parse(stored);
+          user.organizationId = data?.organization?.id || data?.id || 'pending';
+          user.organizationName = data?.organization?.name || data?.name || orgData.name;
+          sessionStorage.setItem('qworship_user_data', JSON.stringify(user));
+        }
+      } catch (e) {
+        console.error("Failed to update session user with organization state:", e);
+      }
+
       toast({
         title: "Organization Created",
         description: "Your church organization has been set up successfully!",
@@ -82,7 +94,7 @@ export default function OrganizationSetup() {
         description: "User session not found. Please sign up again.",
         variant: "destructive",
       });
-      setLocation('/signin');
+      setLocation('/login');
       return;
     }
     

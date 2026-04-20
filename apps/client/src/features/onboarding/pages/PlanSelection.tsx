@@ -16,6 +16,28 @@ export default function PlanSelection() {
   const { toast } = useToast();
   const [showTrialWelcomeModal, setShowTrialWelcomeModal] = useState(false);
 
+  const handleOnboardingComplete = () => {
+    if (sessionStorage.getItem('desktop_auth_pipeline') === 'true') {
+      const token = sessionStorage.getItem('desktop_auth_token');
+      const userStr = sessionStorage.getItem('qworship_user_data') || '{}';
+      
+      toast({
+        title: "Onboarding Complete!",
+        description: "Redirecting you back to Qworship Desktop...",
+      });
+      
+      // Fire the deep link with the token
+      window.location.href = `qworship://auth?token=${token}&user=${encodeURIComponent(userStr)}`;
+      
+      // Clean up session securely
+      sessionStorage.removeItem('desktop_auth_pipeline');
+      sessionStorage.removeItem('desktop_auth_token');
+      sessionStorage.removeItem('qworship_user_data');
+    } else {
+      setLocation('/project-selection');
+    }
+  };
+
   const getPlans = () => {
     const basePlans = {
       trial: {
@@ -111,9 +133,9 @@ export default function PlanSelection() {
         description: `Welcome to ${plans[selectedPlan!].name}`,
       });
       
-      // Navigate to project selection (mandatory for all users)
+      // Navigate to project selection or deep link back to desktop
       setTimeout(() => {
-        setLocation('/project-selection');
+        handleOnboardingComplete();
       }, 1500);
     },
     onError: (error) => {
@@ -165,8 +187,8 @@ export default function PlanSelection() {
       
       setShowTrialWelcomeModal(false);
       
-      // Navigate to project selection (mandatory for all users)
-      setLocation('/project-selection');
+      // Navigate to project selection or deep link back to desktop
+      handleOnboardingComplete();
     } catch (error) {
       console.error('Trial start error:', error);
       setShowTrialWelcomeModal(false);

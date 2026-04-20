@@ -1,6 +1,8 @@
 import React from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import qworshipLogo from "@/assets/logo.png";
+import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+
 
 interface SlideDisplayAreaProps {
   isBuildMode: boolean;
@@ -78,7 +80,10 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
             itemBackground.type === "video"
           ) {
             let backgroundUrl = itemBackground.value;
-            if (
+            const resolvedUrl = resolveMediaUrl(backgroundUrl);
+            if (resolvedUrl) {
+              backgroundUrl = resolvedUrl;
+            } else if (
               !backgroundUrl.startsWith("http") &&
               !backgroundUrl.startsWith("data:")
             ) {
@@ -192,13 +197,31 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                   <div className="absolute inset-0 w-full h-full">
                     {(selectedSlide.slide as any).subtype === "video" ? (
                       <video
-                        src={selectedSlide.slide.content && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : undefined}
-                        autoPlay loop muted playsInline
+                        src={resolveMediaUrl(selectedSlide.slide.content) || (selectedSlide.slide.content && selectedSlide.slide.content !== "Inspirational worship video" ? selectedSlide.slide.content : undefined)}
+                        autoPlay={(selectedSlide.slide as any).videoSettings?.autoPlay ?? true}
+                        loop={(selectedSlide.slide as any).videoSettings?.endAction !== "nothing"}
+                        muted playsInline
                         className="w-full h-full object-cover"
+                        onTimeUpdate={(e) => {
+                            const videoSettings = (selectedSlide.slide as any).videoSettings;
+                            if (!videoSettings) return;
+                            const videoEle = e.currentTarget;
+                            const endTime = videoSettings.endTime;
+                            const startTime = videoSettings.startTime || 0;
+                            if (videoEle.currentTime < startTime - 0.5) videoEle.currentTime = startTime;
+                            if (endTime && videoEle.currentTime >= endTime) {
+                                if (videoSettings.endAction === "loop") {
+                                    videoEle.currentTime = startTime;
+                                    videoEle.play().catch(console.error);
+                                } else {
+                                    videoEle.pause();
+                                }
+                            }
+                        }}
                       />
                     ) : (
                       <img
-                        src={typeof selectedSlide.slide.content === 'string' && selectedSlide.slide.content.length > 5 && selectedSlide.slide.content !== "Worship background image" ? selectedSlide.slide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
+                        src={resolveMediaUrl(selectedSlide.slide.content) || (typeof selectedSlide.slide.content === 'string' && selectedSlide.slide.content.length > 5 && selectedSlide.slide.content !== "Worship background image" ? selectedSlide.slide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop")}
                         alt={selectedSlide.slide.title || "Media slide"}
                         className="w-full h-full object-cover"
                       />
@@ -321,7 +344,10 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                     itemBackground.type === "video"
                   ) {
                     let backgroundUrl = itemBackground.value;
-                    if (
+                    const resolvedUrl = resolveMediaUrl(backgroundUrl);
+                    if (resolvedUrl) {
+                      backgroundUrl = resolvedUrl;
+                    } else if (
                       !backgroundUrl.startsWith("http") &&
                       !backgroundUrl.startsWith("data:")
                     ) {
@@ -353,13 +379,31 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                     <div className="absolute inset-0 w-full h-full">
                       {(currentlyDisplayedSlide as any).subtype === "video" ? (
                         <video
-                          src={currentlyDisplayedSlide.content && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : undefined}
-                          autoPlay loop muted playsInline
+                          src={resolveMediaUrl(currentlyDisplayedSlide.content) || (currentlyDisplayedSlide.content && currentlyDisplayedSlide.content !== "Inspirational worship video" ? currentlyDisplayedSlide.content : undefined)}
+                          autoPlay={(currentlyDisplayedSlide as any).videoSettings?.autoPlay ?? true}
+                          loop={(currentlyDisplayedSlide as any).videoSettings?.endAction !== "nothing"}
+                          muted playsInline
                           className="w-full h-full object-cover"
+                          onTimeUpdate={(e) => {
+                              const videoSettings = (currentlyDisplayedSlide as any).videoSettings;
+                              if (!videoSettings) return;
+                              const videoEle = e.currentTarget;
+                              const endTime = videoSettings.endTime;
+                              const startTime = videoSettings.startTime || 0;
+                              if (videoEle.currentTime < startTime - 0.5) videoEle.currentTime = startTime;
+                              if (endTime && videoEle.currentTime >= endTime) {
+                                  if (videoSettings.endAction === "loop") {
+                                      videoEle.currentTime = startTime;
+                                      videoEle.play().catch(console.error);
+                                  } else {
+                                      videoEle.pause();
+                                  }
+                              }
+                          }}
                         />
                       ) : (
                         <img
-                          src={typeof currentlyDisplayedSlide.content === 'string' && currentlyDisplayedSlide.content.length > 5 && currentlyDisplayedSlide.content !== "Worship background image" ? currentlyDisplayedSlide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
+                          src={resolveMediaUrl(currentlyDisplayedSlide.content) || (typeof currentlyDisplayedSlide.content === 'string' && currentlyDisplayedSlide.content.length > 5 && currentlyDisplayedSlide.content !== "Worship background image" ? currentlyDisplayedSlide.content : "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop")}
                           alt={currentlyDisplayedSlide.title || "Media slide"}
                           className="w-full h-full object-cover"
                         />
@@ -483,7 +527,10 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                           background.type === "video"
                         ) {
                           let backgroundUrl = background.value;
-                          if (
+                          const resolvedUrl = resolveMediaUrl(backgroundUrl);
+                          if (resolvedUrl) {
+                            backgroundUrl = resolvedUrl;
+                          } else if (
                             !backgroundUrl.startsWith("http") &&
                             !backgroundUrl.startsWith("data:")
                           ) {

@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { X, Upload, Image, Video, Music, FileText, Plus, ChevronDown, Check } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildUrl } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImportFilesModalProps {
@@ -130,8 +130,8 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
     mutationFn: async (formData: FormData) => {
       console.log('Starting upload mutation...');
       
-      // Use fetch directly for FormData uploads instead of apiRequest
-      const response = await fetch('/api/user-media-assets/upload', {
+      // Use fetch directly with buildUrl for FormData uploads instead of apiRequest
+      const response = await fetch(buildUrl('/api/user-media-assets/upload'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -173,7 +173,7 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
           id: firstAsset.id,
           title: firstAsset.title || firstAsset.fileName,
           fileType: firstAsset.fileType,
-          fileUrl: firstAsset.fileUrl || `/api/user-media-assets/${firstAsset.id}/file`
+          fileUrl: buildUrl(`/api/user-media-assets/${firstAsset.id}/file`)
         });
       }
 
@@ -182,7 +182,7 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
           id: a.id,
           title: a.title || a.fileName,
           fileType: a.fileType,
-          fileUrl: a.fileUrl || `/api/user-media-assets/${a.id}/file`
+          fileUrl: buildUrl(`/api/user-media-assets/${a.id}/file`)
         })));
       }
       
@@ -210,10 +210,10 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
     }
   });
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files || []);
-    
-    selectedFiles.forEach((file) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const processSelectedFiles = (selectedFilesArray: File[]) => {
+    selectedFilesArray.forEach((file) => {
       const filePreview: FilePreview = {
         file,
         id: Math.random().toString(36).substr(2, 9),
@@ -224,7 +224,6 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
         description: ''
       };
 
-      // Create preview for images
       if (filePreview.fileType === 'image') {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -236,6 +235,31 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
         setFiles(prev => [...prev, filePreview]);
       }
     });
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    processSelectedFiles(selectedFiles);
+    // Reset input so the same file could be selected again if needed
+    if (event.target) event.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processSelectedFiles(Array.from(e.dataTransfer.files));
+    }
   };
 
   const updateFile = (id: string, updates: Partial<FilePreview>) => {
@@ -310,7 +334,7 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
           id: a.id,
           title: a.title || a.fileName,
           fileType: a.fileType,
-          fileUrl: a.fileUrl || `/api/user-media-assets/${a.id}/file`
+          fileUrl: a.fileUrl ? buildUrl(a.fileUrl) : buildUrl(`/api/user-media-assets/${a.id}/file`)
         })));
       }
 
@@ -329,7 +353,7 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
           id: firstAsset.id,
           title: firstAsset.title || firstAsset.fileName,
           fileType: firstAsset.fileType,
-          fileUrl: firstAsset.fileUrl || `/api/user-media-assets/${firstAsset.id}/file`
+          fileUrl: firstAsset.fileUrl ? buildUrl(firstAsset.fileUrl) : buildUrl(`/api/user-media-assets/${firstAsset.id}/file`)
         });
       } else if (!onMultipleMediaUploaded) {
         // Debug why callback isn't being called
@@ -373,7 +397,14 @@ export const ImportFilesModal = ({ open, onOpenChange, onMediaUploaded, onMultip
         <ScrollArea className="h-[75vh] pr-3">
           <div className="space-y-6">
           {/* File Selection */}
-          <div className="border-2 border-dashed border-white/20 rounded-lg p-8 text-center">
+          <div 
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              isDragOver ? 'border-[#8356f3] bg-[#8356f3]/10' : 'border-white/20 bg-transparent'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <Upload className="h-12 w-12 text-white/50 mx-auto mb-4" />
             <p className="text-white/70 mb-4">
               Drag and drop files here or click to browse

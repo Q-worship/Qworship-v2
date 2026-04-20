@@ -18,6 +18,9 @@ import facebookIcon from "@assets/R (2)_1756733484236.png";
 import instagramIcon from "@assets/1658586823instagram-logo-transparent_1756733484234.png";
 import { SongProjectionWidget } from "@/features/dashboard/components/SongProjectionWidget";
 import { BibleProjectionWidget } from "@/features/dashboard/components/BibleProjectionWidget";
+
+import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+
 import { OBSControlPanel } from "@/features/dashboard/components/OBSControlPanel";
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
@@ -512,15 +515,17 @@ export const LivePresentation = (): JSX.Element => {
     switch (appliedBackgroundType) {
       case "color":
         return { backgroundColor: appliedBackgroundColor };
-      case "image":
-        return appliedBackgroundImage
+      case "image": {
+        const resolvedImageUrl = resolveMediaUrl(appliedBackgroundImage);
+        return resolvedImageUrl
           ? {
-              backgroundImage: `url(${appliedBackgroundImage})`,
+              backgroundImage: `url(${resolvedImageUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
             }
           : { backgroundColor: "#000000" };
+      }
       case "video":
         return { backgroundColor: "#000000" }; // Video will be handled separately with a video element
       default:
@@ -2626,7 +2631,7 @@ export const LivePresentation = (): JSX.Element => {
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover z-0"
-          src={appliedBackgroundVideo}
+          src={resolveMediaUrl(appliedBackgroundVideo)}
           onLoadStart={() =>
             console.log("Video loading started:", appliedBackgroundVideo)
           }
@@ -3477,7 +3482,7 @@ export const LivePresentation = (): JSX.Element => {
                   {backgroundImage && (
                     <div className="mt-3">
                       <img
-                        src={backgroundImage}
+                        src={resolveMediaUrl(backgroundImage) || "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=2673&auto=format&fit=crop"}
                         alt="Background preview"
                         className="w-full h-20 object-cover rounded border border-purple-500/30 shadow-lg"
                       />
@@ -3538,7 +3543,7 @@ export const LivePresentation = (): JSX.Element => {
                   {backgroundVideo && (
                     <div className="mt-3">
                       <video
-                        src={backgroundVideo}
+                        src={resolveMediaUrl(backgroundVideo)}
                         className="w-full h-20 object-cover rounded border border-purple-500/30 shadow-lg"
                         muted
                       />
