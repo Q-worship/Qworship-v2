@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { apiRequest, buildUrl } from "@/lib/queryClient";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -9,6 +11,22 @@ import {
 } from "@/components/ui/navigation-menu";
 
 export const DownloadPage = (): JSX.Element => {
+  const { data: desktopDownloads } = useQuery<{
+    windows: null | { id: string; version?: string; minOs?: string; fileSize: number };
+    mac: null | { id: string; version?: string; minOs?: string; fileSize: number };
+  }>({
+    queryKey: ["/api/help/desktop-downloads"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/help/desktop-downloads");
+      return await response.json();
+    },
+  });
+
+  const windowsBuild = desktopDownloads?.windows ?? null;
+  const macBuild = desktopDownloads?.mac ?? null;
+  const formatMb = (bytes?: number) =>
+    bytes && bytes > 0 ? `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB` : "N/A";
+
   // Navigation menu items data
   const navItems = [
     { name: "Home", isActive: false },
@@ -156,13 +174,19 @@ export const DownloadPage = (): JSX.Element => {
               </div>
               <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">WINDOWS</h3>
               <div className="flex flex-col gap-1 mb-8">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">CURRENT VERSION: V2.4.0</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">FILE SIZE: 412 MB</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">CURRENT VERSION: {windowsBuild?.version || "Not published"}</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">FILE SIZE: {formatMb(windowsBuild?.fileSize)}</span>
               </div>
-              <button className="w-full py-4 rounded-xl bg-gradient-to-r from-[#6a0baa] to-[#ee85ff] text-white [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest hover:shadow-[0_0_30px_rgba(238,133,255,0.3)] transition-all active:scale-95">
-                DOWNLOAD FOR WINDOWS
-              </button>
-              <p className="mt-4 text-xs text-slate-500">Requires Windows 10 or 11 (64-bit)</p>
+              <a
+                href={windowsBuild ? buildUrl("/api/help/desktop-downloads/windows/download?source=user-panel-download-page") : "#"}
+                className={`w-full py-4 rounded-xl text-center [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest transition-all ${windowsBuild
+                    ? "bg-gradient-to-r from-[#6a0baa] to-[#ee85ff] text-white hover:shadow-[0_0_30px_rgba(238,133,255,0.3)] active:scale-95"
+                    : "bg-[#302a46] text-slate-400 pointer-events-none"
+                  }`}
+              >
+                {windowsBuild ? "DOWNLOAD FOR WINDOWS" : "WINDOWS BUILD COMING SOON"}
+              </a>
+              <p className="mt-4 text-xs text-slate-500">{windowsBuild?.minOs || "Requires Windows 10 or 11 (64-bit)"}</p>
             </div>
 
             {/* macOS Card */}
@@ -172,13 +196,19 @@ export const DownloadPage = (): JSX.Element => {
               </div>
               <h3 className="text-2xl [font-family:'Manrope',sans-serif] font-bold text-white mb-2">MAC</h3>
               <div className="flex flex-col gap-1 mb-8">
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">CURRENT VERSION: V2.4.0</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">FILE SIZE: 389 MB</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">CURRENT VERSION: {macBuild?.version || "Not published"}</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-[#afa7c2] [font-family:'Inter',sans-serif]">FILE SIZE: {formatMb(macBuild?.fileSize)}</span>
               </div>
-              <button className="w-full py-4 rounded-xl border border-[#4b455c] bg-[#221b36] text-white [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest hover:bg-[#28213e] transition-all active:scale-95">
-                DOWNLOAD FOR MACOS
-              </button>
-              <p className="mt-4 text-xs text-slate-500">Apple Silicon &amp; Intel (macOS 12.0+)</p>
+              <a
+                href={macBuild ? buildUrl("/api/help/desktop-downloads/mac/download?source=user-panel-download-page") : "#"}
+                className={`w-full py-4 rounded-xl border text-center [font-family:'Manrope',sans-serif] font-bold uppercase tracking-widest transition-all ${macBuild
+                    ? "border-[#4b455c] bg-[#221b36] text-white hover:bg-[#28213e] active:scale-95"
+                    : "border-[#3c374a] bg-[#1a1628] text-slate-400 pointer-events-none"
+                  }`}
+              >
+                {macBuild ? "DOWNLOAD FOR MACOS" : "MAC BUILD COMING SOON"}
+              </a>
+              <p className="mt-4 text-xs text-slate-500">{macBuild?.minOs || "Apple Silicon & Intel (macOS 12.0+)"}</p>
             </div>
           </div>
         </section>

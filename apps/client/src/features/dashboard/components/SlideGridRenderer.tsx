@@ -14,18 +14,18 @@ export const SlideGridRenderer = (props: any) => {
   return (
     <>
                     {/* Bottom Slideshow Bar - Centered */}
-                    <div
-                      className="h-36 bg-[#1a0f2e] border border-gray-600 rounded-lg p-5 flex-shrink-0"
-                      style={{ width: "70vw", maxWidth: "1200px" }}
-                    >
+                    <div className="h-36 bg-[#1a0f2e] border border-gray-600 rounded-lg p-5 flex-shrink-0 w-full">
                       <div className="flex items-center justify-between h-full">
                         {/* Slide Navigation */}
-                        <div className="flex items-center space-x-3 flex-1">
+                        <div
+                          className="flex items-center space-x-3 flex-1 overflow-x-auto"
+                          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                        >
                           {/* Slide Thumbnails with Content Previews */}
                           {slides.map((slide: any, index: number) => (
                             <div
                               key={slide.id}
-                              className={`w-32 h-18 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden ${
+                              className={`w-40 h-[90px] flex-shrink-0 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden ${
                                 index + 1 === currentSlide
                                   ? "border-[#8356F3]"
                                   : "border-gray-600 hover:border-gray-500"
@@ -56,7 +56,18 @@ export const SlideGridRenderer = (props: any) => {
                                     background.value || "#000000",
                                 };
                               })()}
-                              onClick={() => {
+                              onMouseDown={(e) => {
+                                if ((slide as any)?.subtype !== "canvas") return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleSlideClick(slide as any, index);
+                              }}
+                              onClick={(e) => {
+                                if ((slide as any)?.subtype === "canvas") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  return;
+                                }
                                 setCurrentSlide(index + 1);
                                 setCurrentlyDisplayedSlide(slide);
                                 // Clear Bible projection when navigating to slides
@@ -89,94 +100,100 @@ export const SlideGridRenderer = (props: any) => {
                               </div>
 
                               {/* Content Preview */}
-                              <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
-                                {slide.type === "verse" ||
-                                slide.type === "chorus" ? (
-                                  <div className="text-center">
-                                    <div className="text-white text-xs font-semibold mb-1 leading-tight">
-                                      {slide.sectionLabel ||
-                                        (slide.type === "verse"
-                                          ? "VERSE"
-                                          : "CHORUS")}
+                              {slide.type === 'media' && (slide as any).subtype === 'canvas' ? (
+                                <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg">
+                                  <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                                </div>
+                              ) : (
+                                <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
+                                  {slide.type === "verse" ||
+                                  slide.type === "chorus" ? (
+                                    <div className="text-center">
+                                      <div className="text-white text-xs font-semibold mb-1 leading-tight">
+                                        {slide.sectionLabel ||
+                                          (slide.type === "verse"
+                                            ? "VERSE"
+                                            : "CHORUS")}
+                                      </div>
+                                      <div
+                                        className="text-gray-300 text-xs leading-tight overflow-hidden"
+                                        style={{
+                                          fontSize: "8px",
+                                          fontFamily:
+                                            editorState.styleFontFamily ||
+                                            editorState.selectedFont ||
+                                            "Lufgord",
+                                          color:
+                                            editorState.styleColor || "#d1d5db",
+                                          fontWeight: editorState.isBold
+                                            ? "bold"
+                                            : "normal",
+                                          fontStyle: editorState.isItalic
+                                            ? "italic"
+                                            : "normal",
+                                          textDecoration:
+                                            `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
+                                            "none",
+                                          textShadow:
+                                            editorState.styleTextShadow || "",
+                                          letterSpacing:
+                                            editorState.styleLetterSpacing || "",
+                                          textTransform:
+                                            (editorState.styleTextTransform as any) ||
+                                            "",
+                                        }}
+                                      >
+                                        {slide.content
+                                          ? typeof slide.content === "string"
+                                            ? slide.content
+                                                .split("\n")
+                                                .slice(0, 1)
+                                                .join("\n")
+                                            : "Song lyrics"
+                                          : "No lyrics"}
+                                      </div>
                                     </div>
-                                    <div
-                                      className="text-gray-300 text-xs leading-tight overflow-hidden"
-                                      style={{
-                                        fontSize: "8px",
-                                        fontFamily:
-                                          editorState.styleFontFamily ||
-                                          editorState.selectedFont ||
-                                          "Lufgord",
-                                        color:
-                                          editorState.styleColor || "#d1d5db",
-                                        fontWeight: editorState.isBold
-                                          ? "bold"
-                                          : "normal",
-                                        fontStyle: editorState.isItalic
-                                          ? "italic"
-                                          : "normal",
-                                        textDecoration:
-                                          `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
-                                          "none",
-                                        textShadow:
-                                          editorState.styleTextShadow || "",
-                                        letterSpacing:
-                                          editorState.styleLetterSpacing || "",
-                                        textTransform:
-                                          (editorState.styleTextTransform as any) ||
-                                          "",
-                                      }}
-                                    >
-                                      {slide.content
-                                        ? typeof slide.content === "string"
-                                          ? slide.content
-                                              .split("\n")
-                                              .slice(0, 1)
-                                              .join("\n")
-                                          : "Song lyrics"
-                                        : "No lyrics"}
+                                  ) : slide.type === "bible" ? (
+                                    <div className="text-center">
+                                      <div className="text-white text-xs font-semibold mb-1">
+                                        BIBLE
+                                      </div>
+                                      <div
+                                        className="text-gray-300 text-xs overflow-hidden"
+                                        style={{ fontSize: "8px" }}
+                                      >
+                                        {slide.title || "Scripture"}
+                                      </div>
                                     </div>
-                                  </div>
-                                ) : slide.type === "bible" ? (
-                                  <div className="text-center">
-                                    <div className="text-white text-xs font-semibold mb-1">
-                                      BIBLE
+                                  ) : slide.type === "media" && (slide as any).subtype === "webpage" ? (
+                                    <div className="text-center">
+                                      <div className="text-teal-300 text-xs font-semibold mb-1">
+                                        🌐 WEB
+                                      </div>
+                                      <div
+                                        className="text-gray-300 text-xs overflow-hidden"
+                                        style={{ fontSize: "8px" }}
+                                      >
+                                        {slide.content && typeof slide.content === "string" && slide.content.length > 5
+                                          ? new URL(slide.content).hostname
+                                          : "Web Page"}
+                                      </div>
                                     </div>
-                                    <div
-                                      className="text-gray-300 text-xs overflow-hidden"
-                                      style={{ fontSize: "8px" }}
-                                    >
-                                      {slide.title || "Scripture"}
+                                  ) : (
+                                    <div className="text-center">
+                                      <div className="text-white text-xs font-semibold">
+                                        {slide.type.toUpperCase()}
+                                      </div>
+                                      <div
+                                        className="text-gray-300 text-xs overflow-hidden"
+                                        style={{ fontSize: "8px" }}
+                                      >
+                                        {slide.title || "Content"}
+                                      </div>
                                     </div>
-                                  </div>
-                                ) : slide.type === "media" && (slide as any).subtype === "webpage" ? (
-                                  <div className="text-center">
-                                    <div className="text-teal-300 text-xs font-semibold mb-1">
-                                      🌐 WEB
-                                    </div>
-                                    <div
-                                      className="text-gray-300 text-xs overflow-hidden"
-                                      style={{ fontSize: "8px" }}
-                                    >
-                                      {slide.content && typeof slide.content === "string" && slide.content.length > 5
-                                        ? new URL(slide.content).hostname
-                                        : "Web Page"}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="text-center">
-                                    <div className="text-white text-xs font-semibold">
-                                      {slide.type.toUpperCase()}
-                                    </div>
-                                    <div
-                                      className="text-gray-300 text-xs overflow-hidden"
-                                      style={{ fontSize: "8px" }}
-                                    >
-                                      {slide.title || "Content"}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Type indicator */}
                               <div
@@ -207,8 +224,8 @@ export const SlideGridRenderer = (props: any) => {
                 {/* Bottom Slideshow Bar - Only in Build Mode */}
                 {isBuildMode && (
                   <div
-                    className="h-64 bg-[#2a1f3d] border border-gray-600 rounded-lg p-6 relative overflow-hidden"
-                    style={{ minHeight: "256px", maxHeight: "256px" }}
+                    className="h-72 bg-[#2a1f3d] border border-gray-600 rounded-lg p-6 relative overflow-hidden"
+                    style={{ minHeight: "288px", maxHeight: "288px" }}
                   >
                     {slides.length > 0 ? (
                       /* Custom Horizontal Scroller Container */
@@ -320,10 +337,25 @@ export const SlideGridRenderer = (props: any) => {
                               isItemSelected = index + 1 === currentSlide;
                             }
 
+                            const thumbWidth =
+                              slides.length <= 1
+                                ? 420
+                                : slides.length === 2
+                                  ? 360
+                                  : slides.length === 3
+                                    ? 300
+                                    : 240;
+                            const thumbHeight = Math.round((thumbWidth * 9) / 16);
+
                             return (
                               <div
                                 key={slide.id}
                                 className="flex flex-col flex-shrink-0 relative"
+                                style={{
+                                  width: `${thumbWidth}px`,
+                                  minWidth: `${thumbWidth}px`,
+                                  flex: `0 0 ${thumbWidth}px`,
+                                }}
                               >
                                 {/* Selection background behind entire tile */}
                                 {isItemSelected && (
@@ -340,12 +372,25 @@ export const SlideGridRenderer = (props: any) => {
                                   </div>
                                   {/* Thumbnail Box - matching reference design exactly */}
                                   <div
-                                    className="relative w-48 h-32 rounded-lg cursor-pointer transition-all overflow-hidden"
+                                    className="relative w-60 h-[135px] rounded-lg cursor-pointer transition-all overflow-hidden"
+                                    onMouseDown={(e) => {
+                                      if ((slide as any)?.subtype !== "canvas") return;
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleSlideClick(slide as any, index);
+                                    }}
                                     onClick={() =>
-                                      handleSlideClick(slide as any, index)
+                                      (slide as any)?.subtype !== "canvas"
+                                        ? handleSlideClick(slide as any, index)
+                                        : undefined
                                     }
                                     title={slide.title}
                                     style={{
+                                      width: `${thumbWidth}px`,
+                                      minWidth: `${thumbWidth}px`,
+                                      height: `${thumbHeight}px`,
+                                      minHeight: `${thumbHeight}px`,
+                                      flex: `0 0 ${thumbWidth}px`,
                                       backgroundColor: "#2E2D39",
                                       transition: "background-color 0.2s ease",
                                     }}
@@ -380,6 +425,11 @@ export const SlideGridRenderer = (props: any) => {
                                     </div>
 
                                     {/* Content Area - Exact spacing like reference image */}
+                                    { (slide.type === "media" && (slide as any).subtype === "canvas") ? (
+                                       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg">
+                                          <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                                       </div>
+                                    ) : (
                                     <div
                                       className="px-4 pt-8 pb-6 h-full relative bg-[#000000]"
                                       style={(() => {
@@ -531,8 +581,8 @@ export const SlideGridRenderer = (props: any) => {
                                                     (slide.content.length > 180
                                                       ? "..."
                                                       : "")
-                                                  ).replace(/\n/g, "<br/>")
-                                                : "Scripture text will appear here",
+                                                    ).replace(/\n/g, "<br/>")
+                                                  : "Scripture text will appear here",
                                             }}
                                           />
                                         ) : slide.type === "custom" &&
@@ -558,11 +608,6 @@ export const SlideGridRenderer = (props: any) => {
                                                 ? (() => { try { return new URL(slide.content).hostname; } catch { return "Ready for content"; } })()
                                                 : "Ready for content"}
                                             </div>
-                                          </div>
-                                        ) : (slide.type === "media" && (slide as any).subtype === "canvas") ? (
-                                          <div className="h-full w-full relative">
-                                            <div className="absolute inset-0 z-20 pointer-events-none border border-purple-500/30"></div>
-                                            <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} />
                                           </div>
                                         ) : (slide.type === "media" && (slide as any).subtype === "video") ? (
                                           <div className="h-full flex flex-col justify-center items-center z-20">
@@ -625,6 +670,7 @@ export const SlideGridRenderer = (props: any) => {
                                         )}
                                       </div>
                                     </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>

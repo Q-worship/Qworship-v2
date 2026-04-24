@@ -154,7 +154,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               >
                 {(slides[currentSlide - 1] as any).subtype === "canvas" ? (
                   <div className="w-full h-full relative drop-shadow-2xl flex justify-center items-center">
-                      <SlideCanvasRenderer content={slides[currentSlide - 1].content} background={{ type: "transparent" }} />
+                      <SlideCanvasRenderer content={slides[currentSlide - 1].content} background={{ type: "transparent" }} scaleMode="contain" />
                   </div>
                 ) : (slides[currentSlide - 1] as any).subtype === "webpage" ? (
                   <div className="w-full h-full relative bg-white">

@@ -840,7 +840,15 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         setIsSlideEditorOpen(false);
       } else if (parentItem.type === "media" && parentItem.subtype === "canvas") {
         // For canvas items, route to the full Slide Canvas Editor
-        setEditingContent(parentItem);
+        const activeCanvasContent =
+          slide?.content && typeof slide.content === "object"
+            ? normalizeCanvasContent(slide.content)
+            : normalizeCanvasContent(parentItem.content);
+        setEditingContent({
+          ...parentItem,
+          content: activeCanvasContent,
+          activeCanvasSlideId: slide.id,
+        });
         setSelectedContentType("canvas");
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
@@ -1884,7 +1892,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           type: "media",
           subtype: "canvas",
           title: "Slide Canvas",
-          content: "Custom presentation slide",
+          content: getDefaultCanvasContent(),
         }),
     },
     {
@@ -2156,6 +2164,47 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     return sections;
   };
 
+  const getDefaultCanvasContent = () => ({
+    elements: [],
+    canvasBackground: { type: "transparent", value: "" },
+  });
+
+  const normalizeCanvasContent = (rawContent: any) => {
+    if (rawContent && typeof rawContent === "object" && !Array.isArray(rawContent)) {
+      return {
+        ...rawContent,
+        elements: Array.isArray(rawContent.elements) ? rawContent.elements : [],
+        canvasBackground:
+          rawContent.canvasBackground ||
+          rawContent.background || { type: "transparent", value: "" },
+      };
+    }
+
+    if (typeof rawContent === "string") {
+      const trimmed = rawContent.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object") {
+            return {
+              ...parsed,
+              elements: Array.isArray((parsed as any).elements)
+                ? (parsed as any).elements
+                : [],
+              canvasBackground:
+                (parsed as any).canvasBackground ||
+                (parsed as any).background || { type: "transparent", value: "" },
+            };
+          }
+        } catch {
+          // Non-JSON string canvas values should fall back to an empty model.
+        }
+      }
+    }
+
+    return getDefaultCanvasContent();
+  };
+
   // Universal function to update item content across both state systems
   const updateItemContent = (
     itemId: string,
@@ -2190,10 +2239,18 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         }
 
         const merged = { ...existingItem, ...(metadata || {}) };
-        const contentVal = typeof newContent === "string" ? newContent : 
-                           (typeof newContent === "object" && newContent !== null && newContent.url ? newContent.url :
-                           (typeof merged.content === "string" ? merged.content : 
-                           (typeof merged.content === "object" && merged.content !== null && merged.content.url ? merged.content.url : "")));
+        
+        let contentVal;
+        if (merged.subtype === "canvas") {
+           contentVal = normalizeCanvasContent(
+             typeof newContent === "object" ? newContent : merged.content
+           );
+        } else {
+           contentVal = typeof newContent === "string" ? newContent : 
+                             (typeof newContent === "object" && newContent !== null && newContent.url ? newContent.url :
+                             (typeof merged.content === "string" ? merged.content : 
+                             (typeof merged.content === "object" && merged.content !== null && merged.content.url ? merged.content.url : "")));
+        }
                            
         return [{
           id: existingItem.slides?.[0]?.id || `slide-${itemId}-${Date.now()}`,
@@ -2582,7 +2639,11 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           type: item.type === "song" ? ("song" as const) : item.type === "announcement" ? ("announcement" as const) : item.type === "media" ? ("media" as const) : ("custom" as const),
           title: item.title,
           content:
-            item.type === "song" ? "Please select a song" : (typeof item.content === "string" ? item.content : "Ready for content"),
+            item.type === "song"
+              ? "Please select a song"
+              : item.type === "media" && item.subtype === "canvas"
+                ? normalizeCanvasContent(item.content)
+                : (typeof item.content === "string" ? item.content : "Ready for content"),
           sectionLabel: item.type === "song" ? "Song" : item.type === "announcement" ? "Announcement" : item.type === "media" ? "Media" : "Content",
           ...(item.type === "announcement" ? {
             location: item.location || "",
@@ -2652,7 +2713,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           id: `item-${item.id}-${Date.now()}`,
           type: "media" as const,
           title: item.title || "Media",
-          content: typeof item.content === "string" ? item.content : "",
+          content:
+            item.subtype === "canvas"
+              ? normalizeCanvasContent(item.content)
+              : (typeof item.content === "string" ? item.content : ""),
           subtype: item.subtype || "image",
           sectionLabel: "Media",
         },

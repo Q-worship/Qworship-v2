@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
-import { HelpArticle, FAQ, ResourceLink, SupportTicket } from './help.model.js';
+import { HelpArticle, FAQ, ResourceLink, SupportTicket, DownloadableFile, DownloadEvent } from './help.model.js';
+import { objectStorage } from '../media/s3.service.js';
+import path from 'path';
 
 export const getHelpArticles = async (req: Request, res: Response) => {
   try {
@@ -81,6 +83,274 @@ export const getResources = async (req: Request, res: Response) => {
   }
 };
 
+const mapDownloadableFile = (file: any) => ({
+  id: file._id,
+  title: file.title,
+  description: file.description,
+  category: file.category,
+  platform: file.platform || 'other',
+  version: file.version,
+  minOs: file.minOs,
+  originalName: file.originalName,
+  mimeType: file.mimeType,
+  fileSize: file.fileSize,
+  isPublished: file.isPublished,
+  createdAt: file.createdAt,
+  updatedAt: file.updatedAt
+});
+
+const sanitizeDownloadFilename = (value: string) =>
+  (value || 'download')
+    .replace(/["\\\r\n]/g, '')
+    .replace(/[^\w.\- ()]/g, '_');
+
+const getLowercaseExtension = (filename: string) => path.extname(filename || '').toLowerCase();
+
+const isAllowedPlatformExtension = (platform: string, filename: string) => {
+  const extension = getLowercaseExtension(filename);
+  if (platform === 'windows') {
+    return extension === '.exe' || extension === '.msi';
+  }
+  if (platform === 'mac') {
+    return extension === '.dmg' || extension === '.pkg';
+  }
+  return true;
+};
+
+const inferSource = (req: Request) => {
+  const explicitSource = typeof req.query.source === 'string' ? req.query.source.trim() : '';
+  if (explicitSource) return explicitSource;
+  const referer = String(req.headers.referer || '');
+  if (referer.includes('/download')) return 'user-panel-download-page';
+  return 'unknown';
+};
+
+const trackDownloadEvent = (req: Request, file: any, platformOverride?: 'windows' | 'mac' | 'other') => {
+  const platform = platformOverride || file?.platform || 'other';
+  const source = inferSource(req);
+  const ip = req.ip || (req.headers['x-forwarded-for'] as string | undefined);
+  const userAgent = String(req.headers['user-agent'] || '');
+  const referer = String(req.headers.referer || '');
+
+  // Fire-and-forget to avoid slowing down download response.
+  void DownloadEvent.create({
+    downloadableFileId: file?._id,
+    platform,
+    source,
+    ip,
+    userAgent,
+    referer
+  }).catch((error) => {
+    console.error('Failed to log download event:', error);
+  });
+};
+
+export const getDownloadableFiles = async (req: Request, res: Response) => {
+  try {
+    const platform = typeof req.query.platform === 'string' ? req.query.platform : undefined;
+    const filter: Record<string, unknown> = { isPublished: true };
+    if (platform) filter.platform = platform;
+    const files = await DownloadableFile.find(filter).sort({ createdAt: -1 });
+    res.json({ files: files.map(mapDownloadableFile) });
+  } catch (error) {
+    console.error('Error fetching downloadable files:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+export const getAdminDownloadableFiles = async (req: Request, res: Response) => {
+  try {
+    const files = await DownloadableFile.find().sort({ createdAt: -1 });
+    res.json({ files: files.map(mapDownloadableFile) });
+  } catch (error) {
+    console.error('Error fetching admin downloadable files:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+export const uploadDownloadableFile = async (req: Request, res: Response) => {
+  try {
+    const file = req.file as Express.Multer.File | undefined;
+    if (!file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const title = (req.body.title || file.originalname).trim();
+    const description = (req.body.description || '').trim();
+    const category = (req.body.category || 'general').trim();
+    const platform = (req.body.platform || 'other').trim().toLowerCase();
+    const version = (req.body.version || '').trim();
+    const minOs = (req.body.minOs || '').trim();
+    const isPublished = req.body.isPublished === undefined
+      ? true
+      : req.body.isPublished === 'true' || req.body.isPublished === true;
+    if (!['windows', 'mac', 'other'].includes(platform)) {
+      return res.status(400).json({ message: 'platform must be windows, mac, or other' });
+    }
+    if (!isAllowedPlatformExtension(platform, file.originalname)) {
+      return res.status(400).json({
+        message: platform === 'windows'
+          ? 'Windows uploads must be .exe or .msi files'
+          : platform === 'mac'
+            ? 'macOS uploads must be .dmg or .pkg files'
+            : 'Unsupported file type'
+      });
+    }
+
+    const { key } = await objectStorage.uploadCloudMedia(file.originalname, file.buffer, file.mimetype);
+
+    if (isPublished && (platform === 'windows' || platform === 'mac')) {
+      // Enforce one active build per platform by auto-archiving previous published builds.
+      await DownloadableFile.updateMany(
+        { platform, isPublished: true },
+        { $set: { isPublished: false } }
+      );
+    }
+
+    const created = await DownloadableFile.create({
+      title,
+      description,
+      category,
+      platform,
+      version,
+      minOs,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+      storageKey: key,
+      isPublished,
+      uploadedBy: (req as any).user?._id?.toString?.() || undefined
+    });
+
+    res.status(201).json({ file: mapDownloadableFile(created) });
+  } catch (error) {
+    console.error('Error uploading downloadable file:', error);
+    res.status(500).json({ message: 'Failed to upload file' });
+  }
+};
+
+export const updateDownloadableFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await DownloadableFile.findById(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const update: Record<string, unknown> = {};
+    if (typeof req.body.title === 'string') update.title = req.body.title.trim();
+    if (typeof req.body.description === 'string') update.description = req.body.description.trim();
+    if (typeof req.body.category === 'string') update.category = req.body.category.trim();
+    if (typeof req.body.platform === 'string') {
+      const platform = req.body.platform.trim().toLowerCase();
+      if (!['windows', 'mac', 'other'].includes(platform)) {
+        return res.status(400).json({ message: 'platform must be windows, mac, or other' });
+      }
+      update.platform = platform;
+    }
+    if (typeof req.body.version === 'string') update.version = req.body.version.trim();
+    if (typeof req.body.minOs === 'string') update.minOs = req.body.minOs.trim();
+    if (typeof req.body.isPublished === 'boolean') update.isPublished = req.body.isPublished;
+
+    const targetPlatform = (update.platform as string | undefined) || existing.platform;
+    const targetPublished = typeof update.isPublished === 'boolean' ? update.isPublished : existing.isPublished;
+    if (targetPublished && (targetPlatform === 'windows' || targetPlatform === 'mac')) {
+      // Enforce one active build per platform by auto-archiving other published builds.
+      await DownloadableFile.updateMany(
+        { _id: { $ne: id }, platform: targetPlatform, isPublished: true },
+        { $set: { isPublished: false } }
+      );
+    }
+
+    const updated = await DownloadableFile.findByIdAndUpdate(id, { $set: update }, { new: true });
+    if (!updated) return res.status(404).json({ message: 'File not found' });
+
+    res.json({ file: mapDownloadableFile(updated) });
+  } catch (error) {
+    console.error('Error updating downloadable file:', error);
+    res.status(500).json({ message: 'Failed to update file' });
+  }
+};
+
+export const deleteDownloadableFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await DownloadableFile.findById(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    await objectStorage.deleteFile(existing.storageKey);
+    await DownloadableFile.findByIdAndDelete(id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting downloadable file:', error);
+    res.status(500).json({ message: 'Failed to delete file' });
+  }
+};
+
+export const downloadPublishedFile = async (req: Request, res: Response) => {
+  try {
+    const file = await DownloadableFile.findOne({ _id: req.params.id, isPublished: true });
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const safeName = sanitizeDownloadFilename(file.originalName);
+    trackDownloadEvent(req, file);
+    const signedUrl = await objectStorage.getSignedDownloadUrl(file.storageKey, 300, {
+      filename: safeName,
+      mimeType: file.mimeType || 'application/octet-stream'
+    });
+    return res.redirect(signedUrl);
+  } catch (error) {
+    console.error('Error downloading published file:', error);
+    res.status(500).json({ message: 'Failed to download file' });
+  }
+};
+
+export const getDesktopDownloads = async (req: Request, res: Response) => {
+  try {
+    const [windowsFile, macFile] = await Promise.all([
+      DownloadableFile.findOne({ isPublished: true, platform: 'windows' }).sort({ createdAt: -1 }),
+      DownloadableFile.findOne({ isPublished: true, platform: 'mac' }).sort({ createdAt: -1 })
+    ]);
+
+    res.json({
+      windows: windowsFile ? mapDownloadableFile(windowsFile) : null,
+      mac: macFile ? mapDownloadableFile(macFile) : null
+    });
+  } catch (error) {
+    console.error('Error fetching desktop downloads:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+export const downloadDesktopByPlatform = async (req: Request, res: Response) => {
+  try {
+    const platform = req.params.platform;
+    if (platform !== 'windows' && platform !== 'mac') {
+      return res.status(400).json({ message: 'Invalid platform' });
+    }
+
+    const file = await DownloadableFile.findOne({ isPublished: true, platform }).sort({ createdAt: -1 });
+    if (!file) {
+      return res.status(404).json({ message: `No published ${platform} build found` });
+    }
+
+    const safeName = sanitizeDownloadFilename(file.originalName);
+    trackDownloadEvent(req, file, platform);
+    const signedUrl = await objectStorage.getSignedDownloadUrl(file.storageKey, 300, {
+      filename: safeName,
+      mimeType: file.mimeType || 'application/octet-stream'
+    });
+    return res.redirect(signedUrl);
+  } catch (error) {
+    console.error('Error downloading desktop file by platform:', error);
+    res.status(500).json({ message: 'Failed to download file' });
+  }
+};
+
 export const submitSupportTicket = async (req: Request, res: Response) => {
   try {
     const { subject, message, priority, category } = req.body;
@@ -100,6 +370,59 @@ export const submitSupportTicket = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error submitting ticket:', error);
     res.status(500).json({ message: 'Failed to submit support ticket' });
+  }
+};
+
+export const getDownloadAnalytics = async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      total,
+      last7Days,
+      last30Days,
+      windowsTotal,
+      macTotal,
+      userPanelTotal,
+      recentEventsRaw
+    ] = await Promise.all([
+      DownloadEvent.countDocuments(),
+      DownloadEvent.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+      DownloadEvent.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+      DownloadEvent.countDocuments({ platform: 'windows' }),
+      DownloadEvent.countDocuments({ platform: 'mac' }),
+      DownloadEvent.countDocuments({ source: 'user-panel-download-page' }),
+      DownloadEvent.find()
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate('downloadableFileId', 'title originalName version platform')
+    ]);
+
+    const recentEvents = recentEventsRaw.map((event: any) => ({
+      id: event._id,
+      createdAt: event.createdAt,
+      platform: event.platform,
+      source: event.source,
+      fileTitle: event.downloadableFileId?.title || event.downloadableFileId?.originalName || 'Unknown file',
+      version: event.downloadableFileId?.version || null
+    }));
+
+    res.json({
+      totals: {
+        allTime: total,
+        last7Days,
+        last30Days,
+        windows: windowsTotal,
+        mac: macTotal,
+        fromUserPanel: userPanelTotal
+      },
+      recentEvents
+    });
+  } catch (error) {
+    console.error('Error fetching download analytics:', error);
+    res.status(500).json({ message: 'Failed to fetch download analytics' });
   }
 };
 

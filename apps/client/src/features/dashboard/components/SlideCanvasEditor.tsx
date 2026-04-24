@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MediaBrowserContent } from "./MediaBrowserContent";
@@ -35,6 +35,13 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalJustifyEnd
 } from "lucide-react";
+import { resolveMediaUrl } from "@/lib/queryClient";
+import {
+  cloneTemplateForCanvas,
+  getAllSlideCanvasTemplates,
+  saveCurrentCanvasTemplateToAssets,
+  type SlideCanvasTemplate,
+} from "./slideCanvasTemplateLibrary";
 
 export interface CanvasElement {
   id: string;
@@ -87,19 +94,238 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
   setEditingContent,
   onClose
 }) => {
+  const CANVAS_WIDTH = 960;
+  const CANVAS_HEIGHT = 540;
+  const normalizeLegacyElementAnchoring = (rawElements: CanvasElement[]): CanvasElement[] => {
+    if (!Array.isArray(rawElements) || rawElements.length === 0) return rawElements || [];
+
+    const numericElements = rawElements.filter(
+      (el) =>
+        typeof el.x === "number" &&
+        typeof el.y === "number" &&
+        typeof el.width === "number" &&
+        typeof el.height === "number",
+    );
+    if (!numericElements.length) return rawElements;
+
+    const overflowScore = (asCentered: boolean) =>
+      numericElements.reduce((sum, el) => {
+        const left = asCentered ? el.x - el.width / 2 : el.x;
+        const top = asCentered ? el.y - el.height / 2 : el.y;
+        const right = left + el.width;
+        const bottom = top + el.height;
+        const overflowX = Math.max(0, -left) + Math.max(0, right - CANVAS_WIDTH);
+        const overflowY = Math.max(0, -top) + Math.max(0, bottom - CANVAS_HEIGHT);
+        return sum + overflowX + overflowY;
+      }, 0);
+
+    const topLeftScore = overflowScore(false);
+    const centeredScore = overflowScore(true);
+    const shouldConvertFromCenter = topLeftScore > 120 && centeredScore < topLeftScore * 0.65;
+
+    if (!shouldConvertFromCenter) return rawElements;
+
+    return rawElements.map((el) => ({
+      ...el,
+      x: typeof el.x === "number" && typeof el.width === "number" ? el.x - el.width / 2 : el.x,
+      y: typeof el.y === "number" && typeof el.height === "number" ? el.y - el.height / 2 : el.y,
+    }));
+  };
+
+  const reframeShiftedLayout = (rawElements: CanvasElement[]): CanvasElement[] => {
+    if (!Array.isArray(rawElements) || rawElements.length === 0) return rawElements || [];
+
+    const positioned = rawElements.filter(
+      (el) =>
+        typeof el.x === "number" &&
+        typeof el.y === "number" &&
+        typeof el.width === "number" &&
+        typeof el.height === "number",
+    );
+    if (!positioned.length) return rawElements;
+
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const el of positioned) {
+      left = Math.min(left, el.x);
+      top = Math.min(top, el.y);
+      right = Math.max(right, el.x + el.width);
+      bottom = Math.max(bottom, el.y + el.height);
+    }
+
+    const layoutWidth = right - left;
+    const layoutHeight = bottom - top;
+    if (layoutWidth <= 0 || layoutHeight <= 0) return rawElements;
+    if (layoutWidth > CANVAS_WIDTH * 1.25 || layoutHeight > CANVAS_HEIGHT * 1.25) {
+      return rawElements;
+    }
+
+    const overflowLeft = Math.max(0, -left);
+    const overflowTop = Math.max(0, -top);
+    const overflowRight = Math.max(0, right - CANVAS_WIDTH);
+    const overflowBottom = Math.max(0, bottom - CANVAS_HEIGHT);
+    const totalOverflow = overflowLeft + overflowTop + overflowRight + overflowBottom;
+
+    let dx = 0;
+    let dy = 0;
+    if (left < 0 && right > CANVAS_WIDTH) {
+      dx = CANVAS_WIDTH / 2 - (left + right) / 2;
+    } else if (left < 0) {
+      dx = -left;
+    } else if (right > CANVAS_WIDTH) {
+      dx = CANVAS_WIDTH - right;
+    }
+
+    if (top < 0 && bottom > CANVAS_HEIGHT) {
+      dy = CANVAS_HEIGHT / 2 - (top + bottom) / 2;
+    } else if (top < 0) {
+      dy = -top;
+    } else if (bottom > CANVAS_HEIGHT) {
+      dy = CANVAS_HEIGHT - bottom;
+    }
+
+    const layoutCenterX = (left + right) / 2;
+    const layoutCenterY = (top + bottom) / 2;
+    const centerDeltaX = CANVAS_WIDTH / 2 - layoutCenterX;
+    const centerDeltaY = CANVAS_HEIGHT / 2 - layoutCenterY;
+    const hasMeaningfulCenterDrift =
+      Math.abs(centerDeltaX) > 28 || Math.abs(centerDeltaY) > 22;
+    const canCenterWithoutCropping =
+      left + centerDeltaX >= -12 &&
+      top + centerDeltaY >= -12 &&
+      right + centerDeltaX <= CANVAS_WIDTH + 12 &&
+      bottom + centerDeltaY <= CANVAS_HEIGHT + 12;
+
+    if ((dx === 0 && dy === 0) && totalOverflow < 80) {
+      if (!(hasMeaningfulCenterDrift && canCenterWithoutCropping)) return rawElements;
+      dx = centerDeltaX;
+      dy = centerDeltaY;
+    }
+
+    if (dx === 0 && dy === 0) return rawElements;
+
+    return rawElements.map((el) => ({
+      ...el,
+      x: typeof el.x === "number" ? el.x + dx : el.x,
+      y: typeof el.y === "number" ? el.y + dy : el.y,
+    }));
+  };
+
+  const normalizeCanvasElements = (rawElements: CanvasElement[]): CanvasElement[] =>
+    reframeShiftedLayout(normalizeLegacyElementAnchoring(rawElements));
+
+  const parseCanvasPayload = (value: any): any => {
+    if (!value) return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return null;
+      }
+    }
+    if (typeof value === "object" && !Array.isArray(value)) return value;
+    return null;
+  };
+
+  const getActiveCanvasSlideId = () =>
+    editingContent?.activeCanvasSlideId || editingContent?.slides?.[0]?.id || null;
+
+  const getActiveCanvasContent = () => {
+    const activeId = getActiveCanvasSlideId();
+    if (activeId && Array.isArray(editingContent?.slides)) {
+      const activeSlide = editingContent.slides.find((s: any) => s.id === activeId);
+      const parsedActive = parseCanvasPayload(activeSlide?.content);
+      if (parsedActive) return parsedActive;
+    }
+
+    const parsedItemContent = parseCanvasPayload(editingContent?.content);
+    if (parsedItemContent) return parsedItemContent;
+    return {};
+  };
+
+  const activeCanvasContent = getActiveCanvasContent();
+
   const [activeTool, setActiveTool] = useState<string>("Text");
-  const [elements, setElements] = useState<CanvasElement[]>(editingContent?.content?.elements || []);
+  const [elements, setElements] = useState<CanvasElement[]>(
+    normalizeCanvasElements(activeCanvasContent?.elements || []),
+  );
   const [canvasBackground, setCanvasBackground] = useState<CanvasBackground>(
-    editingContent?.content?.canvasBackground || { type: "transparent", value: "" }
+    activeCanvasContent?.canvasBackground || { type: "transparent", value: "" }
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [templateQuery, setTemplateQuery] = useState("");
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [templateFeedback, setTemplateFeedback] = useState<string>("");
+  const [templateLibrary, setTemplateLibrary] = useState<SlideCanvasTemplate[]>(
+    () => getAllSlideCanvasTemplates(),
+  );
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const activeContent = getActiveCanvasContent();
+    setElements(normalizeCanvasElements(activeContent?.elements || []));
+    setCanvasBackground(
+      activeContent?.canvasBackground || { type: "transparent", value: "" },
+    );
+    setSelectedId(null);
+  }, [editingContent?.id, editingContent?.content, editingContent?.activeCanvasSlideId]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current) {
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        const newScale = Math.min((width - 16) / CANVAS_WIDTH, (height - 16) / CANVAS_HEIGHT);
+        setScale(newScale);
+      }
+    };
+    handleResize();
+    const observer = new ResizeObserver(handleResize);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && !event.key.includes("qworship-slide-canvas-custom-templates")) return;
+      setTemplateLibrary(getAllSlideCanvasTemplates());
+    };
+    const handleTemplateUpdated = () => {
+      setTemplateLibrary(getAllSlideCanvasTemplates());
+    };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("qworship-slide-template-updated", handleTemplateUpdated);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("qworship-slide-template-updated", handleTemplateUpdated);
+    };
+  }, []);
+
+  const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const syncState = (newElements: CanvasElement[], newBg: CanvasBackground) => {
-    const newContent = { ...editingContent.content, elements: newElements, canvasBackground: newBg };
-    const newSlides = editingContent.slides?.map((s: any) => ({ ...s, content: newContent })) || [];
-    updateItemContent(editingContent.id, editingContent.title, newContent, newSlides);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      const currentContent = getActiveCanvasContent();
+      const newContent = { ...currentContent, elements: newElements, canvasBackground: newBg };
+      const activeSlideId = getActiveCanvasSlideId();
+      const newSlides =
+        editingContent.slides?.map((s: any) =>
+          activeSlideId
+            ? s.id === activeSlideId
+              ? { ...s, content: newContent }
+              : s
+            : { ...s, content: newContent },
+        ) || [];
+      updateItemContent(editingContent.id, editingContent.title, newContent, newSlides);
+    }, 400);
   };
 
   const updateElement = (id: string, partial: Partial<CanvasElement>, sync = true) => {
@@ -124,6 +350,53 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
     setElements(newEls);
     syncState(newEls, canvasBackground);
   };
+
+  const refreshTemplateLibrary = () => {
+    setTemplateLibrary(getAllSlideCanvasTemplates());
+  };
+
+  const applyTemplate = (template: SlideCanvasTemplate) => {
+    const cloned = cloneTemplateForCanvas(template);
+    const normalizedElements = normalizeCanvasElements(cloned.elements as CanvasElement[]);
+    setElements(normalizedElements);
+    setCanvasBackground(cloned.canvasBackground as CanvasBackground);
+    setSelectedId(null);
+    syncState(normalizedElements, cloned.canvasBackground as CanvasBackground);
+    setTemplateFeedback(`Applied "${template.name}"`);
+    setTimeout(() => setTemplateFeedback(""), 2200);
+  };
+
+  const saveCurrentAsTemplate = () => {
+    if (!elements.length) {
+      setTemplateFeedback("Add at least one element before saving a template.");
+      setTimeout(() => setTemplateFeedback(""), 2200);
+      return;
+    }
+
+    const templateName = (newTemplateName || editingContent?.title || "Custom Canvas Template").trim();
+    saveCurrentCanvasTemplateToAssets({
+      name: templateName,
+      description: `Saved from ${editingContent?.title || "Slide Canvas"}`,
+      category: "Custom",
+      elements: elements,
+      canvasBackground: canvasBackground,
+    });
+    setNewTemplateName("");
+    refreshTemplateLibrary();
+    setTemplateFeedback(`Saved "${templateName}" to Assets > Templates`);
+    setTimeout(() => setTemplateFeedback(""), 2600);
+  };
+
+  const filteredTemplates = useMemo(() => {
+    const query = templateQuery.trim().toLowerCase();
+    if (!query) return templateLibrary;
+    return templateLibrary.filter(
+      (template) =>
+        template.name.toLowerCase().includes(query) ||
+        template.description.toLowerCase().includes(query) ||
+        template.category.toLowerCase().includes(query),
+    );
+  }, [templateLibrary, templateQuery]);
 
   const addText = (preset: "headline" | "subhead" | "body") => {
     const isHeadline = preset === "headline";
@@ -203,8 +476,8 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
     const initialY = element.y;
 
     const handleMouseMove = (mvEvent: MouseEvent) => {
-      const dx = mvEvent.clientX - startX;
-      const dy = mvEvent.clientY - startY;
+      const dx = (mvEvent.clientX - startX) / scale;
+      const dy = (mvEvent.clientY - startY) / scale;
       updateElement(id, { x: initialX + dx, y: initialY + dy }, false);
     };
 
@@ -213,7 +486,9 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
       document.removeEventListener("mouseup", handleMouseUp);
       // Sync state after drag completes
       setElements(curr => {
-        syncState(curr, canvasBackground);
+        setTimeout(() => {
+          syncState(curr, canvasBackground);
+        }, 0);
         return curr;
       });
     };
@@ -223,10 +498,6 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
   };
 
   const selectedEl = elements.find(e => e.id === selectedId);
-
-  function resolveMediaUrl(value: string) {
-    throw new Error("Function not implemented.");
-  }
 
   return (
     <div className="flex w-full h-full bg-[#1e1e2e] rounded-xl overflow-hidden shadow-2xl relative border border-gray-700">
@@ -262,26 +533,28 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
 
       {/* Secondary Context Panel */}
       {(selectedEl || activeTool) && (
-        <div className="w-72 bg-[#313243] border-r border-[#3a3b4c] flex flex-col shrink-0 z-20 overflow-y-auto custom-scrollbar h-full text-white">
+        <div className="w-64 lg:w-72 bg-[#313243] border-r border-[#3a3b4c] flex flex-col shrink-0 z-20 overflow-y-auto custom-scrollbar h-full text-white">
 
-          {/* PROPERTIES PANEL FOR TEXT ELEMENT */}
-          {(selectedEl?.type === "text" || (!selectedId && activeTool === "Text Properties")) ? (
+          {/* PROPERTIES PANEL FOR SELECTED ELEMENT */}
+          {(selectedEl) ? (
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-4 border-b border-gray-700 tracking-wide font-semibold text-lg">
-                Text Properties
+                {selectedEl.type === 'text' ? 'Text' : selectedEl.type === 'rect' ? 'Element' : 'Image'} Properties
                 <button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
               </div>
               <div className="p-4 space-y-5">
 
-                {/* Content */}
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold uppercase text-gray-300 flex items-center gap-1.5"><ChevronDown size={14} /> Content</div>
-                  <textarea
-                    className="w-full bg-[#1e1e2c] border border-gray-600 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none h-20"
-                    value={selectedEl?.content || ""}
-                    onChange={(e) => selectedEl && updateElement(selectedEl.id, { content: e.target.value })}
-                  />
-                </div>
+                {selectedEl.type === "text" && (
+                  <>
+                    {/* Content */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold uppercase text-gray-300 flex items-center gap-1.5"><ChevronDown size={14} /> Content</div>
+                      <textarea
+                        className="w-full bg-[#1e1e2c] border border-gray-600 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none h-20"
+                        value={selectedEl?.content || ""}
+                        onChange={(e) => updateElement(selectedEl.id, { content: e.target.value })}
+                      />
+                    </div>
 
                 {/* Text Formatting */}
                 <div className="space-y-3">
@@ -364,6 +637,25 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                   </div>
                 </div>
 
+                  </>
+                )}
+
+                {selectedEl.type === "rect" && (
+                  <div className="space-y-3">
+                    <div className="text-xs font-semibold uppercase text-gray-300 flex items-center gap-1.5"><ChevronDown size={14} /> Style</div>
+                    <div className="flex gap-4 items-center text-gray-400">
+                      <div className="flex flex-col gap-1 w-full relative">
+                        <span className="text-xs text-gray-400">Color</span>
+                        <div className="w-full h-10 rounded-lg shrink-0 border border-gray-600 relative overflow-hidden bg-white/5 flex items-center px-3">
+                          <input type="color" className="absolute -inset-2 w-[200%] h-16 cursor-pointer opacity-0" value={selectedEl.color || "#8356F3"} onChange={(e) => updateElement(selectedEl.id, { color: e.target.value })} />
+                          <div className="w-5 h-5 rounded-full border border-white/20 mr-3" style={{backgroundColor: selectedEl.color || "#8356F3"}}></div>
+                          <span className="text-sm uppercase text-gray-300">{selectedEl.color || "#8356F3"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Position */}
                 <div className="space-y-3">
                   <div className="text-xs font-semibold uppercase text-gray-300 flex items-center gap-1.5"><ChevronDown size={14} /> Position</div>
@@ -407,6 +699,86 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                   <div className="flex items-center justify-between text-sm"><span>Background Shape</span> <Switch checked={selectedEl?.backgroundShape} onCheckedChange={(v) => selectedEl && updateElement(selectedEl.id, { backgroundShape: v })} /></div>
                 </div>
 
+              </div>
+            </div>
+          ) : activeTool === "Template" ? (
+            <div className="flex flex-col h-full">
+              <div className="p-4 border-b border-gray-700 tracking-wide font-semibold text-lg">
+                Templates
+              </div>
+              <div className="p-4 border-b border-gray-700/70 space-y-3">
+                <Input
+                  value={templateQuery}
+                  onChange={(e) => setTemplateQuery(e.target.value)}
+                  placeholder="Search templates..."
+                  className="bg-[#1e1e2c] border-gray-600 text-white"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    value={newTemplateName}
+                    onChange={(e) => setNewTemplateName(e.target.value)}
+                    placeholder="Template name"
+                    className="bg-[#1e1e2c] border-gray-600 text-white"
+                  />
+                  <Button
+                    onClick={saveCurrentAsTemplate}
+                    className="bg-purple-600 hover:bg-purple-700 text-white whitespace-nowrap"
+                  >
+                    Save
+                  </Button>
+                </div>
+                {templateFeedback && (
+                  <p className="text-xs text-purple-300">{templateFeedback}</p>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {filteredTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => applyTemplate(template)}
+                    className="w-full text-left bg-[#1e1e2c] hover:bg-[#25263a] border border-gray-700 hover:border-purple-500 rounded-lg p-3 transition-colors"
+                  >
+                    {(() => {
+                      const templateBgUrl =
+                        template.canvasBackground?.type === "image"
+                          ? resolveMediaUrl(template.canvasBackground.value)
+                          : undefined;
+                      return (
+                    <div
+                      className="h-24 rounded-md mb-3 relative overflow-hidden"
+                      style={{
+                        background: template.preview.gradient,
+                        backgroundImage: templateBgUrl
+                          ? `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url("${templateBgUrl}")`
+                          : undefined,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }}
+                    >
+                      <div
+                        className="absolute bottom-0 left-0 right-0 h-2"
+                        style={{ background: template.preview.accent }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center text-white/85 text-xs font-semibold tracking-wide">
+                        {template.category}
+                      </div>
+                    </div>
+                      );
+                    })()}
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-white">{template.name}</p>
+                      <span className="text-[10px] uppercase tracking-wide text-gray-400">
+                        {template.source}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{template.description}</p>
+                  </button>
+                ))}
+                {!filteredTemplates.length && (
+                  <div className="text-center text-sm text-gray-400 py-8">
+                    No templates match your search.
+                  </div>
+                )}
               </div>
             </div>
           ) : activeTool === "Text" ? (
@@ -598,7 +970,9 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
 
         {/* The Artboard */}
         <div
-          className="flex-1 overflow-hidden p-2 flex items-center justify-center relative bg-[#101017]"
+          ref={containerRef}
+          className="flex-1 overflow-hidden p-1 md:p-2 flex items-center justify-center relative bg-[#0a0a0f]"
+          onClick={() => setSelectedId(null)}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
@@ -614,10 +988,13 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
         >
           <div
             ref={canvasRef}
-            className="w-[960px] h-[540px] shadow-2xl relative overflow-hidden transition-transform duration-300 shrink-0 transform-origin-center sm:scale-[0.6] md:scale-[0.75] lg:scale-[0.85] xl:scale-[0.95]"
+            className="shadow-2xl relative overflow-hidden transition-transform duration-300 shrink-0 transform-origin-center"
             style={{
+              width: `${CANVAS_WIDTH}px`,
+              height: `${CANVAS_HEIGHT}px`,
+              transform: `scale(${scale})`,
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
-              backgroundColor: canvasBackground.type === 'color' ? canvasBackground.value : canvasBackground.type === 'transparent' ? '#1e1e2c' : 'transparent',
+              backgroundColor: canvasBackground.type === 'color' ? canvasBackground.value : canvasBackground.type === 'transparent' ? '#14141d' : 'transparent',
               backgroundImage: canvasBackground.type === 'image' ? `url("${resolveMediaUrl(canvasBackground.value)}")` : 'none',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
@@ -636,12 +1013,13 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                 <div
                   key={el.id}
                   onMouseDown={(e) => handleDragStart(e, el.id)}
+                  onClick={(e) => e.stopPropagation()}
                   className={`absolute ${el.locked ? '' : 'cursor-move'} ${isSelected ? 'ring-2 ring-[#8356F3]' : 'hover:ring-1 hover:ring-purple-500/50'}`}
                   style={{
-                    left: el.x,
-                    top: el.y,
-                    width: el.width,
-                    height: el.height,
+                    left: `${el.x}px`,
+                    top: `${el.y}px`,
+                    width: `${el.width}px`,
+                    height: `${el.height}px`,
                     backgroundColor: el.type === 'rect' ? el.color : 'transparent',
                     opacity: el.opacity / 100,
                     transform: `rotate(${el.rotation}deg)`,
@@ -672,7 +1050,7 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                   )}
 
                   {el.type === 'image' && (
-                    <img src={el.content} alt={el.layerName} className="w-full h-full object-cover select-none pointer-events-none" />
+                    <img src={resolveMediaUrl(el.content)} alt={el.layerName} className="w-full h-full object-cover select-none pointer-events-none" />
                   )}
 
                   {/* Resize Handles */}

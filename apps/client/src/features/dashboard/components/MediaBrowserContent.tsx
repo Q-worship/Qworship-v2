@@ -68,6 +68,10 @@ export const MediaBrowserContent: React.FC<{
               onSelectMedia(selectedItem.asset);
             }
           }}
+          isModal={true}
+          onAssetSelect={(url: string) => {
+            onSelectMedia(url as any);
+          }}
           activeFilters={activeFilters}
         />
       </div>

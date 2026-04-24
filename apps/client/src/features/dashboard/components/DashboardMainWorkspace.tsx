@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from "react";
+import React, { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { useDashboardUI } from "@/features/dashboard/providers/DashboardUIProvider";
 
 import { Input } from "@/components/ui/input";
@@ -111,6 +111,46 @@ export const DashboardMainWorkspace = (props: any) => {
     );
   };
 
+  const canvasDebugTimestampsRef = useRef<Record<string, number>>({});
+  const logCanvasThumbnailDebug = useCallback(
+    (zone: string, slide: any, containerEl?: HTMLDivElement | null) => {
+      const id = slide?.id || "unknown-slide";
+      const key = `${zone}:${id}`;
+      const now = Date.now();
+      const last = canvasDebugTimestampsRef.current[key] || 0;
+
+      // Throttle repeated logs from rapid React re-renders.
+      if (now - last < 1200) return;
+      canvasDebugTimestampsRef.current[key] = now;
+
+      const content = slide?.content;
+      const contentType = Array.isArray(content) ? "array" : typeof content;
+      const hasElements =
+        !!content && typeof content === "object" && Array.isArray(content.elements);
+      const elementsCount = hasElements ? content.elements.length : 0;
+      const bgType =
+        content && typeof content === "object"
+          ? content.canvasBackground?.type || content.background?.type || "none"
+          : "none";
+      const rect = containerEl?.getBoundingClientRect();
+
+      console.log(`[CanvasThumbDebug:${zone}]`, {
+        slideId: id,
+        title: slide?.title,
+        type: slide?.type,
+        subtype: slide?.subtype,
+        contentType,
+        hasElements,
+        elementsCount,
+        backgroundType: bgType,
+        container: rect
+          ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+          : null,
+      });
+    },
+    [],
+  );
+
   return (
     <main
       className={`flex-1 ${isBuildMode ? "bg-[#2a1f4b] p-8 overflow-hidden h-full" : "bg-transparent p-0"} ${!isBuildMode ? "relative z-40" : ""}`}
@@ -130,9 +170,9 @@ export const DashboardMainWorkspace = (props: any) => {
             }}
           >
             {/* Left Section - Edit & Preparation */}
-            <div className="flex-1 bg-[#1a0f2e] p-6 border-r border-gray-600">
-              <div className="h-full flex flex-col">
-                <div className="flex items-center justify-between mb-6">
+            <div className={`flex-1 bg-[#1a0f2e] border-r border-gray-600 min-h-0 overflow-hidden flex flex-col ${editingContent?.type === "media" && editingContent?.subtype === "canvas" ? "p-0" : "p-6"}`}>
+              <div className="h-full flex flex-col min-h-0">
+                <div className="flex items-center justify-between mb-6 shrink-0">
                   <div className="flex items-center space-x-3">
                     <Button
                       variant="ghost"
@@ -167,7 +207,7 @@ export const DashboardMainWorkspace = (props: any) => {
                 </div>
 
                 {/* Edit Content Area */}
-                <div className="flex-1 border-2 border-dashed border-gray-600 rounded-lg">
+                <div className={`flex-1 min-h-0 overflow-hidden flex flex-col ${editingContent?.type === "media" && editingContent?.subtype === "canvas" ? "" : "border-2 border-dashed border-gray-600 rounded-lg"}`}>
                   {selectedSlide && !(selectedSlide.item?.type === "media" && selectedSlide.item?.subtype === "video") ? (
                     /* Slide Editor */
                     <div className="p-6 h-full overflow-y-auto">
@@ -3949,7 +3989,7 @@ import type { Slide } from "@/types";\n${text}`,
             </div>
             {/* Right Section - Presentation Preview */}
             <div
-              className="flex-1 flex items-center justify-center relative min-h-[500px] bg-[#000000]"
+              className={`flex-1 flex items-center justify-center relative min-h-[500px] bg-[#000000] ${editingContent?.type === "media" && editingContent?.subtype === "canvas" ? "hidden" : ""}`}
               style={(() => {
                 // Apply the background of the currently editing item to the entire preview section
                 if (editingContent) {
@@ -4197,7 +4237,7 @@ import type { Slide } from "@/types";\n${text}`,
                             />
                           ) : (selectedSlide.slide as any).subtype === "canvas" ? (
                             <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
-                              <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} />
+                              <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} scaleMode="contain" />
                             </div>
                           ) : (
                             <img
@@ -4720,7 +4760,7 @@ import type { Slide } from "@/types";\n${text}`,
                           <>
                             {(displaySlide as any)?.subtype === "canvas" ? (
                               <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
-                                <SlideCanvasRenderer content={displaySlide?.content} background={{type: 'transparent'}} />
+                                <SlideCanvasRenderer content={displaySlide?.content} background={{type: 'transparent'}} scaleMode="contain" />
                               </div>
                             ) : (
                             <img
@@ -4959,7 +4999,7 @@ import type { Slide } from "@/types";\n${text}`,
                           />
                         ) : (currentlyDisplayedSlide as any).subtype === "canvas" ? (
                           <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
-                            <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} />
+                            <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} scaleMode="contain" />
                           </div>
                         ) : (
                           <img
@@ -5145,18 +5185,18 @@ import type { Slide } from "@/types";\n${text}`,
               </div>
             </div>
             {/* Bottom Slideshow Bar - Centered */}
-            <div
-              className="h-36 bg-[#1a0f2e] border border-gray-600 rounded-lg p-5 flex-shrink-0"
-              style={{ width: "70vw", maxWidth: "1200px" }}
-            >
+            <div className="h-36 bg-[#1a0f2e] border border-gray-600 rounded-lg p-5 flex-shrink-0 w-full">
               <div className="flex items-center justify-between h-full">
                 {/* Slide Navigation */}
-                <div className="flex items-center space-x-3 flex-1">
+                <div
+                  className="flex items-center space-x-3 flex-1 overflow-x-auto"
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
                   {/* Slide Thumbnails with Content Previews */}
                   {slides.map((slide, index) => (
                     <div
                       key={slide.id}
-                      className={`w-32 h-18 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden ${index + 1 === currentSlide
+                      className={`w-40 h-[90px] flex-shrink-0 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden ${index + 1 === currentSlide
                         ? "border-[#8356F3]"
                         : "border-gray-600 hover:border-gray-500"
                         }`}
@@ -5186,7 +5226,18 @@ import type { Slide } from "@/types";\n${text}`,
                             background.value || "#000000",
                         };
                       })()}
-                      onClick={() => {
+                      onMouseDown={(e) => {
+                        if ((slide as any)?.subtype !== "canvas") return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSlideClick(slide as any, index);
+                      }}
+                      onClick={(e) => {
+                        if ((slide as any)?.subtype === "canvas") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
                         setCurrentSlide(index + 1);
                         setCurrentlyDisplayedSlide(slide);
                         // Clear Bible projection when navigating to slides
@@ -5214,14 +5265,22 @@ import type { Slide } from "@/types";\n${text}`,
                       title={slide.title}
                     >
                       {/* Slide Number Badge */}
-                      <div className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
+                      <div className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded z-10">
                         {index + 1}
                       </div>
 
                       {/* Content Preview */}
-                      <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
-                        {slide.type === "verse" ||
-                          slide.type === "chorus" ? (
+                      {(slide as any).subtype === "canvas" ? (
+                        <div
+                          className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg"
+                          ref={(el) => logCanvasThumbnailDebug("bottom-strip", slide, el)}
+                        >
+                          <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                        </div>
+                      ) : (
+                        <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
+                          {slide.type === "verse" ||
+                            slide.type === "chorus" ? (
                           <div className="text-center">
                             <div className="text-white text-xs font-semibold mb-1 leading-tight">
                               {slide.sectionLabel ||
@@ -5267,7 +5326,7 @@ import type { Slide } from "@/types";\n${text}`,
                                 : "No lyrics"}
                             </div>
                           </div>
-                        ) : slide.type === "bible" ? (
+                          ) : slide.type === "bible" ? (
                           <div className="text-center">
                             <div className="text-white text-xs font-semibold mb-1">
                               BIBLE
@@ -5279,7 +5338,7 @@ import type { Slide } from "@/types";\n${text}`,
                               {slide.title || "Scripture"}
                             </div>
                           </div>
-                        ) : (
+                          ) : (
                           <div className="text-center">
                             <div className="text-white text-xs font-semibold">
                               {slide.type.toUpperCase()}
@@ -5291,8 +5350,9 @@ import type { Slide } from "@/types";\n${text}`,
                               {slide.title || "Content"}
                             </div>
                           </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Type indicator */}
                       <div
@@ -5322,8 +5382,8 @@ import type { Slide } from "@/types";\n${text}`,
         {/* Bottom Slideshow Bar - Only in Build Mode */}
         {isBuildMode && (
           <div
-            className="h-64 bg-[#2a1f3d] border border-gray-600 rounded-lg p-6 relative overflow-hidden"
-            style={{ minHeight: "256px", maxHeight: "256px" }}
+                  className="h-72 bg-[#2a1f3d] border border-gray-600 rounded-lg p-6 relative overflow-hidden"
+                  style={{ minHeight: "288px", maxHeight: "288px" }}
           >
             {slides.length > 0 ? (
               /* Custom Horizontal Scroller Container */
@@ -5352,7 +5412,6 @@ import type { Slide } from "@/types";\n${text}`,
                     }
                   }}
                   onWheel={(e) => {
-                    e.preventDefault();
                     const container = e.currentTarget;
                     const scrollAmount = e.deltaY * 2; // Adjust sensitivity
                     container.scrollLeft += scrollAmount;
@@ -5431,10 +5490,25 @@ import type { Slide } from "@/types";\n${text}`,
                       isItemSelected = index + 1 === currentSlide;
                     }
 
+                    const thumbWidth =
+                      slides.length <= 1
+                        ? 420
+                        : slides.length === 2
+                          ? 360
+                          : slides.length === 3
+                            ? 300
+                            : 240;
+                    const thumbHeight = Math.round((thumbWidth * 9) / 16);
+
                     return (
                       <div
                         key={slide.id}
                         className="flex flex-col flex-shrink-0 relative"
+                        style={{
+                          width: `${thumbWidth}px`,
+                          minWidth: `${thumbWidth}px`,
+                          flex: `0 0 ${thumbWidth}px`,
+                        }}
                       >
                         {/* Selection background behind entire tile */}
                         {isItemSelected && (
@@ -5451,12 +5525,25 @@ import type { Slide } from "@/types";\n${text}`,
                           </div>
                           {/* Thumbnail Box - matching reference design exactly */}
                           <div
-                            className="relative w-48 h-32 rounded-lg cursor-pointer transition-all overflow-hidden"
+                            className="relative w-60 h-[135px] rounded-lg cursor-pointer transition-all overflow-hidden"
+                            onMouseDown={(e) => {
+                              if ((slide as any)?.subtype !== "canvas") return;
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleSlideClick(slide as any, index);
+                            }}
                             onClick={() =>
-                              handleSlideClick(slide as any, index)
+                              (slide as any)?.subtype !== "canvas"
+                                ? handleSlideClick(slide as any, index)
+                                : undefined
                             }
                             title={slide.title}
                             style={{
+                              width: `${thumbWidth}px`,
+                              minWidth: `${thumbWidth}px`,
+                              height: `${thumbHeight}px`,
+                              minHeight: `${thumbHeight}px`,
+                              flex: `0 0 ${thumbWidth}px`,
                               backgroundColor: "#2E2D39",
                               transition: "background-color 0.2s ease",
                             }}
@@ -5491,6 +5578,14 @@ import type { Slide } from "@/types";\n${text}`,
                             </div>
 
                             {/* Content Area - Exact spacing like reference image */}
+                            {(slide as any).subtype === "canvas" ? (
+                              <div
+                                className="absolute inset-0 z-0 overflow-hidden"
+                                ref={(el) => logCanvasThumbnailDebug("build-scroller", slide, el)}
+                              >
+                                <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                              </div>
+                            ) : (
                             <div
                               className="px-4 pt-8 pb-6 h-full relative bg-[#000000]"
                               style={(() => {
@@ -5685,8 +5780,11 @@ import type { Slide } from "@/types";\n${text}`,
                                         playsInline
                                       />
                                     ) : (slide as any).subtype === "canvas" ? (
-                                      <div className="relative z-10 w-full h-full object-contain bg-black border border-purple-500/30">
-                                        <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} />
+                                      <div
+                                        className="absolute inset-0 w-full h-full"
+                                        ref={(el) => logCanvasThumbnailDebug("media-fallback-branch", slide, el)}
+                                      >
+                                        <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
                                       </div>
                                     ) : (
                                       <img
@@ -5763,6 +5861,7 @@ import type { Slide } from "@/types";\n${text}`,
                                 )}
                               </div>
                             </div>
+                            )}
                           </div>
                         </div>
                       </div>

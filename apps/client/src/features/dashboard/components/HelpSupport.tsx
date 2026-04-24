@@ -790,6 +790,7 @@ export const HelpSupport: React.FC = () => {
                 </Card>
               </div>
             </TabsContent>
+
           </Tabs>
         </div>
       </div>

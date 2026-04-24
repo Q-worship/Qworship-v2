@@ -39,6 +39,8 @@ app.use(
       "Content-Type",
       "Authorization",
       "Access-Control-Allow-Credentials",
+      "x-admin-key",
+      "X-Admin-Key",
     ],
   }),
 ); // Connect to Vite App
