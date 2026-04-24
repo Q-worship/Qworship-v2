@@ -145,10 +145,15 @@ export class ObjectStorageService {
   async getSignedDownloadUrl(
     key: string,
     expiresIn: number = 3600,
+    options?: { filename?: string; mimeType?: string }
   ): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: getBucketName(),
       Key: key, // Use the stored key from database
+      ResponseContentDisposition: options?.filename
+        ? `attachment; filename="${options.filename.replace(/["\\\r\n]/g, "")}"`
+        : undefined,
+      ResponseContentType: options?.mimeType,
     });
     // This returns a temporary pre-signed S3/R2 URL valid for 1 hour.
     return await getSignedUrl(getS3Client(), command, { expiresIn });

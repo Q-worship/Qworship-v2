@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Play, Image } from "lucide-react";
-import { buildUrl } from "@/lib/queryClient";
+import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+import { getAllSlideCanvasTemplates } from "@/features/dashboard/components/slideCanvasTemplateLibrary";
 
 interface CloudMediaAsset {
   id: number;
@@ -41,6 +42,7 @@ interface MediaAsset {
   lastUsed?: string | null;
   fileSize?: number;
   description?: string;
+  templateId?: string;
 }
 
 interface DynamicMediaSectionsProps {
@@ -136,6 +138,29 @@ export const DynamicMediaSections: React.FC<DynamicMediaSectionsProps> = ({
   isModal = false,
   recentlyUploadedMediaId = null,
 }) => {
+  const [templateRefreshTick, setTemplateRefreshTick] = React.useState(0);
+  const slideCanvasTemplates = React.useMemo(
+    () => getAllSlideCanvasTemplates(),
+    [templateRefreshTick],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key && !event.key.includes("qworship-slide-canvas-custom-templates")) return;
+      setTemplateRefreshTick((prev) => prev + 1);
+    };
+    const onTemplateUpdated = () => {
+      setTemplateRefreshTick((prev) => prev + 1);
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("qworship-slide-template-updated", onTemplateUpdated);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("qworship-slide-template-updated", onTemplateUpdated);
+    };
+  }, []);
+
   // Fetch cloud media assets with categories for CLOUD MEDIA tab
   const { data: cloudMediaAssets = [], isLoading: cloudLoading } = useQuery<
     CloudMediaAsset[]
@@ -829,16 +854,7 @@ export const DynamicMediaSections: React.FC<DynamicMediaSectionsProps> = ({
               <div className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5 pointer-events-none">
                 {asset.type?.toLowerCase() === "video" ? (
                   <Play className="w-4 h-4 text-white fill-white" />
-                ) : activeTab === "templates" ? (
-            <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[400px]">
-              <div className="text-gray-400 text-lg mb-4 font-medium uppercase tracking-widest relative z-10" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>
-                Premium Templates Coming Soon
-              </div>
-              <p className="text-gray-500 text-center max-w-md text-sm mt-2">
-                Professionally designed presentation templates will be available in the upcoming release to help you create stunning worship experiences faster.
-              </p>
-            </div>
-          ) : (
+                ) : (
                   <Image className="w-4 h-4 text-white" />
                 )}
               </div>
@@ -884,6 +900,114 @@ export const DynamicMediaSections: React.FC<DynamicMediaSectionsProps> = ({
         </div>
       );
     };
+
+  if (activeTab === "templates") {
+    return (
+      <ScrollArea className="h-full pr-3">
+        <div className="space-y-6">
+          <div className="mb-1">
+            <h2 className="text-white text-lg font-semibold font-['Poppins',Helvetica]">
+              Slide Canvas Templates
+            </h2>
+            <p className="text-sm text-gray-400 mt-1">
+              Built-in and custom templates saved from Slide Canvas are available here.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            {slideCanvasTemplates.map((template, index) => {
+              const templateAsset: MediaAsset = {
+                id: -(index + 1),
+                title: template.name,
+                type: "template",
+                thumbnail: null,
+                uploadedBy: template.source === "built-in" ? "admin" : "user",
+                tags: [template.category],
+                collection: "Slide Templates",
+                usageCount: 0,
+                createdAt: template.createdAt || new Date().toISOString(),
+                description: template.description,
+                templateId: template.id,
+              };
+
+              const isSelected =
+                selectedMedia?.type === "template" &&
+                selectedMedia?.title === template.name;
+
+              return (
+                <div
+                  key={template.id}
+                  className={`rounded-lg border cursor-pointer transition-colors ${
+                    isSelected
+                      ? "border-[#cea2fd] bg-[#cea2fd]/10"
+                      : "border-[#2d2144] hover:border-[#cea2fd]"
+                  }`}
+                  onClick={() => {
+                    if (onMediaSelect) {
+                      onMediaSelect({
+                        sectionIndex: 0,
+                        itemIndex: index,
+                        title: template.name,
+                        color: "#8356f3",
+                        type: "template",
+                        asset: templateAsset,
+                      });
+                    }
+                    if (isModal && onAssetSelect) {
+                      onAssetSelect(`slide-template:${template.id}`, "template", template.name);
+                    }
+                  }}
+                >
+                  <div className="p-0">
+                    {(() => {
+                      const templateBgUrl =
+                        template.canvasBackground?.type === "image"
+                          ? resolveMediaUrl(template.canvasBackground.value)
+                          : undefined;
+                      return (
+                    <div
+                      className="h-40 rounded-t-lg relative overflow-hidden"
+                      style={{
+                        background: template.preview.gradient,
+                        backgroundImage: templateBgUrl
+                          ? `linear-gradient(rgba(0,0,0,0.22), rgba(0,0,0,0.35)), url("${templateBgUrl}")`
+                          : undefined,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }}
+                    >
+                      <div
+                        className="absolute bottom-0 left-0 right-0 h-2"
+                        style={{ background: template.preview.accent }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center text-white text-sm font-semibold tracking-wide">
+                        {template.category}
+                      </div>
+                    </div>
+                      );
+                    })()}
+                    <div className="p-3">
+                      <p className="text-white text-sm font-semibold">{template.name}</p>
+                      <p className="text-gray-400 text-xs mt-1 line-clamp-2">{template.description}</p>
+                      <div className="mt-2 text-[10px] uppercase tracking-wide text-gray-500">
+                        {template.source === "built-in" ? "Built-in" : "Custom"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {slideCanvasTemplates.length === 0 && (
+            <div className="text-sm text-gray-400 py-12 text-center">
+              No templates available yet.
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -74,6 +74,12 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
     socialHandlesColor,
   } = props;
 
+  const displaySlides = previewSlides.length > 0 ? previewSlides : slidesProp;
+  const displayCurrentSlide = previewSlides.length > 0 ? previewCurrentSlide : currentSlide;
+  const currentSlideData = displaySlides[displayCurrentSlide - 1];
+  const isSlidesMediaMode =
+    activeMode === "slides" && !!currentSlideData && currentSlideData.type === "media";
+
   return (
     <div
       className="bg-black rounded-lg overflow-hidden border border-gray-700 flex-1 relative"
@@ -114,7 +120,11 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
       </div>
 
       {/* Content Layer - Mirrors Live Screen based on activeMode */}
-      <div className="absolute inset-0 flex items-center justify-center p-4">
+      <div
+        className={`absolute inset-0 flex items-center justify-center ${
+          isSlidesMediaMode ? "p-0" : "p-4"
+        }`}
+      >
         {/* Song Projection - only show when activeMode is 'song' */}
         {activeMode === "song" &&
           previewProjectionType === "song" &&
@@ -154,10 +164,6 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
 
         {/* Slide Content - Show when activeMode is 'slides' */}
         {(() => {
-          const displaySlides = previewSlides.length > 0 ? previewSlides : slidesProp;
-          const displayCurrentSlide = previewSlides.length > 0 ? previewCurrentSlide : currentSlide;
-          const currentSlideData = displaySlides[displayCurrentSlide - 1];
-
           if (activeMode !== "slides" || displaySlides.length === 0 || !currentSlideData) {
             return null;
           }
@@ -225,7 +231,7 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
                   />
                 ) : (currentSlideData as any).subtype === "canvas" ? (
                   <div className="absolute inset-0 w-full h-full z-10">
-                     <SlideCanvasRenderer content={currentSlideData.content} />
+                     <SlideCanvasRenderer content={currentSlideData.content} scaleMode="contain" />
                   </div>
                 ) : (
                   <img

@@ -27,6 +27,7 @@ export default function OBSPresentationView() {
   const [backgroundColor, setBackgroundColor] = useState('transparent');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundVideo, setBackgroundVideo] = useState<string | null>(null);
+  const isMediaSlide = currentSlide?.type === "media";
 
   useEffect(() => {
     const handleSlideChange = (event: CustomEvent) => {
@@ -111,7 +112,11 @@ export default function OBSPresentationView() {
         />
       )}
 
-      <div className="relative z-10 w-full h-full flex items-center justify-center p-16">
+      <div
+        className={`relative z-10 w-full h-full flex items-center justify-center ${
+          isMediaSlide ? "p-0" : "p-16"
+        }`}
+      >
         {currentSlide ? (
           <div
             className="w-full max-w-7xl"
@@ -302,7 +307,7 @@ export default function OBSPresentationView() {
               <>
                 {(currentSlide as any).subtype === 'canvas' ? (
                   <div className="absolute inset-0 w-full h-full z-10">
-                    <SlideCanvasRenderer content={currentSlide.content} />
+                    <SlideCanvasRenderer content={currentSlide.content} scaleMode="contain" />
                   </div>
                 ) : (currentSlide as any).subtype === 'webpage' ? (
                   <div className="absolute inset-0 w-full h-full z-10 bg-white">

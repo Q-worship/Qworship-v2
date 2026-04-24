@@ -214,7 +214,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                       </div>
                     ) : (selectedSlide.slide as any).subtype === "canvas" ? (
                       <div className="absolute inset-0 w-full h-full z-10">
-                        <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} />
+                        <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} scaleMode="contain" />
                       </div>
                     ) : (selectedSlide.slide as any).subtype === "video" ? (
                       <video
@@ -417,7 +417,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                       </div>
                     ) : (currentlyDisplayedSlide as any).subtype === "canvas" ? (
                         <div className="absolute inset-0 w-full h-full z-10">
-                          <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} />
+                          <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} scaleMode="contain" />
                         </div>
                     ) : (currentlyDisplayedSlide as any).subtype === "video" ? (
                         <video
@@ -515,9 +515,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
           </div>
 
           {/* Bottom Slideshow Bar - Centered */}
-          <div
-            className="h-36 bg-[#1a0f2e] border border-gray-600 rounded-lg p-5 flex-shrink-0 mt-4 mx-auto"
-            style={{ width: "70vw", maxWidth: "1200px" }}>
+          <div className="h-36 bg-[#1a0f2e] border border-gray-600 rounded-lg p-5 flex-shrink-0 mt-4 w-full">
             <div className="flex items-center justify-between h-full">
               {/* Slide Navigation */}
               <div
@@ -555,7 +553,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                   return (
                     <div
                       key={slide.id}
-                      className={`w-32 h-18 rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden flex-shrink-0 ${
+                      className={`w-40 h-[90px] rounded-lg border-2 cursor-pointer transition-all relative overflow-hidden flex-shrink-0 ${
                         index + 1 === currentSlide
                           ? "border-[#8356F3]"
                           : "border-gray-600 hover:border-gray-500"
@@ -617,6 +615,11 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                       <div className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded z-10">
                         {index + 1}
                       </div>
+                      { (slide as any).subtype === "canvas" ? (
+                         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg">
+                            <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                         </div>
+                      ) : (
                       <div className="p-1.5 pt-5 h-full flex flex-col justify-center bg-black/40">
                         {slide.type === "verse" || slide.type === "chorus" ? (
                           <div className="text-center">
@@ -668,6 +671,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                           </div>
                         )}
                       </div>
+                      )}
                       <div
                         className={`absolute bottom-0 left-0 right-0 h-0.5 ${slide.type === "verse" || slide.type === "chorus" ? "bg-blue-500" : slide.type === "bible" ? "bg-green-500" : "bg-gray-500"}`}></div>
                     </div>

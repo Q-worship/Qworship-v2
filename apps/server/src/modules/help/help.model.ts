@@ -97,3 +97,61 @@ const SupportTicketSchema = new Schema<ISupportTicket>({
 }, { timestamps: true });
 
 export const SupportTicket = mongoose.model<ISupportTicket>('SupportTicket', SupportTicketSchema);
+
+export interface IDownloadableFile extends Document {
+  title: string;
+  description?: string;
+  category: string;
+  platform: 'windows' | 'mac' | 'other';
+  version?: string;
+  minOs?: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  storageKey: string;
+  isPublished: boolean;
+  uploadedBy?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const DownloadableFileSchema = new Schema<IDownloadableFile>({
+  title: { type: String, required: true },
+  description: { type: String },
+  category: { type: String, default: 'general' },
+  platform: { type: String, enum: ['windows', 'mac', 'other'], default: 'other', index: true },
+  version: { type: String },
+  minOs: { type: String },
+  originalName: { type: String, required: true },
+  mimeType: { type: String, required: true },
+  fileSize: { type: Number, required: true },
+  storageKey: { type: String, required: true, unique: true },
+  isPublished: { type: Boolean, default: true },
+  uploadedBy: { type: String }
+}, { timestamps: true });
+
+export const DownloadableFile = mongoose.model<IDownloadableFile>('DownloadableFile', DownloadableFileSchema);
+
+export interface IDownloadEvent extends Document {
+  downloadableFileId?: mongoose.Types.ObjectId;
+  platform: 'windows' | 'mac' | 'other';
+  source: string;
+  ip?: string;
+  userAgent?: string;
+  referer?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const DownloadEventSchema = new Schema<IDownloadEvent>({
+  downloadableFileId: { type: Schema.Types.ObjectId, ref: 'DownloadableFile' },
+  platform: { type: String, enum: ['windows', 'mac', 'other'], default: 'other', index: true },
+  source: { type: String, default: 'unknown', index: true },
+  ip: { type: String },
+  userAgent: { type: String },
+  referer: { type: String }
+}, { timestamps: true });
+
+DownloadEventSchema.index({ createdAt: -1 });
+
+export const DownloadEvent = mongoose.model<IDownloadEvent>('DownloadEvent', DownloadEventSchema);

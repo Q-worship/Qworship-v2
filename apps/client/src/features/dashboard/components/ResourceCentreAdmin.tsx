@@ -7,13 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { 
   Book, 
   HelpCircle, 
-  MessageSquare, 
   ExternalLink, 
   Plus, 
   Edit, 
@@ -21,13 +20,10 @@ import {
   Save, 
   X, 
   Search,
-  RefreshCw,
   Eye,
   ThumbsUp,
   ThumbsDown,
-  Clock,
-  Users,
-  FileText
+  Download
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -69,9 +65,46 @@ interface ResourceLink {
   updatedAt?: string;
 }
 
+interface DownloadableFile {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  platform?: "windows" | "mac" | "other";
+  version?: string;
+  minOs?: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  isPublished: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface DownloadAnalytics {
+  totals: {
+    allTime: number;
+    last7Days: number;
+    last30Days: number;
+    windows: number;
+    mac: number;
+    fromUserPanel: number;
+  };
+  recentEvents: Array<{
+    id: string;
+    createdAt: string;
+    platform: string;
+    source: string;
+    fileTitle: string;
+    version?: string | null;
+  }>;
+}
+
 export const ResourceCentreAdmin: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const ADMIN_KEY = "qworship-superadmin-2025";
+  const withAdminKey = (url: string) => `${url}${url.includes("?") ? "&" : "?"}adminKey=${ADMIN_KEY}`;
   
   const [activeTab, setActiveTab] = useState("articles");
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,6 +139,14 @@ export const ResourceCentreAdmin: React.FC = () => {
     icon: "ExternalLink",
     published: false
   });
+  const [desktopReleaseForm, setDesktopReleaseForm] = useState({
+    windowsVersion: "",
+    windowsMinOs: "Requires Windows 10 or 11 (64-bit)",
+    windowsFile: null as File | null,
+    macVersion: "",
+    macMinOs: "Apple Silicon & Intel (macOS 12.0+)",
+    macFile: null as File | null
+  });
 
   // Categories
   const categories = [
@@ -122,13 +163,7 @@ export const ResourceCentreAdmin: React.FC = () => {
   const { data: articlesData } = useQuery({
     queryKey: ['/api/admin/articles'],
     queryFn: async () => {
-      const response = await fetch('/api/admin/articles', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'qworship-superadmin-2025'
-        }
-      });
+      const response = await fetch(withAdminKey('/api/admin/articles'));
       return await response.json();
     }
   });
@@ -136,13 +171,7 @@ export const ResourceCentreAdmin: React.FC = () => {
   const { data: faqsData } = useQuery({
     queryKey: ['/api/admin/faqs'],
     queryFn: async () => {
-      const response = await fetch('/api/admin/faqs', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'qworship-superadmin-2025'
-        }
-      });
+      const response = await fetch(withAdminKey('/api/admin/faqs'));
       return await response.json();
     }
   });
@@ -150,13 +179,21 @@ export const ResourceCentreAdmin: React.FC = () => {
   const { data: resourcesData } = useQuery({
     queryKey: ['/api/admin/resources'],
     queryFn: async () => {
-      const response = await fetch('/api/admin/resources', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'qworship-superadmin-2025'
-        }
-      });
+      const response = await fetch(withAdminKey('/api/admin/resources'));
+      return await response.json();
+    }
+  });
+  const { data: downloadableFilesData } = useQuery({
+    queryKey: ['/api/admin/download-files'],
+    queryFn: async () => {
+      const response = await fetch(withAdminKey('/api/admin/download-files'));
+      return await response.json();
+    }
+  });
+  const { data: downloadAnalyticsData } = useQuery<DownloadAnalytics>({
+    queryKey: ['/api/admin/download-files/analytics'],
+    queryFn: async () => {
+      const response = await fetch(withAdminKey('/api/admin/download-files/analytics'));
       return await response.json();
     }
   });
@@ -164,15 +201,19 @@ export const ResourceCentreAdmin: React.FC = () => {
   const articles = articlesData?.articles || [];
   const faqs = faqsData?.faqs || [];
   const resources = resourcesData?.resources || [];
+  const downloadableFiles = (downloadableFilesData?.files || []) as DownloadableFile[];
+  const windowsBuild = downloadableFiles.find((file) => file.platform === "windows");
+  const macBuild = downloadableFiles.find((file) => file.platform === "mac");
+  const analytics = downloadAnalyticsData?.totals;
+  const recentDownloadEvents = downloadAnalyticsData?.recentEvents || [];
 
   // Create/Update mutations
   const createArticleMutation = useMutation({
     mutationFn: async (article: Partial<HelpArticle>) => {
-      const response = await fetch('/api/admin/articles', {
+      const response = await fetch(withAdminKey('/api/admin/articles'), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'qworship-superadmin-2025'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(article)
       });
@@ -197,11 +238,10 @@ export const ResourceCentreAdmin: React.FC = () => {
 
   const createFAQMutation = useMutation({
     mutationFn: async (faq: Partial<FAQItem>) => {
-      const response = await fetch('/api/admin/faqs', {
+      const response = await fetch(withAdminKey('/api/admin/faqs'), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'qworship-superadmin-2025'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(faq)
       });
@@ -222,11 +262,10 @@ export const ResourceCentreAdmin: React.FC = () => {
 
   const createResourceMutation = useMutation({
     mutationFn: async (resource: Partial<ResourceLink>) => {
-      const response = await fetch('/api/admin/resources', {
+      const response = await fetch(withAdminKey('/api/admin/resources'), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': 'qworship-superadmin-2025'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(resource)
       });
@@ -244,6 +283,98 @@ export const ResourceCentreAdmin: React.FC = () => {
         published: false
       });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/resources'] });
+    }
+  });
+  const uploadDownloadMutation = useMutation({
+    mutationFn: async (payload: {
+      platform: "windows" | "mac";
+      file: File | null;
+      version: string;
+      minOs: string;
+    }) => {
+      if (!payload.file) {
+        throw new Error("Please select a file to upload.");
+      }
+
+      const formData = new FormData();
+      formData.append("file", payload.file);
+      formData.append("title", payload.file.name);
+      formData.append("description", `${payload.platform.toUpperCase()} desktop installer`);
+      formData.append("category", "desktop-installers");
+      formData.append("platform", payload.platform);
+      formData.append("version", payload.version);
+      formData.append("minOs", payload.minOs);
+      formData.append("isPublished", "true");
+
+      const response = await fetch(withAdminKey('/api/admin/download-files/upload'), {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.message || "Upload request failed.");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Download file uploaded successfully" });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/download-files'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload failed",
+        description: error?.message || "Could not upload this file.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const toggleDownloadPublishMutation = useMutation({
+    mutationFn: async ({ id, isPublished }: { id: string; isPublished: boolean }) => {
+      const response = await fetch(withAdminKey(`/api/admin/download-files/${id}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ isPublished })
+      });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.message || "Update request failed.");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/download-files'] });
+    },
+    onError: () => {
+      toast({
+        title: "Update failed",
+        description: "Could not change publish status.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteDownloadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(withAdminKey(`/api/admin/download-files/${id}`), { method: 'DELETE' });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody?.message || "Delete request failed.");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Download file deleted" });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/download-files'] });
+    },
+    onError: () => {
+      toast({
+        title: "Delete failed",
+        description: "Could not delete this file.",
+        variant: "destructive"
+      });
     }
   });
 
@@ -282,6 +413,8 @@ export const ResourceCentreAdmin: React.FC = () => {
       return searchMatch;
     });
   };
+  const formatFileSizeMb = (bytes?: number) =>
+    bytes && bytes > 0 ? `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB` : "N/A";
 
   const renderStats = () => {
     const stats = {
@@ -330,6 +463,7 @@ export const ResourceCentreAdmin: React.FC = () => {
             <div className="text-sm text-gray-600 dark:text-gray-400">{stats.resources.published} published</div>
           </CardContent>
         </Card>
+
       </div>
     );
   };
@@ -627,7 +761,7 @@ export const ResourceCentreAdmin: React.FC = () => {
               </div>
             </>
           )}
-          
+
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -681,6 +815,245 @@ export const ResourceCentreAdmin: React.FC = () => {
           Create New
         </Button>
       </div>
+
+      <Card className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 shadow-md">
+        <CardHeader>
+          <CardTitle className="text-gray-900 dark:text-white">Desktop App Releases (Public Download Page)</CardTitle>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Upload one Windows installer and one macOS installer. The latest published file per platform appears on the public download page.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Windows Build</h3>
+                <Badge variant={windowsBuild?.isPublished ? "default" : "secondary"}>
+                  {windowsBuild ? "Published" : "Not published"}
+                </Badge>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <p>Current: {windowsBuild?.version || "None"}</p>
+                <p>File: {windowsBuild?.originalName || "N/A"}</p>
+                <p>Size: {formatFileSizeMb(windowsBuild?.fileSize)}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Version *</Label>
+              <Input
+                placeholder="Version e.g. v2.4.1"
+                value={desktopReleaseForm.windowsVersion}
+                onChange={(e) => setDesktopReleaseForm((prev) => ({ ...prev, windowsVersion: e.target.value }))}
+                className="bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Minimum OS *</Label>
+              <Input
+                placeholder="Minimum OS"
+                value={desktopReleaseForm.windowsMinOs}
+                onChange={(e) => setDesktopReleaseForm((prev) => ({ ...prev, windowsMinOs: e.target.value }))}
+                className="bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Installer File *</Label>
+              <Input
+                type="file"
+                accept=".exe,.msi"
+                onChange={(e) =>
+                  setDesktopReleaseForm((prev) => ({
+                    ...prev,
+                    windowsFile: e.target.files && e.target.files.length > 0 ? e.target.files[0] : null
+                  }))
+                }
+                className="bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white file:mr-3 file:rounded-md file:border-0 file:bg-purple-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-purple-900 dark:file:bg-purple-900/40 dark:file:text-purple-200"
+              />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Allowed: <span className="font-medium">.exe, .msi</span>
+                  {desktopReleaseForm.windowsFile ? ` • Selected: ${desktopReleaseForm.windowsFile.name}` : ""}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700"
+                  disabled={!desktopReleaseForm.windowsFile || !desktopReleaseForm.windowsVersion.trim()}
+                  onClick={() =>
+                    uploadDownloadMutation.mutate({
+                      platform: "windows",
+                      file: desktopReleaseForm.windowsFile,
+                      version: desktopReleaseForm.windowsVersion,
+                      minOs: desktopReleaseForm.windowsMinOs
+                    })
+                  }
+                >
+                  Upload Windows
+                </Button>
+                {windowsBuild && (
+                  <>
+                    <Button
+                      variant={windowsBuild.isPublished ? "destructive" : "default"}
+                      onClick={() =>
+                        toggleDownloadPublishMutation.mutate({ id: windowsBuild.id, isPublished: !windowsBuild.isPublished })
+                      }
+                    >
+                      {windowsBuild.isPublished ? "Unpublish" : "Publish"}
+                    </Button>
+                    <Button variant="destructive" onClick={() => deleteDownloadMutation.mutate(windowsBuild.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 dark:text-white">macOS Build</h3>
+                <Badge variant={macBuild?.isPublished ? "default" : "secondary"}>
+                  {macBuild ? "Published" : "Not published"}
+                </Badge>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <p>Current: {macBuild?.version || "None"}</p>
+                <p>File: {macBuild?.originalName || "N/A"}</p>
+                <p>Size: {formatFileSizeMb(macBuild?.fileSize)}</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Version *</Label>
+              <Input
+                placeholder="Version e.g. v2.4.1"
+                value={desktopReleaseForm.macVersion}
+                onChange={(e) => setDesktopReleaseForm((prev) => ({ ...prev, macVersion: e.target.value }))}
+                className="bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Minimum OS *</Label>
+              <Input
+                placeholder="Minimum OS"
+                value={desktopReleaseForm.macMinOs}
+                onChange={(e) => setDesktopReleaseForm((prev) => ({ ...prev, macMinOs: e.target.value }))}
+                className="bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Installer File *</Label>
+              <Input
+                type="file"
+                accept=".dmg,.pkg"
+                onChange={(e) =>
+                  setDesktopReleaseForm((prev) => ({
+                    ...prev,
+                    macFile: e.target.files && e.target.files.length > 0 ? e.target.files[0] : null
+                  }))
+                }
+                className="bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white file:mr-3 file:rounded-md file:border-0 file:bg-purple-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-purple-900 dark:file:bg-purple-900/40 dark:file:text-purple-200"
+              />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Allowed: <span className="font-medium">.dmg, .pkg</span>
+                  {desktopReleaseForm.macFile ? ` • Selected: ${desktopReleaseForm.macFile.name}` : ""}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700"
+                  disabled={!desktopReleaseForm.macFile || !desktopReleaseForm.macVersion.trim()}
+                  onClick={() =>
+                    uploadDownloadMutation.mutate({
+                      platform: "mac",
+                      file: desktopReleaseForm.macFile,
+                      version: desktopReleaseForm.macVersion,
+                      minOs: desktopReleaseForm.macMinOs
+                    })
+                  }
+                >
+                  Upload macOS
+                </Button>
+                {macBuild && (
+                  <>
+                    <Button
+                      variant={macBuild.isPublished ? "destructive" : "default"}
+                      onClick={() =>
+                        toggleDownloadPublishMutation.mutate({ id: macBuild.id, isPublished: !macBuild.isPublished })
+                      }
+                    >
+                      {macBuild.isPublished ? "Unpublish" : "Publish"}
+                    </Button>
+                    <Button variant="destructive" onClick={() => deleteDownloadMutation.mutate(macBuild.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 shadow-md">
+        <CardHeader>
+          <CardTitle className="text-gray-900 dark:text-white flex items-center gap-2">
+            <Download className="w-5 h-5" />
+            Download Tracking
+          </CardTitle>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Tracks every download event from the user panel and desktop download links.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">All-Time Downloads</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">{analytics?.allTime ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Last 7 Days</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">{analytics?.last7Days ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Last 30 Days</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">{analytics?.last30Days ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Windows Downloads</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">{analytics?.windows ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">macOS Downloads</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">{analytics?.mac ?? 0}</p>
+            </div>
+            <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">User Panel Source</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">{analytics?.fromUserPanel ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-gray-200 dark:border-gray-700">
+            <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Recent Download Events</p>
+            </div>
+            <div className="max-h-64 overflow-auto">
+              {recentDownloadEvents.length === 0 ? (
+                <p className="p-3 text-sm text-gray-500 dark:text-gray-400">No downloads recorded yet.</p>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {recentDownloadEvents.map((event) => (
+                    <div key={event.id} className="p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">{event.fileTitle}</p>
+                        <Badge variant="secondary">{event.platform}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Source: {event.source} • {new Date(event.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       {renderStats()}
@@ -871,6 +1244,7 @@ export const ResourceCentreAdmin: React.FC = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
 
       {/* Dialogs */}
