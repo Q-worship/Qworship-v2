@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +104,38 @@ export const ResourceCentreAdmin: React.FC = () => {
   const queryClient = useQueryClient();
   const ADMIN_KEY = "qworship-superadmin-2025";
   const withAdminKey = (url: string) => `${url}${url.includes("?") ? "&" : "?"}adminKey=${ADMIN_KEY}`;
+  const readOnlyHelpApiNotice = "This environment currently supports read-only help content. Create/publish APIs for articles, FAQs, and resources are not deployed.";
+
+  const getErrorMessageFromResponse = async (response: Response, fallback: string) => {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await response.json().catch(() => ({} as Record<string, unknown>));
+      const message = typeof body?.message === "string" ? body.message : "";
+      if (message) return message;
+    } else {
+      const bodyText = (await response.text().catch(() => "")).trim();
+      if (bodyText) return bodyText;
+    }
+    return fallback;
+  };
+
+  const getUploadErrorMessage = async (response: Response) => {
+    const fallbackMessage = await getErrorMessageFromResponse(
+      response,
+      "Upload request failed. Please try again.",
+    );
+
+    if (response.status === 413) {
+      return "Upload too large for production gateway. Reduce file size or increase proxy/CDN body-size limits.";
+    }
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      return "Upload failed at the gateway (502/503/504). Check reverse-proxy/CDN limits and backend availability.";
+    }
+    if (response.status >= 500) {
+      return `Server error (${response.status}) while uploading. ${fallbackMessage}`;
+    }
+    return fallbackMessage;
+  };
   
   const [activeTab, setActiveTab] = useState("articles");
   const [searchQuery, setSearchQuery] = useState("");
@@ -159,27 +190,27 @@ export const ResourceCentreAdmin: React.FC = () => {
     { value: "general", label: "General" }
   ];
 
-  // Fetch data from API with SuperAdmin authentication
+  // Fetch help content from existing public help endpoints.
   const { data: articlesData } = useQuery({
-    queryKey: ['/api/admin/articles'],
+    queryKey: ['/api/help/articles'],
     queryFn: async () => {
-      const response = await fetch(withAdminKey('/api/admin/articles'));
+      const response = await fetch('/api/help/articles');
       return await response.json();
     }
   });
 
   const { data: faqsData } = useQuery({
-    queryKey: ['/api/admin/faqs'],
+    queryKey: ['/api/help/faqs'],
     queryFn: async () => {
-      const response = await fetch(withAdminKey('/api/admin/faqs'));
+      const response = await fetch('/api/help/faqs');
       return await response.json();
     }
   });
 
   const { data: resourcesData } = useQuery({
-    queryKey: ['/api/admin/resources'],
+    queryKey: ['/api/help/resources'],
     queryFn: async () => {
-      const response = await fetch(withAdminKey('/api/admin/resources'));
+      const response = await fetch('/api/help/resources');
       return await response.json();
     }
   });
@@ -207,84 +238,7 @@ export const ResourceCentreAdmin: React.FC = () => {
   const analytics = downloadAnalyticsData?.totals;
   const recentDownloadEvents = downloadAnalyticsData?.recentEvents || [];
 
-  // Create/Update mutations
-  const createArticleMutation = useMutation({
-    mutationFn: async (article: Partial<HelpArticle>) => {
-      const response = await fetch(withAdminKey('/api/admin/articles'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(article)
-      });
-      return await response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Article created successfully" });
-      setShowCreateDialog(false);
-      setArticleForm({
-        title: "",
-        description: "",
-        category: "getting-started",
-        readTime: "",
-        difficulty: "beginner",
-        content: "",
-        tags: [],
-        published: false
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
-    }
-  });
-
-  const createFAQMutation = useMutation({
-    mutationFn: async (faq: Partial<FAQItem>) => {
-      const response = await fetch(withAdminKey('/api/admin/faqs'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(faq)
-      });
-      return await response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "FAQ created successfully" });
-      setShowCreateDialog(false);
-      setFaqForm({
-        question: "",
-        answer: "",
-        category: "general",
-        published: false
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/faqs'] });
-    }
-  });
-
-  const createResourceMutation = useMutation({
-    mutationFn: async (resource: Partial<ResourceLink>) => {
-      const response = await fetch(withAdminKey('/api/admin/resources'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(resource)
-      });
-      return await response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Resource created successfully" });
-      setShowCreateDialog(false);
-      setResourceForm({
-        title: "",
-        description: "",
-        url: "",
-        category: "general",
-        icon: "ExternalLink",
-        published: false
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/resources'] });
-    }
-  });
+  // Download release mutations (supported by deployed admin API)
   const uploadDownloadMutation = useMutation({
     mutationFn: async (payload: {
       platform: "windows" | "mac";
@@ -311,8 +265,7 @@ export const ResourceCentreAdmin: React.FC = () => {
         body: formData
       });
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody?.message || "Upload request failed.");
+        throw new Error(await getUploadErrorMessage(response));
       }
       return await response.json();
     },
@@ -379,30 +332,19 @@ export const ResourceCentreAdmin: React.FC = () => {
   });
 
   const handleCreateItem = () => {
-    if (activeTab === "articles") {
-      createArticleMutation.mutate(articleForm);
-    } else if (activeTab === "faqs") {
-      createFAQMutation.mutate(faqForm);
-    } else if (activeTab === "resources") {
-      createResourceMutation.mutate(resourceForm);
-    }
+    toast({
+      title: "Create unavailable",
+      description: readOnlyHelpApiNotice,
+      variant: "destructive",
+    });
   };
 
   const handlePublishToggle = async (type: string, id: string, currentStatus: boolean) => {
-    try {
-      const endpoint = `/api/admin/${type}/${id}`;
-      await apiRequest('PUT', endpoint, { published: !currentStatus });
-      toast({ 
-        title: `${type.slice(0, -1)} ${!currentStatus ? 'published' : 'unpublished'}` 
-      });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/${type}`] });
-    } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: "Failed to update publish status",
-        variant: "destructive" 
-      });
-    }
+    toast({
+      title: "Publish toggle unavailable",
+      description: readOnlyHelpApiNotice,
+      variant: "destructive",
+    });
   };
 
   const filteredData = (data: any[]) => {
