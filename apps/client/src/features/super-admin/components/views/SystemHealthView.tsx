@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,7 @@ export const SystemHealthView: React.FC<SystemHealthViewProps> = ({
   const { data: systemMetrics } = useQuery({
     queryKey: ['/api/admin/system-metrics'],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/system-metrics?adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/system-metrics?adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch system metrics');
       return response.json();
     },

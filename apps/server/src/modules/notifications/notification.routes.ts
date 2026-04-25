@@ -24,4 +24,4 @@ notificationRouter.delete('/notifications', protect, clearAllNotifications as an
 notificationRouter.post('/notifications/trigger-recording-saved', protect, triggerRecordingSaved as any);
 
 // ─── Admin routes ────────────────────────────────────────────────────
-notificationRouter.post('/admin/notifications/broadcast', authorizeAdmin, adminBroadcast as any);
+notificationRouter.post('/admin/notifications/broadcast', protect, authorizeAdmin, adminBroadcast as any);

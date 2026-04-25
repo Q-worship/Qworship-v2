@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,7 @@ export const UserAnalyticsView: React.FC<UserAnalyticsViewProps> = ({
   const { data: userMetrics } = useQuery({
     queryKey: ['/api/admin/user-metrics', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch user metrics');
       return response.json();
     },

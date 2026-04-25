@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,8 @@ import {
   Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+import { Progress } from "@/components/ui/progress";
 
 interface HelpArticle {
   id: string;
@@ -103,40 +106,7 @@ interface DownloadAnalytics {
 export const ResourceCentreAdmin: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const ADMIN_KEY = "qworship-superadmin-2025";
-  const withAdminKey = (url: string) => `${url}${url.includes("?") ? "&" : "?"}adminKey=${ADMIN_KEY}`;
   const readOnlyHelpApiNotice = "This environment currently supports read-only help content. Create/publish APIs for articles, FAQs, and resources are not deployed.";
-
-  const getErrorMessageFromResponse = async (response: Response, fallback: string) => {
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const body = await response.json().catch(() => ({} as Record<string, unknown>));
-      const message = typeof body?.message === "string" ? body.message : "";
-      if (message) return message;
-    } else {
-      const bodyText = (await response.text().catch(() => "")).trim();
-      if (bodyText) return bodyText;
-    }
-    return fallback;
-  };
-
-  const getUploadErrorMessage = async (response: Response) => {
-    const fallbackMessage = await getErrorMessageFromResponse(
-      response,
-      "Upload request failed. Please try again.",
-    );
-
-    if (response.status === 413) {
-      return "Upload too large for production gateway. Reduce file size or increase proxy/CDN body-size limits.";
-    }
-    if (response.status === 502 || response.status === 503 || response.status === 504) {
-      return "Upload failed at the gateway (502/503/504). Check reverse-proxy/CDN limits and backend availability.";
-    }
-    if (response.status >= 500) {
-      return `Server error (${response.status}) while uploading. ${fallbackMessage}`;
-    }
-    return fallbackMessage;
-  };
   
   const [activeTab, setActiveTab] = useState("articles");
   const [searchQuery, setSearchQuery] = useState("");
@@ -144,6 +114,7 @@ export const ResourceCentreAdmin: React.FC = () => {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [uploadingPlatform, setUploadingPlatform] = useState<"windows" | "mac" | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ [platform: string]: number }>({});
 
   // Form states
   const [articleForm, setArticleForm] = useState<Partial<HelpArticle>>({
@@ -219,14 +190,14 @@ export const ResourceCentreAdmin: React.FC = () => {
   const { data: downloadableFilesData } = useQuery({
     queryKey: ['/api/admin/download-files'],
     queryFn: async () => {
-      const response = await fetch(withAdminKey('/api/admin/download-files'));
+      const response = await apiRequest('GET', '/api/admin/download-files');
       return await response.json();
     }
   });
   const { data: downloadAnalyticsData } = useQuery<DownloadAnalytics>({
     queryKey: ['/api/admin/download-files/analytics'],
     queryFn: async () => {
-      const response = await fetch(withAdminKey('/api/admin/download-files/analytics'));
+      const response = await apiRequest('GET', '/api/admin/download-files/analytics');
       return await response.json();
     }
   });
@@ -252,24 +223,53 @@ export const ResourceCentreAdmin: React.FC = () => {
         throw new Error("Please select a file to upload.");
       }
 
-      const formData = new FormData();
-      formData.append("file", payload.file);
-      formData.append("title", payload.file.name);
-      formData.append("description", `${payload.platform.toUpperCase()} desktop installer`);
-      formData.append("category", "desktop-installers");
-      formData.append("platform", payload.platform);
-      formData.append("version", payload.version);
-      formData.append("minOs", payload.minOs);
-      formData.append("isPublished", "true");
+      setUploadProgress(prev => ({ ...prev, [payload.platform]: 0 }));
+      try {
+        // Step 1: Get presigned URL
+        const presignedRes = await apiRequest('POST', '/api/admin/download-files/presigned-url', {
+          filename: payload.file.name,
+          mimeType: payload.file.type || 'application/octet-stream'
+        });
+        const { presignedUrl, key } = await presignedRes.json();
 
-      const response = await fetch(withAdminKey('/api/admin/download-files/upload'), {
-        method: 'POST',
-        body: formData
-      });
-      if (!response.ok) {
-        throw new Error(await getUploadErrorMessage(response));
+        // Step 2: Upload directly to S3
+        await axios.put(presignedUrl, payload.file, {
+          headers: {
+            'Content-Type': payload.file.type || 'application/octet-stream'
+          },
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(prev => ({ ...prev, [payload.platform]: percentCompleted }));
+            }
+          }
+        });
+
+        // Step 3: Confirm upload
+        const confirmRes = await apiRequest('POST', '/api/admin/download-files/confirm', {
+          key,
+          title: payload.file.name,
+          description: `${payload.platform.toUpperCase()} desktop installer`,
+          category: "desktop-installers",
+          platform: payload.platform,
+          version: payload.version,
+          minOs: payload.minOs,
+          originalName: payload.file.name,
+          mimeType: payload.file.type || 'application/octet-stream',
+          fileSize: payload.file.size,
+          isPublished: true
+        });
+
+        return await confirmRes.json();
+      } finally {
+        setTimeout(() => {
+          setUploadProgress(prev => {
+            const newProgress = { ...prev };
+            delete newProgress[payload.platform];
+            return newProgress;
+          });
+        }, 2000);
       }
-      return await response.json();
     },
     onSuccess: () => {
       toast({ title: "Download file uploaded successfully" });
@@ -295,17 +295,7 @@ export const ResourceCentreAdmin: React.FC = () => {
 
   const toggleDownloadPublishMutation = useMutation({
     mutationFn: async ({ id, isPublished }: { id: string; isPublished: boolean }) => {
-      const response = await fetch(withAdminKey(`/api/admin/download-files/${id}`), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ isPublished })
-      });
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody?.message || "Update request failed.");
-      }
+      const response = await apiRequest('PATCH', `/api/admin/download-files/${id}`, { isPublished });
       return await response.json();
     },
     onSuccess: () => {
@@ -322,11 +312,7 @@ export const ResourceCentreAdmin: React.FC = () => {
 
   const deleteDownloadMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(withAdminKey(`/api/admin/download-files/${id}`), { method: 'DELETE' });
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody?.message || "Delete request failed.");
-      }
+      const response = await apiRequest('DELETE', `/api/admin/download-files/${id}`);
       return await response.json();
     },
     onSuccess: () => {
@@ -870,6 +856,15 @@ export const ResourceCentreAdmin: React.FC = () => {
                   </>
                 )}
               </div>
+              {typeof uploadProgress["windows"] === "number" && (
+                <div className="space-y-1 mt-2">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress["windows"]}%</span>
+                  </div>
+                  <Progress value={uploadProgress["windows"]} className="h-2" />
+                </div>
+              )}
             </div>
 
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
@@ -964,6 +959,15 @@ export const ResourceCentreAdmin: React.FC = () => {
                   </>
                 )}
               </div>
+              {typeof uploadProgress["mac"] === "number" && (
+                <div className="space-y-1 mt-2">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress["mac"]}%</span>
+                  </div>
+                  <Progress value={uploadProgress["mac"]} className="h-2" />
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

@@ -32,12 +32,6 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 
 export const authorizeAdmin = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
-  const adminKey = req.query.adminKey || req.body.adminKey || req.headers['x-admin-key'];
-
-  // Root access pass for raw frontend fetches using the super admin override key
-  if (adminKey === 'qworship-superadmin-2025') {
-    return next();
-  }
 
   // Standard JWT Bearer token check
   if (user && (user.role === 'admin' || user.role === 'superadmin')) {

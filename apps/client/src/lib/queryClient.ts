@@ -78,18 +78,13 @@ export async function apiRequest(
   return res;
 }
 
-// Admin API request function that includes the admin key for SuperAdmin authentication
+// Admin API request function (now identical to apiRequest since adminKey bypass was removed)
 export async function adminApiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
   const fullUrl = buildUrl(url);
-  const adminKey = 'qworship-superadmin-2025';
-  
-  // Add admin key as query parameter
-  const separator = fullUrl.includes('?') ? '&' : '?';
-  const urlWithKey = `${fullUrl}${separator}adminKey=${adminKey}`;
   
   const headers: Record<string, string> = {};
   
@@ -105,7 +100,7 @@ export async function adminApiRequest(
     }
   }
   
-  const res = await fetch(urlWithKey, {
+  const res = await fetch(fullUrl, {
     method,
     headers,
     body: data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined),
@@ -142,18 +137,14 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
-// Admin query function that includes the admin key for SuperAdmin authentication
+// Admin query function (now identical to getQueryFn since adminKey bypass was removed)
 export const getAdminQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const adminKey = 'qworship-superadmin-2025';
     const originalUrl = queryKey[0] as string;
     const fullUrl = buildUrl(originalUrl);
-    
-    const separator = fullUrl.includes('?') ? '&' : '?';
-    const urlWithKey = `${fullUrl}${separator}adminKey=${adminKey}`;
     
     const headers: Record<string, string> = {};
     if (typeof window !== 'undefined') {
@@ -163,7 +154,7 @@ export const getAdminQueryFn: <T>(options: {
       }
     }
 
-    const res = await fetch(urlWithKey, {
+    const res = await fetch(fullUrl, {
       headers,
     });
 

@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,7 +114,7 @@ export default function AdminTopBar({
   const { data: systemStatus } = useQuery<SystemStatus>({
     queryKey: ['/api/admin/system-status'],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/system-status?adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/system-status?adminKey=${adminKey}`);
       if (!response.ok) {
         // Return mock data if endpoint doesn't exist
         return {

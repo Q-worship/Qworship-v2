@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -72,7 +73,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { data: userMetrics } = useQuery({
     queryKey: ['/api/admin/user-metrics', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch user metrics');
       return response.json();
     },
@@ -81,7 +82,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { data: trialAnalytics } = useQuery({
     queryKey: ['/api/admin/trial-analytics', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch trial analytics');
       return response.json();
     },
@@ -90,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { data: revenueData } = useQuery({
     queryKey: ['/api/admin/revenue-data', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch revenue data');
       return response.json();
     },
@@ -99,7 +100,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { data: systemMetrics } = useQuery({
     queryKey: ['/api/admin/system-metrics'],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/system-metrics?adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/system-metrics?adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch system metrics');
       return response.json();
     },
