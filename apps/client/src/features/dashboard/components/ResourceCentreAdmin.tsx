@@ -22,7 +22,8 @@ import {
   Eye,
   ThumbsUp,
   ThumbsDown,
-  Download
+  Download,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -142,6 +143,7 @@ export const ResourceCentreAdmin: React.FC = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [previewItem, setPreviewItem] = useState<any>(null);
+  const [uploadingPlatform, setUploadingPlatform] = useState<"windows" | "mac" | null>(null);
 
   // Form states
   const [articleForm, setArticleForm] = useState<Partial<HelpArticle>>({
@@ -273,14 +275,23 @@ export const ResourceCentreAdmin: React.FC = () => {
       toast({ title: "Download file uploaded successfully" });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/download-files'] });
     },
+    onMutate: async (payload) => {
+      setUploadingPlatform(payload.platform);
+    },
     onError: (error: any) => {
       toast({
         title: "Upload failed",
         description: error?.message || "Could not upload this file.",
         variant: "destructive"
       });
+    },
+    onSettled: () => {
+      setUploadingPlatform(null);
     }
   });
+  const isUploading = uploadDownloadMutation.isPending;
+  const isUploadingWindows = isUploading && uploadingPlatform === "windows";
+  const isUploadingMac = isUploading && uploadingPlatform === "mac";
 
   const toggleDownloadPublishMutation = useMutation({
     mutationFn: async ({ id, isPublished }: { id: string; isPublished: boolean }) => {
@@ -818,7 +829,7 @@ export const ResourceCentreAdmin: React.FC = () => {
               <div className="flex gap-2">
                 <Button
                   className="bg-purple-600 hover:bg-purple-700"
-                  disabled={!desktopReleaseForm.windowsFile || !desktopReleaseForm.windowsVersion.trim()}
+                  disabled={isUploading || !desktopReleaseForm.windowsFile || !desktopReleaseForm.windowsVersion.trim()}
                   onClick={() =>
                     uploadDownloadMutation.mutate({
                       platform: "windows",
@@ -828,19 +839,32 @@ export const ResourceCentreAdmin: React.FC = () => {
                     })
                   }
                 >
-                  Upload Windows
+                  {isUploadingWindows ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading Windows...
+                    </>
+                  ) : (
+                    "Upload Windows"
+                  )}
                 </Button>
+                {isUploadingWindows && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 self-center">
+                    Upload in progress... please wait.
+                  </p>
+                )}
                 {windowsBuild && (
                   <>
                     <Button
                       variant={windowsBuild.isPublished ? "destructive" : "default"}
+                      disabled={isUploading}
                       onClick={() =>
                         toggleDownloadPublishMutation.mutate({ id: windowsBuild.id, isPublished: !windowsBuild.isPublished })
                       }
                     >
                       {windowsBuild.isPublished ? "Unpublish" : "Publish"}
                     </Button>
-                    <Button variant="destructive" onClick={() => deleteDownloadMutation.mutate(windowsBuild.id)}>
+                    <Button variant="destructive" disabled={isUploading} onClick={() => deleteDownloadMutation.mutate(windowsBuild.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </>
@@ -899,7 +923,7 @@ export const ResourceCentreAdmin: React.FC = () => {
               <div className="flex gap-2">
                 <Button
                   className="bg-purple-600 hover:bg-purple-700"
-                  disabled={!desktopReleaseForm.macFile || !desktopReleaseForm.macVersion.trim()}
+                  disabled={isUploading || !desktopReleaseForm.macFile || !desktopReleaseForm.macVersion.trim()}
                   onClick={() =>
                     uploadDownloadMutation.mutate({
                       platform: "mac",
@@ -909,19 +933,32 @@ export const ResourceCentreAdmin: React.FC = () => {
                     })
                   }
                 >
-                  Upload macOS
+                  {isUploadingMac ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading macOS...
+                    </>
+                  ) : (
+                    "Upload macOS"
+                  )}
                 </Button>
+                {isUploadingMac && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 self-center">
+                    Upload in progress... please wait.
+                  </p>
+                )}
                 {macBuild && (
                   <>
                     <Button
                       variant={macBuild.isPublished ? "destructive" : "default"}
+                      disabled={isUploading}
                       onClick={() =>
                         toggleDownloadPublishMutation.mutate({ id: macBuild.id, isPublished: !macBuild.isPublished })
                       }
                     >
                       {macBuild.isPublished ? "Unpublish" : "Publish"}
                     </Button>
-                    <Button variant="destructive" onClick={() => deleteDownloadMutation.mutate(macBuild.id)}>
+                    <Button variant="destructive" disabled={isUploading} onClick={() => deleteDownloadMutation.mutate(macBuild.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </>
