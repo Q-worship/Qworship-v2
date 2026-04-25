@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,7 @@ export const RevenueAnalyticsView: React.FC<RevenueAnalyticsViewProps> = ({
   const { data: revenueData } = useQuery({
     queryKey: ['/api/admin/revenue-data', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch revenue data');
       return response.json();
     },

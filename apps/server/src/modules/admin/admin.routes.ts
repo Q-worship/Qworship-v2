@@ -15,10 +15,12 @@ import {
   getBibleCoverage,
   migrateBibleBookNames,
 } from "./admin.controller.js";
-import { authorizeAdmin } from "../auth/auth.middleware.js";
+import { protect, authorizeAdmin } from "../auth/auth.middleware.js";
 import {
   getAdminDownloadableFiles,
   uploadDownloadableFile,
+  generatePresignedUploadUrl,
+  confirmUpload,
   updateDownloadableFile,
   deleteDownloadableFile,
   getDownloadAnalytics
@@ -30,8 +32,7 @@ const upload = multer({
   limits: { fileSize: 150 * 1024 * 1024 }
 });
 
-// To be safe, the frontend sends adminKey as a query parameter.
-router.use(authorizeAdmin);
+router.use(protect, authorizeAdmin);
 
 router.get("/system-status", getSystemStatus);
 router.get("/trial-analytics", getTrialAnalytics);
@@ -55,6 +56,8 @@ router.post("/migrate-bible-books", migrateBibleBookNames);
 router.get("/download-files", getAdminDownloadableFiles);
 router.get("/download-files/analytics", getDownloadAnalytics);
 router.post("/download-files/upload", upload.single("file"), uploadDownloadableFile);
+router.post("/download-files/presigned-url", generatePresignedUploadUrl);
+router.post("/download-files/confirm", confirmUpload);
 router.patch("/download-files/:id", updateDownloadableFile);
 router.delete("/download-files/:id", deleteDownloadableFile);
 

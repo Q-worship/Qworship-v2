@@ -76,7 +76,7 @@ export const getAdminAccounts = (req: Request, res: Response) => {
       role: "moderator",
       status: "active",
       lastLogin: new Date(Date.now() - 86400000).toISOString(),
-    }
+    },
   ]);
 };
 
@@ -86,7 +86,9 @@ export const getMediaCategories = async (req: Request, res: Response) => {
     const categories = await MediaCategory.find().sort({ sortOrder: 1 });
     res.status(200).json(categories);
   } catch (error) {
-    res.status(500).json({ success: false, message: "Error fetching categories" });
+    res
+      .status(500)
+      .json({ success: false, message: "Error fetching categories" });
   }
 };
 
@@ -105,7 +107,9 @@ export const getMediaCollections = async (req: Request, res: Response) => {
     const collections = await MediaCollection.find().sort({ sortOrder: 1 });
     res.status(200).json(collections);
   } catch (error) {
-    res.status(500).json({ success: false, message: "Error fetching collections" });
+    res
+      .status(500)
+      .json({ success: false, message: "Error fetching collections" });
   }
 };
 
@@ -122,11 +126,45 @@ export const createMediaCollection = async (req: Request, res: Response) => {
 // ── Bible Translation Seed (Admin Only) ───────────────────────────────────────
 
 const OT_BOOKS = new Set([
-  'Genesis','Exodus','Leviticus','Numbers','Deuteronomy','Joshua','Judges','Ruth',
-  '1 Samuel','2 Samuel','1 Kings','2 Kings','1 Chronicles','2 Chronicles','Ezra',
-  'Nehemiah','Esther','Job','Psalms','Proverbs','Ecclesiastes','Song of Solomon',
-  'Isaiah','Jeremiah','Lamentations','Ezekiel','Daniel','Hosea','Joel','Amos',
-  'Obadiah','Jonah','Micah','Nahum','Habakkuk','Zephaniah','Haggai','Zechariah','Malachi',
+  "Genesis",
+  "Exodus",
+  "Leviticus",
+  "Numbers",
+  "Deuteronomy",
+  "Joshua",
+  "Judges",
+  "Ruth",
+  "1 Samuel",
+  "2 Samuel",
+  "1 Kings",
+  "2 Kings",
+  "1 Chronicles",
+  "2 Chronicles",
+  "Ezra",
+  "Nehemiah",
+  "Esther",
+  "Job",
+  "Psalms",
+  "Proverbs",
+  "Ecclesiastes",
+  "Song of Solomon",
+  "Isaiah",
+  "Jeremiah",
+  "Lamentations",
+  "Ezekiel",
+  "Daniel",
+  "Hosea",
+  "Joel",
+  "Amos",
+  "Obadiah",
+  "Jonah",
+  "Micah",
+  "Nahum",
+  "Habakkuk",
+  "Zephaniah",
+  "Haggai",
+  "Zechariah",
+  "Malachi",
 ]);
 
 /**
@@ -139,17 +177,31 @@ const OT_BOOKS = new Set([
 export const seedBibleTranslation = async (req: Request, res: Response) => {
   try {
     const { version, verses } = req.body;
-    const validVersions = ['amp', 'msg', 'kjv', 'nkjv', 'esv', 'niv'];
+    const validVersions = ["amp", "msg", "kjv", "nkjv", "esv", "niv"];
 
     if (!validVersions.includes(version)) {
-      return res.status(400).json({ success: false, message: `Invalid version. Must be one of: ${validVersions.join(', ')}` });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: `Invalid version. Must be one of: ${validVersions.join(", ")}`,
+        });
     }
     if (!Array.isArray(verses) || verses.length === 0) {
-      return res.status(400).json({ success: false, message: 'verses array is required and must not be empty' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "verses array is required and must not be empty",
+        });
     }
 
-    const nonEmpty = verses.filter((v: any) => v.text && v.text.trim().length > 0);
-    console.log(`[Bible Seed] Upserting ${nonEmpty.length} ${version.toUpperCase()} verses...`);
+    const nonEmpty = verses.filter(
+      (v: any) => v.text && v.text.trim().length > 0,
+    );
+    console.log(
+      `[Bible Seed] Upserting ${nonEmpty.length} ${version.toUpperCase()} verses...`,
+    );
 
     const BATCH_SIZE = 1000;
     let written = 0;
@@ -162,7 +214,7 @@ export const seedBibleTranslation = async (req: Request, res: Response) => {
           update: {
             $set: {
               bookName: v.book,
-              testament: OT_BOOKS.has(v.book) ? 'old' : 'new',
+              testament: OT_BOOKS.has(v.book) ? "old" : "new",
               chapter: v.chapter,
               verse: v.verse,
               [version]: v.text,
@@ -175,10 +227,12 @@ export const seedBibleTranslation = async (req: Request, res: Response) => {
       written += batch.length;
     }
 
-    console.log(`[Bible Seed] ✅ ${version.toUpperCase()}: ${written} verses written to DB`);
+    console.log(
+      `[Bible Seed] ✅ ${version.toUpperCase()}: ${written} verses written to DB`,
+    );
     res.status(200).json({ success: true, version, written });
   } catch (error: any) {
-    console.error('[Bible Seed] Error:', error);
+    console.error("[Bible Seed] Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -189,11 +243,13 @@ export const seedBibleTranslation = async (req: Request, res: Response) => {
  */
 export const getBibleCoverage = async (req: Request, res: Response) => {
   try {
-    const versions = ['kjv', 'nkjv', 'amp', 'msg', 'esv', 'niv'];
+    const versions = ["kjv", "nkjv", "amp", "msg", "esv", "niv"];
     const coverage: Record<string, number> = {};
 
     for (const v of versions) {
-      coverage[v] = await BibleVerse.countDocuments({ [v]: { $exists: true, $ne: '' } });
+      coverage[v] = await BibleVerse.countDocuments({
+        [v]: { $exists: true, $ne: "" },
+      });
     }
 
     const total = await BibleVerse.countDocuments();
@@ -211,25 +267,25 @@ export const getBibleCoverage = async (req: Request, res: Response) => {
  */
 export const migrateBibleBookNames = async (req: Request, res: Response) => {
   const RENAMES: { from: string; to: string }[] = [
-    { from: 'Psalm',           to: 'Psalms' },
-    { from: 'Song of Songs',   to: 'Song of Solomon' },
-    { from: 'I Samuel',        to: '1 Samuel' },
-    { from: 'II Samuel',       to: '2 Samuel' },
-    { from: 'I Kings',         to: '1 Kings' },
-    { from: 'II Kings',        to: '2 Kings' },
-    { from: 'I Chronicles',    to: '1 Chronicles' },
-    { from: 'II Chronicles',   to: '2 Chronicles' },
-    { from: 'I Corinthians',   to: '1 Corinthians' },
-    { from: 'II Corinthians',  to: '2 Corinthians' },
-    { from: 'I Thessalonians', to: '1 Thessalonians' },
-    { from: 'II Thessalonians',to: '2 Thessalonians' },
-    { from: 'I Timothy',       to: '1 Timothy' },
-    { from: 'II Timothy',      to: '2 Timothy' },
-    { from: 'I Peter',         to: '1 Peter' },
-    { from: 'II Peter',        to: '2 Peter' },
-    { from: 'I John',          to: '1 John' },
-    { from: 'II John',         to: '2 John' },
-    { from: 'III John',        to: '3 John' },
+    { from: "Psalm", to: "Psalms" },
+    { from: "Song of Songs", to: "Song of Solomon" },
+    { from: "I Samuel", to: "1 Samuel" },
+    { from: "II Samuel", to: "2 Samuel" },
+    { from: "I Kings", to: "1 Kings" },
+    { from: "II Kings", to: "2 Kings" },
+    { from: "I Chronicles", to: "1 Chronicles" },
+    { from: "II Chronicles", to: "2 Chronicles" },
+    { from: "I Corinthians", to: "1 Corinthians" },
+    { from: "II Corinthians", to: "2 Corinthians" },
+    { from: "I Thessalonians", to: "1 Thessalonians" },
+    { from: "II Thessalonians", to: "2 Thessalonians" },
+    { from: "I Timothy", to: "1 Timothy" },
+    { from: "II Timothy", to: "2 Timothy" },
+    { from: "I Peter", to: "1 Peter" },
+    { from: "II Peter", to: "2 Peter" },
+    { from: "I John", to: "1 John" },
+    { from: "II John", to: "2 John" },
+    { from: "III John", to: "3 John" },
   ];
 
   try {
@@ -239,7 +295,7 @@ export const migrateBibleBookNames = async (req: Request, res: Response) => {
     for (const { from, to } of RENAMES) {
       const result = await BibleVerse.updateMany(
         { bookName: from },
-        { $set: { bookName: to } }
+        { $set: { bookName: to } },
       );
       if (result.modifiedCount > 0) {
         results.push({ from, to, count: result.modifiedCount });
@@ -247,10 +303,12 @@ export const migrateBibleBookNames = async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`[Bible Migration] ✅ Renamed ${totalRenamed} documents across ${results.length} book name fixes`);
+    console.log(
+      `[Bible Migration] ✅ Renamed ${totalRenamed} documents across ${results.length} book name fixes`,
+    );
     res.json({ success: true, totalRenamed, results });
   } catch (error: any) {
-    console.error('[Bible Migration] Error:', error);
+    console.error("[Bible Migration] Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

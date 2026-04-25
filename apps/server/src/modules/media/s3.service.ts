@@ -158,6 +158,20 @@ export class ObjectStorageService {
     // This returns a temporary pre-signed S3/R2 URL valid for 1 hour.
     return await getSignedUrl(getS3Client(), command, { expiresIn });
   }
+
+  // Get a signed URL for writing (PUT)
+  async getSignedUploadUrl(
+    key: string,
+    mimeType?: string,
+    expiresIn: number = 3600
+  ): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: getBucketName(),
+      Key: key,
+      ContentType: mimeType,
+    });
+    return await getSignedUrl(getS3Client(), command, { expiresIn });
+  }
 }
 
 // Export a robust singleton instance

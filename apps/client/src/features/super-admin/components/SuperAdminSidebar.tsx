@@ -1015,10 +1015,9 @@ export default function SuperAdminSidebar() {
   const { data: trialAnalytics, isLoading: trialsLoading } = useQuery({
     queryKey: ["/api/admin/trial-analytics", dateRange],
     queryFn: async () => {
-      const response = await fetch(
+      const response = await apiRequest('GET',
         `/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`,
       );
-      if (!response.ok) throw new Error("Failed to fetch trial analytics");
       return response.json();
     },
   });
@@ -1026,10 +1025,9 @@ export default function SuperAdminSidebar() {
   const { data: userMetrics, isLoading: userLoading } = useQuery({
     queryKey: ["/api/admin/user-metrics", dateRange],
     queryFn: async () => {
-      const response = await fetch(
+      const response = await apiRequest('GET',
         `/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`,
       );
-      if (!response.ok) throw new Error("Failed to fetch user metrics");
       return response.json();
     },
   });
@@ -1037,10 +1035,9 @@ export default function SuperAdminSidebar() {
   const { data: revenueData, isLoading: revenueLoading } = useQuery({
     queryKey: ["/api/admin/revenue-data", dateRange],
     queryFn: async () => {
-      const response = await fetch(
+      const response = await apiRequest('GET',
         `/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`,
       );
-      if (!response.ok) throw new Error("Failed to fetch revenue data");
       return response.json();
     },
   });
@@ -1048,10 +1045,9 @@ export default function SuperAdminSidebar() {
   const { data: systemMetrics, isLoading: systemLoading } = useQuery({
     queryKey: ["/api/admin/system-metrics"],
     queryFn: async () => {
-      const response = await fetch(
+      const response = await apiRequest('GET',
         `/api/admin/system-metrics?adminKey=${adminKey}`,
       );
-      if (!response.ok) throw new Error("Failed to fetch system metrics");
       return response.json();
     },
   });
@@ -1331,10 +1327,9 @@ export default function SuperAdminSidebar() {
   // Export functionality
   const exportData = async (reportType: string) => {
     try {
-      const response = await fetch(
+      const response = await apiRequest('GET',
         `/api/admin/export/${reportType}?dateRange=${dateRange}&adminKey=${adminKey}`,
       );
-      if (!response.ok) throw new Error("Export failed");
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);

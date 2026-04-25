@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -25,7 +26,7 @@ export const TrialManagementView: React.FC<TrialManagementViewProps> = ({
   const { data: trialAnalytics } = useQuery({
     queryKey: ['/api/admin/trial-analytics', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch trial analytics');
       return response.json();
     },
@@ -34,7 +35,7 @@ export const TrialManagementView: React.FC<TrialManagementViewProps> = ({
   const { data: systemMetrics } = useQuery({
     queryKey: ['/api/admin/system-metrics'],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/system-metrics?adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/system-metrics?adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch system metrics');
       return response.json();
     },

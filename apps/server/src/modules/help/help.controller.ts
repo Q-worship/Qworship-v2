@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { HelpArticle, FAQ, ResourceLink, SupportTicket, DownloadableFile, DownloadEvent } from './help.model.js';
 import { objectStorage } from '../media/s3.service.js';
 import path from 'path';
-
+import { randomUUID } from 'crypto';
 export const getHelpArticles = async (req: Request, res: Response) => {
   try {
     const articles = await HelpArticle.find({ isPublished: true }).sort({ createdAt: -1 });
@@ -228,6 +228,79 @@ export const uploadDownloadableFile = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Failed to upload file' });
   }
 };
+
+export const generatePresignedUploadUrl = async (req: Request, res: Response) => {
+  try {
+    const { filename, mimeType } = req.body;
+    if (!filename) {
+      return res.status(400).json({ message: 'Filename is required' });
+    }
+    
+    const fileId = randomUUID();
+    const safeFileName = filename.replace(/[^a-zA-Z0-9.\-_]/g, '-');
+    const key = `cloud-media/${fileId}-${safeFileName}`;
+    
+    const presignedUrl = await objectStorage.getSignedUploadUrl(key, mimeType || 'application/octet-stream', 3600);
+    
+    res.json({ presignedUrl, key });
+  } catch (error) {
+    console.error('Error generating presigned upload URL:', error);
+    res.status(500).json({ message: 'Failed to generate upload URL' });
+  }
+};
+
+export const confirmUpload = async (req: Request, res: Response) => {
+  try {
+    const {
+      key, title, description, category, platform, version, minOs, originalName, mimeType, fileSize, isPublished
+    } = req.body;
+    
+    if (!key || !platform || !originalName) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    if (!['windows', 'mac', 'other'].includes(platform)) {
+      return res.status(400).json({ message: 'platform must be windows, mac, or other' });
+    }
+
+    // Verify file actually exists in S3
+    const exists = await objectStorage.fileExists(key);
+    if (!exists) {
+      return res.status(404).json({ message: 'File not found in storage. Upload may have failed.' });
+    }
+
+    const targetPublished = isPublished === undefined ? true : (isPublished === 'true' || isPublished === true);
+
+    if (targetPublished && (platform === 'windows' || platform === 'mac')) {
+      // Enforce one active build per platform by auto-archiving previous published builds.
+      await DownloadableFile.updateMany(
+        { platform, isPublished: true },
+        { $set: { isPublished: false } }
+      );
+    }
+
+    const created = await DownloadableFile.create({
+      title: title || originalName,
+      description: description || '',
+      category: category || 'general',
+      platform,
+      version: version || '',
+      minOs: minOs || '',
+      originalName,
+      mimeType: mimeType || 'application/octet-stream',
+      fileSize: fileSize || 0,
+      storageKey: key,
+      isPublished: targetPublished,
+      uploadedBy: (req as any).user?._id?.toString?.() || undefined
+    });
+
+    res.status(201).json({ file: mapDownloadableFile(created) });
+  } catch (error) {
+    console.error('Error confirming upload:', error);
+    res.status(500).json({ message: 'Failed to confirm upload' });
+  }
+};
+
 
 export const updateDownloadableFile = async (req: Request, res: Response) => {
   try {

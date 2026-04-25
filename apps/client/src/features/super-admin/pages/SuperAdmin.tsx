@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -156,7 +157,7 @@ export default function SuperAdmin() {
   const { data: trialAnalytics, isLoading: trialLoading } = useQuery<TrialAnalytics>({
     queryKey: ['/api/admin/trial-analytics', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/trial-analytics?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch trial analytics');
       return response.json();
     },
@@ -165,7 +166,7 @@ export default function SuperAdmin() {
   const { data: userMetrics, isLoading: userLoading } = useQuery<UserMetrics>({
     queryKey: ['/api/admin/user-metrics', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/user-metrics?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch user metrics');
       return response.json();
     },
@@ -174,7 +175,7 @@ export default function SuperAdmin() {
   const { data: revenueData, isLoading: revenueLoading } = useQuery<RevenueData>({
     queryKey: ['/api/admin/revenue-data', dateRange],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/revenue-data?dateRange=${dateRange}&adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch revenue data');
       return response.json();
     },
@@ -183,7 +184,7 @@ export default function SuperAdmin() {
   const { data: systemMetrics, isLoading: systemLoading } = useQuery<SystemMetrics>({
     queryKey: ['/api/admin/system-metrics'],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/system-metrics?adminKey=${adminKey}`);
+      const response = await apiRequest('GET', `/api/admin/system-metrics?adminKey=${adminKey}`);
       if (!response.ok) throw new Error('Failed to fetch system metrics');
       return response.json();
     },
