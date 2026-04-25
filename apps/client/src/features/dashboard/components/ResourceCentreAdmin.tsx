@@ -23,7 +23,8 @@ import {
   Eye,
   ThumbsUp,
   ThumbsDown,
-  Download
+  Download,
+  Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
@@ -105,12 +106,14 @@ interface DownloadAnalytics {
 export const ResourceCentreAdmin: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const readOnlyHelpApiNotice = "This environment currently supports read-only help content. Create/publish APIs for articles, FAQs, and resources are not deployed.";
   
   const [activeTab, setActiveTab] = useState("articles");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [previewItem, setPreviewItem] = useState<any>(null);
+  const [uploadingPlatform, setUploadingPlatform] = useState<"windows" | "mac" | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [platform: string]: number }>({});
 
   // Form states
@@ -160,27 +163,27 @@ export const ResourceCentreAdmin: React.FC = () => {
     { value: "general", label: "General" }
   ];
 
-  // Fetch data from API with authentication
+  // Fetch help content from existing public help endpoints.
   const { data: articlesData } = useQuery({
-    queryKey: ['/api/admin/articles'],
+    queryKey: ['/api/help/articles'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/admin/articles');
+      const response = await fetch('/api/help/articles');
       return await response.json();
     }
   });
 
   const { data: faqsData } = useQuery({
-    queryKey: ['/api/admin/faqs'],
+    queryKey: ['/api/help/faqs'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/admin/faqs');
+      const response = await fetch('/api/help/faqs');
       return await response.json();
     }
   });
 
   const { data: resourcesData } = useQuery({
-    queryKey: ['/api/admin/resources'],
+    queryKey: ['/api/help/resources'],
     queryFn: async () => {
-      const response = await apiRequest('GET', '/api/admin/resources');
+      const response = await fetch('/api/help/resources');
       return await response.json();
     }
   });
@@ -208,66 +211,7 @@ export const ResourceCentreAdmin: React.FC = () => {
   const analytics = downloadAnalyticsData?.totals;
   const recentDownloadEvents = downloadAnalyticsData?.recentEvents || [];
 
-  // Create/Update mutations
-  const createArticleMutation = useMutation({
-    mutationFn: async (article: Partial<HelpArticle>) => {
-      const response = await apiRequest('POST', '/api/admin/articles', article);
-      return await response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Article created successfully" });
-      setShowCreateDialog(false);
-      setArticleForm({
-        title: "",
-        description: "",
-        category: "getting-started",
-        readTime: "",
-        difficulty: "beginner",
-        content: "",
-        tags: [],
-        published: false
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/articles'] });
-    }
-  });
-
-  const createFAQMutation = useMutation({
-    mutationFn: async (faq: Partial<FAQItem>) => {
-      const response = await apiRequest('POST', '/api/admin/faqs', faq);
-      return await response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "FAQ created successfully" });
-      setShowCreateDialog(false);
-      setFaqForm({
-        question: "",
-        answer: "",
-        category: "general",
-        published: false
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/faqs'] });
-    }
-  });
-
-  const createResourceMutation = useMutation({
-    mutationFn: async (resource: Partial<ResourceLink>) => {
-      const response = await apiRequest('POST', '/api/admin/resources', resource);
-      return await response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Resource created successfully" });
-      setShowCreateDialog(false);
-      setResourceForm({
-        title: "",
-        description: "",
-        url: "",
-        category: "general",
-        icon: "ExternalLink",
-        published: false
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/resources'] });
-    }
-  });
+  // Download release mutations (supported by deployed admin API)
   const uploadDownloadMutation = useMutation({
     mutationFn: async (payload: {
       platform: "windows" | "mac";
@@ -280,7 +224,6 @@ export const ResourceCentreAdmin: React.FC = () => {
       }
 
       setUploadProgress(prev => ({ ...prev, [payload.platform]: 0 }));
-
       try {
         // Step 1: Get presigned URL
         const presignedRes = await apiRequest('POST', '/api/admin/download-files/presigned-url', {
@@ -332,14 +275,23 @@ export const ResourceCentreAdmin: React.FC = () => {
       toast({ title: "Download file uploaded successfully" });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/download-files'] });
     },
+    onMutate: async (payload) => {
+      setUploadingPlatform(payload.platform);
+    },
     onError: (error: any) => {
       toast({
         title: "Upload failed",
         description: error?.message || "Could not upload this file.",
         variant: "destructive"
       });
+    },
+    onSettled: () => {
+      setUploadingPlatform(null);
     }
   });
+  const isUploading = uploadDownloadMutation.isPending;
+  const isUploadingWindows = isUploading && uploadingPlatform === "windows";
+  const isUploadingMac = isUploading && uploadingPlatform === "mac";
 
   const toggleDownloadPublishMutation = useMutation({
     mutationFn: async ({ id, isPublished }: { id: string; isPublished: boolean }) => {
@@ -377,30 +329,19 @@ export const ResourceCentreAdmin: React.FC = () => {
   });
 
   const handleCreateItem = () => {
-    if (activeTab === "articles") {
-      createArticleMutation.mutate(articleForm);
-    } else if (activeTab === "faqs") {
-      createFAQMutation.mutate(faqForm);
-    } else if (activeTab === "resources") {
-      createResourceMutation.mutate(resourceForm);
-    }
+    toast({
+      title: "Create unavailable",
+      description: readOnlyHelpApiNotice,
+      variant: "destructive",
+    });
   };
 
   const handlePublishToggle = async (type: string, id: string, currentStatus: boolean) => {
-    try {
-      const endpoint = `/api/admin/${type}/${id}`;
-      await apiRequest('PUT', endpoint, { published: !currentStatus });
-      toast({ 
-        title: `${type.slice(0, -1)} ${!currentStatus ? 'published' : 'unpublished'}` 
-      });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/${type}`] });
-    } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: "Failed to update publish status",
-        variant: "destructive" 
-      });
-    }
+    toast({
+      title: "Publish toggle unavailable",
+      description: readOnlyHelpApiNotice,
+      variant: "destructive",
+    });
   };
 
   const filteredData = (data: any[]) => {
@@ -874,7 +815,7 @@ export const ResourceCentreAdmin: React.FC = () => {
               <div className="flex gap-2">
                 <Button
                   className="bg-purple-600 hover:bg-purple-700"
-                  disabled={!desktopReleaseForm.windowsFile || !desktopReleaseForm.windowsVersion.trim()}
+                  disabled={isUploading || !desktopReleaseForm.windowsFile || !desktopReleaseForm.windowsVersion.trim()}
                   onClick={() =>
                     uploadDownloadMutation.mutate({
                       platform: "windows",
@@ -884,19 +825,32 @@ export const ResourceCentreAdmin: React.FC = () => {
                     })
                   }
                 >
-                  Upload Windows
+                  {isUploadingWindows ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading Windows...
+                    </>
+                  ) : (
+                    "Upload Windows"
+                  )}
                 </Button>
+                {isUploadingWindows && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 self-center">
+                    Upload in progress... please wait.
+                  </p>
+                )}
                 {windowsBuild && (
                   <>
                     <Button
                       variant={windowsBuild.isPublished ? "destructive" : "default"}
+                      disabled={isUploading}
                       onClick={() =>
                         toggleDownloadPublishMutation.mutate({ id: windowsBuild.id, isPublished: !windowsBuild.isPublished })
                       }
                     >
                       {windowsBuild.isPublished ? "Unpublish" : "Publish"}
                     </Button>
-                    <Button variant="destructive" onClick={() => deleteDownloadMutation.mutate(windowsBuild.id)}>
+                    <Button variant="destructive" disabled={isUploading} onClick={() => deleteDownloadMutation.mutate(windowsBuild.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </>
@@ -964,7 +918,7 @@ export const ResourceCentreAdmin: React.FC = () => {
               <div className="flex gap-2">
                 <Button
                   className="bg-purple-600 hover:bg-purple-700"
-                  disabled={!desktopReleaseForm.macFile || !desktopReleaseForm.macVersion.trim()}
+                  disabled={isUploading || !desktopReleaseForm.macFile || !desktopReleaseForm.macVersion.trim()}
                   onClick={() =>
                     uploadDownloadMutation.mutate({
                       platform: "mac",
@@ -974,19 +928,32 @@ export const ResourceCentreAdmin: React.FC = () => {
                     })
                   }
                 >
-                  Upload macOS
+                  {isUploadingMac ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading macOS...
+                    </>
+                  ) : (
+                    "Upload macOS"
+                  )}
                 </Button>
+                {isUploadingMac && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 self-center">
+                    Upload in progress... please wait.
+                  </p>
+                )}
                 {macBuild && (
                   <>
                     <Button
                       variant={macBuild.isPublished ? "destructive" : "default"}
+                      disabled={isUploading}
                       onClick={() =>
                         toggleDownloadPublishMutation.mutate({ id: macBuild.id, isPublished: !macBuild.isPublished })
                       }
                     >
                       {macBuild.isPublished ? "Unpublish" : "Publish"}
                     </Button>
-                    <Button variant="destructive" onClick={() => deleteDownloadMutation.mutate(macBuild.id)}>
+                    <Button variant="destructive" disabled={isUploading} onClick={() => deleteDownloadMutation.mutate(macBuild.id)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </>
