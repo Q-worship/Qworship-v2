@@ -2784,7 +2784,7 @@ export const LivePresentation = (): JSX.Element => {
               <div key={`slide-${currentSlide}-${animationKey}`} className="absolute top-0 left-0 w-screen h-screen z-10 overflow-hidden bg-black">
                 {slides[currentSlide - 1].subtype === "canvas" && (
                   <div className="w-full h-full relative drop-shadow-2xl flex justify-center items-center">
-                    <SlideCanvasRenderer content={slides[currentSlide - 1].content} background={{ type: "transparent" }} scaleMode="contain" />
+                    <SlideCanvasRenderer content={slides[currentSlide - 1].content} background={{ type: "transparent" }} scaleMode="contain" debugSource="live-presentation:currentSlide" />
                   </div>
                 )}
                 {slides[currentSlide - 1].subtype === "webpage" && (

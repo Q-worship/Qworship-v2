@@ -263,6 +263,11 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
   const [templateLibrary, setTemplateLibrary] = useState<SlideCanvasTemplate[]>(
     () => getAllSlideCanvasTemplates(),
   );
+  const previousCanvasContextRef = useRef<string | null>(null);
+  const pointerInteractionRef = useRef({
+    startedOnElement: false,
+    didDrag: false,
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -270,25 +275,66 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
 
   useEffect(() => {
     const activeContent = getActiveCanvasContent();
-    setElements(normalizeCanvasElements(activeContent?.elements || []));
+    const normalizedElements = normalizeCanvasElements(activeContent?.elements || []);
+    setElements(normalizedElements);
     setCanvasBackground(
       activeContent?.canvasBackground || { type: "transparent", value: "" },
     );
-    setSelectedId(null);
+    const contextKey = `${editingContent?.id || ""}:${getActiveCanvasSlideId() || ""}`;
+    const didSwitchCanvasContext = previousCanvasContextRef.current !== contextKey;
+    previousCanvasContextRef.current = contextKey;
+    if (didSwitchCanvasContext) {
+      setSelectedId(null);
+      return;
+    }
+    setSelectedId((prev) =>
+      prev && normalizedElements.some((element) => element.id === prev) ? prev : null,
+    );
   }, [editingContent?.id, editingContent?.content, editingContent?.activeCanvasSlideId]);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        const newScale = Math.min((width - 16) / CANVAS_WIDTH, (height - 16) / CANVAS_HEIGHT);
-        setScale(newScale);
-      }
+    const clampScale = (value: number) => {
+      if (!Number.isFinite(value)) return 1;
+      return Math.min(Math.max(value, 0.05), 6);
     };
+
+    const computeBoundedScale = () => {
+      if (!containerRef.current) return;
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      const availableWidth = Math.max(width, 1);
+      const availableHeight = Math.max(height, 1);
+      const widthScale = availableWidth / CANVAS_WIDTH;
+      const heightScale = availableHeight / CANVAS_HEIGHT;
+      let nextScale = clampScale(Math.min(widthScale, heightScale));
+
+      // Hard overflow guard: if any axis still exceeds bounds, recompute to strict contain.
+      const scaledWidth = CANVAS_WIDTH * nextScale;
+      const scaledHeight = CANVAS_HEIGHT * nextScale;
+      if (scaledWidth > availableWidth || scaledHeight > availableHeight) {
+        nextScale = clampScale(
+          Math.min(availableWidth / CANVAS_WIDTH, availableHeight / CANVAS_HEIGHT),
+        );
+      }
+
+      setScale(nextScale);
+    };
+
+    const handleResize = () => {
+      computeBoundedScale();
+    };
+
     handleResize();
+    // Post-layout stabilization passes for 100% zoom and panel toggle reflows.
+    const rafId = window.requestAnimationFrame(computeBoundedScale);
+    const settleTimeoutId = window.setTimeout(computeBoundedScale, 120);
+
     const observer = new ResizeObserver(handleResize);
     if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(settleTimeoutId);
+    };
   }, []);
 
   useEffect(() => {
@@ -355,14 +401,24 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
     setTemplateLibrary(getAllSlideCanvasTemplates());
   };
 
-  const applyTemplate = (template: SlideCanvasTemplate) => {
+  const applyTemplate = (
+    template: SlideCanvasTemplate,
+    options?: { enterEditMode?: boolean },
+  ) => {
     const cloned = cloneTemplateForCanvas(template);
     const normalizedElements = normalizeCanvasElements(cloned.elements as CanvasElement[]);
     setElements(normalizedElements);
     setCanvasBackground(cloned.canvasBackground as CanvasBackground);
-    setSelectedId(null);
+    setSelectedId(options?.enterEditMode ? normalizedElements[0]?.id || null : null);
+    if (options?.enterEditMode) {
+      setActiveTool("");
+    }
     syncState(normalizedElements, cloned.canvasBackground as CanvasBackground);
-    setTemplateFeedback(`Applied "${template.name}"`);
+    setTemplateFeedback(
+      options?.enterEditMode
+        ? `Loaded "${template.name}" for editing.`
+        : `Applied "${template.name}"`,
+    );
     setTimeout(() => setTemplateFeedback(""), 2200);
   };
 
@@ -466,24 +522,44 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
 
   const handleDragStart = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    pointerInteractionRef.current.startedOnElement = true;
+    pointerInteractionRef.current.didDrag = false;
     setSelectedId(id);
     const element = elements.find(el => el.id === id);
-    if (!element || element.locked) return;
+    if (!element || element.locked) {
+      pointerInteractionRef.current.startedOnElement = false;
+      return;
+    }
 
     const startX = e.clientX;
     const startY = e.clientY;
     const initialX = element.x;
     const initialY = element.y;
+    const DRAG_THRESHOLD_PX = 3;
 
     const handleMouseMove = (mvEvent: MouseEvent) => {
-      const dx = (mvEvent.clientX - startX) / scale;
-      const dy = (mvEvent.clientY - startY) / scale;
+      const moveX = mvEvent.clientX - startX;
+      const moveY = mvEvent.clientY - startY;
+      if (!pointerInteractionRef.current.didDrag) {
+        const distance = Math.sqrt(moveX * moveX + moveY * moveY);
+        if (distance >= DRAG_THRESHOLD_PX) {
+          pointerInteractionRef.current.didDrag = true;
+        } else {
+          return;
+        }
+      }
+      const dx = moveX / scale;
+      const dy = moveY / scale;
       updateElement(id, { x: initialX + dx, y: initialY + dy }, false);
     };
 
     const handleMouseUp = () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      pointerInteractionRef.current.startedOnElement = false;
+      const dragged = pointerInteractionRef.current.didDrag;
+      pointerInteractionRef.current.didDrag = false;
+      if (!dragged) return;
       // Sync state after drag completes
       setElements(curr => {
         setTimeout(() => {
@@ -498,6 +574,14 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
   };
 
   const selectedEl = elements.find(e => e.id === selectedId);
+  const handleCanvasBackgroundClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (pointerInteractionRef.current.startedOnElement || pointerInteractionRef.current.didDrag) {
+      pointerInteractionRef.current.didDrag = false;
+      return;
+    }
+    setSelectedId(null);
+  };
 
   return (
     <div className="flex w-full h-full bg-[#1e1e2e] rounded-xl overflow-hidden shadow-2xl relative border border-gray-700">
@@ -733,38 +817,50 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
               </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {filteredTemplates.map((template) => (
-                  <button
+                  (() => {
+                    const heroTextElement = template.elements.find(
+                      (element) =>
+                        element.type === "text" &&
+                        typeof element.content === "string" &&
+                        element.content.trim(),
+                    );
+                    const previewText = (heroTextElement?.content || template.name)
+                      .split("\n")[0]
+                      .trim();
+                    const previewBgUrl =
+                      template.canvasBackground?.type === "image"
+                        ? resolveMediaUrl(template.canvasBackground.value)
+                        : "";
+                    return (
+                  <div
                     key={template.id}
-                    onClick={() => applyTemplate(template)}
-                    className="w-full text-left bg-[#1e1e2c] hover:bg-[#25263a] border border-gray-700 hover:border-purple-500 rounded-lg p-3 transition-colors"
+                    onClick={() => applyTemplate(template, { enterEditMode: true })}
+                    className="w-full text-left bg-[#1e1e2c] border border-gray-700 hover:border-purple-500 rounded-lg p-3 transition-colors cursor-pointer"
                   >
-                    {(() => {
-                      const templateBgUrl =
-                        template.canvasBackground?.type === "image"
-                          ? resolveMediaUrl(template.canvasBackground.value)
-                          : undefined;
-                      return (
                     <div
-                      className="h-24 rounded-md mb-3 relative overflow-hidden"
+                      className="w-full aspect-video rounded-md mb-3 overflow-hidden relative"
                       style={{
-                        background: template.preview.gradient,
-                        backgroundImage: templateBgUrl
-                          ? `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url("${templateBgUrl}")`
-                          : undefined,
+                        backgroundColor:
+                          template.canvasBackground?.type === "color"
+                            ? template.canvasBackground.value
+                            : "#171126",
+                        backgroundImage: previewBgUrl
+                          ? `linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%), url("${previewBgUrl}")`
+                          : template.preview?.gradient || undefined,
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                       }}
                     >
                       <div
-                        className="absolute bottom-0 left-0 right-0 h-2"
-                        style={{ background: template.preview.accent }}
+                        className="absolute inset-x-0 bottom-0 h-1.5"
+                        style={{ background: template.preview?.accent || "#8356f3" }}
                       />
-                      <div className="absolute inset-0 flex items-center justify-center text-white/85 text-xs font-semibold tracking-wide">
-                        {template.category}
+                      <div className="absolute inset-0 flex items-center justify-center px-3">
+                        <p className="text-white text-base font-semibold text-center leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] line-clamp-2">
+                          {previewText}
+                        </p>
                       </div>
                     </div>
-                      );
-                    })()}
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-white">{template.name}</p>
                       <span className="text-[10px] uppercase tracking-wide text-gray-400">
@@ -772,7 +868,9 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">{template.description}</p>
-                  </button>
+                  </div>
+                    );
+                  })()
                 ))}
                 {!filteredTemplates.length && (
                   <div className="text-center text-sm text-gray-400 py-8">
@@ -947,8 +1045,9 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
       )}
 
       {/* Main Canvas Area */}
-      <div className="flex-1 bg-[#101017] relative flex flex-col overflow-hidden"
-        onClick={() => setSelectedId(null)}
+      <div
+        className="flex-1 bg-[#101017] relative flex flex-col overflow-hidden"
+        onClick={handleCanvasBackgroundClick}
       >
         <div className="h-14 bg-[#1a1a24] border-b border-[#2a2a3c] flex items-center justify-between px-6 z-10">
           <Input
@@ -971,8 +1070,8 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
         {/* The Artboard */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-hidden p-1 md:p-2 flex items-center justify-center relative bg-[#0a0a0f]"
-          onClick={() => setSelectedId(null)}
+          className="flex-1 overflow-hidden p-0 flex items-center justify-center relative bg-[#0a0a0f]"
+          onClick={handleCanvasBackgroundClick}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();

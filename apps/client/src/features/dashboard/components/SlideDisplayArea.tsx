@@ -2,7 +2,7 @@ import React from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import qworshipLogo from "@/assets/logo.png";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
-import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
+import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
 
 interface SlideDisplayAreaProps {
   isBuildMode: boolean;
@@ -214,7 +214,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                       </div>
                     ) : (selectedSlide.slide as any).subtype === "canvas" ? (
                       <div className="absolute inset-0 w-full h-full z-10">
-                        <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} scaleMode="contain" />
+                        <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} scaleMode="contain" debugSource="slide-display:selectedSlidePreview" />
                       </div>
                     ) : (selectedSlide.slide as any).subtype === "video" ? (
                       <video
@@ -417,7 +417,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                       </div>
                     ) : (currentlyDisplayedSlide as any).subtype === "canvas" ? (
                         <div className="absolute inset-0 w-full h-full z-10">
-                          <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} scaleMode="contain" />
+                          <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} scaleMode="contain" debugSource="slide-display:currentlyDisplayedSlide" />
                         </div>
                     ) : (currentlyDisplayedSlide as any).subtype === "video" ? (
                         <video
@@ -617,7 +617,7 @@ export const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
                       </div>
                       { (slide as any).subtype === "canvas" ? (
                          <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg">
-                            <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                            <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" debugSource="slide-display:slidesMapCard" />
                          </div>
                       ) : (
                       <div className="p-1.5 pt-5 h-full flex flex-col justify-center bg-black/40">

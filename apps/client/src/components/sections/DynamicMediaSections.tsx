@@ -4,7 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Play, Image } from "lucide-react";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
-import { getAllSlideCanvasTemplates } from "@/features/dashboard/components/slideCanvasTemplateLibrary";
+import {
+  getAllSlideCanvasTemplates,
+  type SlideCanvasTemplate,
+} from "../../features/dashboard/components/slideCanvasTemplateLibrary";
 
 interface CloudMediaAsset {
   id: number;
@@ -915,7 +918,15 @@ export const DynamicMediaSections: React.FC<DynamicMediaSectionsProps> = ({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            {slideCanvasTemplates.map((template, index) => {
+            {slideCanvasTemplates.map((template: SlideCanvasTemplate, index: number) => {
+              const heroTextElement = template.elements.find(
+                (element) => element.type === "text" && typeof element.content === "string" && element.content.trim(),
+              );
+              const previewText = (heroTextElement?.content || template.name).split("\n")[0].trim();
+              const previewBgUrl =
+                template.canvasBackground?.type === "image"
+                  ? resolveMediaUrl(template.canvasBackground.value)
+                  : "";
               const templateAsset: MediaAsset = {
                 id: -(index + 1),
                 title: template.name,
@@ -959,33 +970,30 @@ export const DynamicMediaSections: React.FC<DynamicMediaSectionsProps> = ({
                   }}
                 >
                   <div className="p-0">
-                    {(() => {
-                      const templateBgUrl =
-                        template.canvasBackground?.type === "image"
-                          ? resolveMediaUrl(template.canvasBackground.value)
-                          : undefined;
-                      return (
                     <div
-                      className="h-40 rounded-t-lg relative overflow-hidden"
+                      className="w-full aspect-video rounded-t-lg overflow-hidden relative"
                       style={{
-                        background: template.preview.gradient,
-                        backgroundImage: templateBgUrl
-                          ? `linear-gradient(rgba(0,0,0,0.22), rgba(0,0,0,0.35)), url("${templateBgUrl}")`
-                          : undefined,
+                        backgroundColor:
+                          template.canvasBackground?.type === "color"
+                            ? template.canvasBackground.value
+                            : "#171126",
+                        backgroundImage: previewBgUrl
+                          ? `linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%), url("${previewBgUrl}")`
+                          : template.preview?.gradient || undefined,
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                       }}
                     >
                       <div
-                        className="absolute bottom-0 left-0 right-0 h-2"
-                        style={{ background: template.preview.accent }}
+                        className="absolute inset-x-0 bottom-0 h-1.5"
+                        style={{ background: template.preview?.accent || "#8356f3" }}
                       />
-                      <div className="absolute inset-0 flex items-center justify-center text-white text-sm font-semibold tracking-wide">
-                        {template.category}
+                      <div className="absolute inset-0 flex items-center justify-center px-3">
+                        <p className="text-white text-base font-semibold text-center leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] line-clamp-2">
+                          {previewText}
+                        </p>
                       </div>
                     </div>
-                      );
-                    })()}
                     <div className="p-3">
                       <p className="text-white text-sm font-semibold">{template.name}</p>
                       <p className="text-gray-400 text-xs mt-1 line-clamp-2">{template.description}</p>
