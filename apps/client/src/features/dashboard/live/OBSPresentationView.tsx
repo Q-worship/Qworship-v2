@@ -307,7 +307,7 @@ export default function OBSPresentationView() {
               <>
                 {(currentSlide as any).subtype === 'canvas' ? (
                   <div className="absolute inset-0 w-full h-full z-10">
-                    <SlideCanvasRenderer content={currentSlide.content} scaleMode="contain" />
+                    <SlideCanvasRenderer content={currentSlide.content} scaleMode="contain" debugSource="obs-presentation-view:currentSlide" />
                   </div>
                 ) : (currentSlide as any).subtype === 'webpage' ? (
                   <div className="absolute inset-0 w-full h-full z-10 bg-white">

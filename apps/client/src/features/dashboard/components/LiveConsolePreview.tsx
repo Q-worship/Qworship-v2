@@ -231,7 +231,7 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
                   />
                 ) : (currentSlideData as any).subtype === "canvas" ? (
                   <div className="absolute inset-0 w-full h-full z-10">
-                     <SlideCanvasRenderer content={currentSlideData.content} scaleMode="contain" />
+                     <SlideCanvasRenderer content={currentSlideData.content} scaleMode="contain" debugSource="live-console-preview:currentSlide" />
                   </div>
                 ) : (
                   <img

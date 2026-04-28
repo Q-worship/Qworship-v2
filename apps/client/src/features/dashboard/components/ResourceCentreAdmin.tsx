@@ -968,6 +968,7 @@ export const ResourceCentreAdmin: React.FC = () => {
                   <Progress value={uploadProgress["mac"]} className="h-2" />
                 </div>
               )}
+
             </div>
           </div>
         </CardContent>

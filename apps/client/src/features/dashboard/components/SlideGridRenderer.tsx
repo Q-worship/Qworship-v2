@@ -1,7 +1,7 @@
 import React from "react";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
-import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
+import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
 
 export const SlideGridRenderer = (props: any) => {
   const { 
@@ -102,7 +102,7 @@ export const SlideGridRenderer = (props: any) => {
                               {/* Content Preview */}
                               {slide.type === 'media' && (slide as any).subtype === 'canvas' ? (
                                 <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg">
-                                  <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                                  <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" debugSource="slide-grid-renderer:mainGridCard" />
                                 </div>
                               ) : (
                                 <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
@@ -427,7 +427,7 @@ export const SlideGridRenderer = (props: any) => {
                                     {/* Content Area - Exact spacing like reference image */}
                                     { (slide.type === "media" && (slide as any).subtype === "canvas") ? (
                                        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg">
-                                          <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                                          <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" debugSource="slide-grid-renderer:altGridCard" />
                                        </div>
                                     ) : (
                                     <div

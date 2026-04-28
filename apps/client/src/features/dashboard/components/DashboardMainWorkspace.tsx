@@ -21,8 +21,8 @@ import { EditAndPreparationArea } from "@/features/dashboard/components/EditAndP
 import { SidebarOpen, SidebarClose } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { WebPageEditor } from "@/features/dashboard/components/WebPageEditor";
-import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
-import { SlideCanvasEditor } from "@/features/dashboard/components/SlideCanvasEditor";
+import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
+import { SlideCanvasEditor } from "./SlideCanvasEditor";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 
@@ -58,6 +58,12 @@ export const DashboardMainWorkspace = (props: any) => {
   const { isLiveMode, activeTab, isSidebarCollapsed, setIsSidebarCollapsed } = useDashboardUI();
   const { isSlideEditorOpen, setIsSlideEditorOpen } = useDashboardModals();
   const { serviceItems, setServiceItems, slides, selectedSlide, setSelectedSlide, currentSlide, setCurrentSlide, totalSlides } = useDashboardPresentation();
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7568/ingest/109086ba-dec0-4cee-b02e-eb1cf11ca2b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1fdb7f'},body:JSON.stringify({sessionId:'1fdb7f',runId:'instrumentation-heartbeat',hypothesisId:'H10',location:'DashboardMainWorkspace.tsx:mount',message:'DashboardMainWorkspace mounted',data:{activeTab,isBuildMode,editingSubtype:editingContent?.subtype||null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, []);
 
   // Helper to update a field on the selected slide and the underlying serviceItems state
   const updateSelectedSlideField = (field: string, value: string) => {
@@ -112,8 +118,37 @@ export const DashboardMainWorkspace = (props: any) => {
   };
 
   const canvasDebugTimestampsRef = useRef<Record<string, number>>({});
+  const dashboardInteractionDebugRef = useRef<Record<string, number>>({});
+  const emitDashboardDebugLog = useCallback(
+    (hypothesisId: string, message: string, data: Record<string, unknown>, minIntervalMs = 0) => {
+      const key = `${hypothesisId}:${message}`;
+      const now = Date.now();
+      const last = dashboardInteractionDebugRef.current[key] || 0;
+      if (minIntervalMs > 0 && now - last < minIntervalMs) return;
+      dashboardInteractionDebugRef.current[key] = now;
+      // #region agent log
+      fetch('http://127.0.0.1:7568/ingest/109086ba-dec0-4cee-b02e-eb1cf11ca2b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1fdb7f'},body:JSON.stringify({sessionId:'1fdb7f',runId:'dashboard-interaction-trace',hypothesisId,location:'DashboardMainWorkspace.tsx',message,data,timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    },
+    [],
+  );
+  useEffect(() => {
+    emitDashboardDebugLog(
+      "H19",
+      "Editing content context changed",
+      {
+        editingContentId: editingContent?.id || null,
+        editingType: editingContent?.type || null,
+        editingSubtype: editingContent?.subtype || null,
+        isBuildMode,
+      },
+      120,
+    );
+  }, [editingContent?.id, editingContent?.type, editingContent?.subtype, isBuildMode, emitDashboardDebugLog]);
+
   const logCanvasThumbnailDebug = useCallback(
     (zone: string, slide: any, containerEl?: HTMLDivElement | null) => {
+      if (!containerEl) return;
       const id = slide?.id || "unknown-slide";
       const key = `${zone}:${id}`;
       const now = Date.now();
@@ -128,12 +163,54 @@ export const DashboardMainWorkspace = (props: any) => {
       const hasElements =
         !!content && typeof content === "object" && Array.isArray(content.elements);
       const elementsCount = hasElements ? content.elements.length : 0;
+      const numericElements = hasElements
+        ? content.elements.filter(
+            (el: any) =>
+              el &&
+              typeof el.x === "number" &&
+              typeof el.y === "number" &&
+              typeof el.width === "number" &&
+              typeof el.height === "number",
+          )
+        : [];
+      const layoutBounds =
+        numericElements.length > 0
+          ? numericElements.reduce(
+              (acc: any, el: any) => ({
+                left: Math.min(acc.left, el.x),
+                top: Math.min(acc.top, el.y),
+                right: Math.max(acc.right, el.x + el.width),
+                bottom: Math.max(acc.bottom, el.y + el.height),
+              }),
+              { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
+            )
+          : null;
+      const layoutOverflow =
+        layoutBounds
+          ? {
+              left: Math.max(0, -layoutBounds.left),
+              top: Math.max(0, -layoutBounds.top),
+              right: Math.max(0, layoutBounds.right - 960),
+              bottom: Math.max(0, layoutBounds.bottom - 540),
+            }
+          : null;
       const bgType =
         content && typeof content === "object"
           ? content.canvasBackground?.type || content.background?.type || "none"
           : "none";
-      const rect = containerEl?.getBoundingClientRect();
-
+      const backgroundValue =
+        content && typeof content === "object"
+          ? content.canvasBackground?.value || content.background?.value || ""
+          : "";
+      const elementTypeCounts = numericElements.reduce(
+        (acc: Record<string, number>, el: any) => {
+          const key = typeof el.type === "string" ? el.type : "unknown";
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+      const rect = containerEl.getBoundingClientRect();
       console.log(`[CanvasThumbDebug:${zone}]`, {
         slideId: id,
         title: slide?.title,
@@ -143,13 +220,50 @@ export const DashboardMainWorkspace = (props: any) => {
         hasElements,
         elementsCount,
         backgroundType: bgType,
-        container: rect
-          ? { width: Math.round(rect.width), height: Math.round(rect.height) }
-          : null,
+        backgroundValue,
+        elementTypeCounts,
+        layoutBounds,
+        layoutOverflow,
+        container: { width: Math.round(rect.width), height: Math.round(rect.height) },
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7568/ingest/109086ba-dec0-4cee-b02e-eb1cf11ca2b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1fdb7f'},body:JSON.stringify({sessionId:'1fdb7f',runId:'template-preview-fallback-trace',hypothesisId:'H6',location:'DashboardMainWorkspace.tsx:logCanvasThumbnailDebug',message:'Canvas thumbnail ref callback snapshot',data:{zone,slideId:id,subtype:slide?.subtype,elementsCount,backgroundType:bgType,backgroundValue,elementTypeCounts,layoutBounds,layoutOverflow,container:{width:Math.round(rect.width),height:Math.round(rect.height)}},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     },
     [],
   );
+
+  const getNormalizedCanvasPreviewContent = useCallback((rawContent: any) => {
+    if (!rawContent) return rawContent;
+
+    const parsed =
+      typeof rawContent === "string"
+        ? (() => {
+            try {
+              return JSON.parse(rawContent);
+            } catch {
+              return null;
+            }
+          })()
+        : rawContent;
+
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.elements)) {
+      return rawContent;
+    }
+
+    const resolvedCanvasBackground =
+      parsed.canvasBackground ||
+      parsed.background ||
+      (parsed.backgroundImage
+        ? { type: "image", value: parsed.backgroundImage }
+        : null) ||
+      { type: "transparent", value: "" };
+
+    return {
+      ...parsed,
+      canvasBackground: resolvedCanvasBackground,
+    };
+  }, []);
 
   return (
     <main
@@ -4237,7 +4351,7 @@ import type { Slide } from "@/types";\n${text}`,
                             />
                           ) : (selectedSlide.slide as any).subtype === "canvas" ? (
                             <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
-                              <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} scaleMode="contain" />
+                              <SlideCanvasRenderer content={selectedSlide.slide.content} background={{type: 'transparent'}} scaleMode="contain" debugSource="dashboard-main:selectedSlidePreview" />
                             </div>
                           ) : (
                             <img
@@ -4760,7 +4874,7 @@ import type { Slide } from "@/types";\n${text}`,
                           <>
                             {(displaySlide as any)?.subtype === "canvas" ? (
                               <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
-                                <SlideCanvasRenderer content={displaySlide?.content} background={{type: 'transparent'}} scaleMode="contain" />
+                                <SlideCanvasRenderer content={displaySlide?.content} background={{type: 'transparent'}} scaleMode="contain" debugSource="dashboard-main:displaySlidePreview" />
                               </div>
                             ) : (
                             <img
@@ -4999,7 +5113,7 @@ import type { Slide } from "@/types";\n${text}`,
                           />
                         ) : (currentlyDisplayedSlide as any).subtype === "canvas" ? (
                           <div className="relative z-10 w-full h-full object-contain drop-shadow-2xl bg-black border border-purple-500/30">
-                            <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} scaleMode="contain" />
+                            <SlideCanvasRenderer content={currentlyDisplayedSlide.content} background={{type: 'transparent'}} scaleMode="contain" debugSource="dashboard-main:currentlyDisplayedSlide" />
                           </div>
                         ) : (
                           <img
@@ -5265,17 +5379,17 @@ import type { Slide } from "@/types";\n${text}`,
                       title={slide.title}
                     >
                       {/* Slide Number Badge */}
-                      <div className="absolute top-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded z-10">
+                      <div className="absolute top-0.5 left-0.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded z-10">
                         {index + 1}
                       </div>
 
                       {/* Content Preview */}
                       {(slide as any).subtype === "canvas" ? (
                         <div
-                          className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-lg"
+                          className="absolute inset-[1px] z-0 pointer-events-none overflow-hidden rounded-[6px]"
                           ref={(el) => logCanvasThumbnailDebug("bottom-strip", slide, el)}
                         >
-                          <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                          <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="cover" showBackdrop={false} debugSource="dashboard-main:slidesColumnCard" />
                         </div>
                       ) : (
                         <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
@@ -5492,12 +5606,12 @@ import type { Slide } from "@/types";\n${text}`,
 
                     const thumbWidth =
                       slides.length <= 1
-                        ? 420
+                        ? 360
                         : slides.length === 2
-                          ? 360
+                          ? 320
                           : slides.length === 3
-                            ? 300
-                            : 240;
+                            ? 270
+                            : 210;
                     const thumbHeight = Math.round((thumbWidth * 9) / 16);
 
                     return (
@@ -5512,11 +5626,11 @@ import type { Slide } from "@/types";\n${text}`,
                       >
                         {/* Selection background behind entire tile */}
                         {isItemSelected && (
-                          <div className="absolute inset-0 -inset-x-2 -inset-y-2 rounded-lg shadow-lg shadow-purple-500/20 transition-all duration-200 z-0 bg-[#392A48]"></div>
+                          <div className="absolute inset-0 -inset-x-1 -inset-y-1 rounded-md shadow-md shadow-purple-500/20 transition-all duration-200 z-0 bg-[#392A48]"></div>
                         )}
                         <div className="relative z-10">
                           {/* Title above thumbnail - only for first slide of each item */}
-                          <div className="h-6 mb-2 flex items-end">
+                          <div className="h-5 mb-1 flex items-end">
                             {isFirstSlideOfItem && (
                               <div className="text-white text-sm font-medium text-left">
                                 {itemTitle}
@@ -5525,16 +5639,30 @@ import type { Slide } from "@/types";\n${text}`,
                           </div>
                           {/* Thumbnail Box - matching reference design exactly */}
                           <div
-                            className="relative w-60 h-[135px] rounded-lg cursor-pointer transition-all overflow-hidden"
+                            className="relative rounded-md cursor-pointer transition-all overflow-hidden ring-1 ring-white/5"
                             onMouseDown={(e) => {
                               if ((slide as any)?.subtype !== "canvas") return;
                               e.preventDefault();
                               e.stopPropagation();
+                              emitDashboardDebugLog("H20", "Canvas queue card mouseDown invoked handleSlideClick", {
+                                slideId: (slide as any)?.id || null,
+                                slideSubtype: (slide as any)?.subtype || null,
+                                index,
+                                source: "build-scroller",
+                              });
                               handleSlideClick(slide as any, index);
                             }}
                             onClick={() =>
                               (slide as any)?.subtype !== "canvas"
-                                ? handleSlideClick(slide as any, index)
+                                ? (() => {
+                                    emitDashboardDebugLog("H21", "Non-canvas queue card click invoked handleSlideClick", {
+                                      slideId: (slide as any)?.id || null,
+                                      slideSubtype: (slide as any)?.subtype || null,
+                                      index,
+                                      source: "build-scroller",
+                                    });
+                                    handleSlideClick(slide as any, index);
+                                  })()
                                 : undefined
                             }
                             title={slide.title}
@@ -5545,17 +5673,20 @@ import type { Slide } from "@/types";\n${text}`,
                               minHeight: `${thumbHeight}px`,
                               flex: `0 0 ${thumbWidth}px`,
                               backgroundColor: "#2E2D39",
+                              ...(slide as any)?.subtype === "canvas"
+                                ? { backgroundColor: "transparent" }
+                                : {},
                               transition: "background-color 0.2s ease",
                             }}
                           >
                             {/* Slide Number Badge - Top Left Corner (black background) */}
-                            <div className="absolute top-1 left-1 text-white text-xs px-1.5 py-0.5 font-bold z-10 rounded bg-[#000000]">
+                            <div className="absolute top-0.5 left-0.5 text-white text-[10px] px-1.5 py-0.5 font-bold z-10 rounded bg-[#000000]">
                               {index + 1}
                             </div>
 
                             {/* Item Slide Count - Bottom Right Corner (colored background) */}
                             <div
-                              className={`absolute bottom-1 right-1 text-white text-xs px-1.5 py-0.5 font-bold z-10 rounded ${slide.type === "verse" ||
+                              className={`absolute bottom-0.5 right-0.5 text-white text-[10px] px-1.5 py-0.5 font-bold z-10 rounded ${slide.type === "verse" ||
                                 slide.type === "chorus"
                                 ? "bg-purple-600"
                                 : slide.type === "bible"
@@ -5580,10 +5711,10 @@ import type { Slide } from "@/types";\n${text}`,
                             {/* Content Area - Exact spacing like reference image */}
                             {(slide as any).subtype === "canvas" ? (
                               <div
-                                className="absolute inset-0 z-0 overflow-hidden"
+                                className="absolute inset-[1px] z-0 overflow-hidden rounded-[6px]"
                                 ref={(el) => logCanvasThumbnailDebug("build-scroller", slide, el)}
                               >
-                                <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                                <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="cover" showBackdrop={false} debugSource="dashboard-main:queueListCard" />
                               </div>
                             ) : (
                             <div
@@ -5765,7 +5896,11 @@ import type { Slide } from "@/types";\n${text}`,
                                     />
                                   </div>
                                 ) : slide.type === "media" ? (
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black">
+                                  <div
+                                    className={`absolute inset-0 flex items-center justify-center ${
+                                      (slide as any).subtype === "canvas" ? "" : "bg-black"
+                                    }`}
+                                  >
                                     {(slide as any).subtype === "webpage" ? (
                                       <div className="absolute inset-0 w-full h-full bg-white overflow-hidden">
                                         <div className="absolute inset-0 z-20 cursor-pointer" />
@@ -5784,7 +5919,7 @@ import type { Slide } from "@/types";\n${text}`,
                                         className="absolute inset-0 w-full h-full"
                                         ref={(el) => logCanvasThumbnailDebug("media-fallback-branch", slide, el)}
                                       >
-                                        <SlideCanvasRenderer content={slide.content} background={{type: 'transparent'}} scaleMode="cover" />
+                                        <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="cover" showBackdrop={false} debugSource="dashboard-main:secondaryQueueCard" />
                                       </div>
                                     ) : (
                                       <img
