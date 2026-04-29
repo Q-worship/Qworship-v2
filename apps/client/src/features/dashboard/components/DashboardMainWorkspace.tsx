@@ -229,6 +229,9 @@ export const DashboardMainWorkspace = (props: any) => {
       // #region agent log
       fetch('http://127.0.0.1:7568/ingest/109086ba-dec0-4cee-b02e-eb1cf11ca2b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'1fdb7f'},body:JSON.stringify({sessionId:'1fdb7f',runId:'template-preview-fallback-trace',hypothesisId:'H6',location:'DashboardMainWorkspace.tsx:logCanvasThumbnailDebug',message:'Canvas thumbnail ref callback snapshot',data:{zone,slideId:id,subtype:slide?.subtype,elementsCount,backgroundType:bgType,backgroundValue,elementTypeCounts,layoutBounds,layoutOverflow,container:{width:Math.round(rect.width),height:Math.round(rect.height)}},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
+      // #region agent log
+      fetch('http://127.0.0.1:7568/ingest/109086ba-dec0-4cee-b02e-eb1cf11ca2b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3b938c'},body:JSON.stringify({sessionId:'3b938c',runId:'thumb-debug-v2',hypothesisId:'H1-H2-H3-H4',location:'DashboardMainWorkspace.tsx:logCanvasThumbnailDebug',message:'Canvas thumbnail debug ref snapshot',data:{zone,slideId:id,subtype:slide?.subtype,elementsCount,backgroundType:bgType,backgroundValue,elementTypeCounts,layoutBounds,layoutOverflow,container:{width:Math.round(rect.width),height:Math.round(rect.height)}},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     },
     [],
   );
@@ -5386,10 +5389,10 @@ import type { Slide } from "@/types";\n${text}`,
                       {/* Content Preview */}
                       {(slide as any).subtype === "canvas" ? (
                         <div
-                          className="absolute inset-[1px] z-0 pointer-events-none overflow-hidden rounded-[6px]"
+                          className="absolute inset-0 z-0 pointer-events-none overflow-hidden rounded-[6px]"
                           ref={(el) => logCanvasThumbnailDebug("bottom-strip", slide, el)}
                         >
-                          <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="cover" showBackdrop={false} debugSource="dashboard-main:slidesColumnCard" />
+                          <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="contain" showBackdrop={false} debugSource="dashboard-main:slidesColumnCard" />
                         </div>
                       ) : (
                         <div className="p-1.5 pt-5 h-full flex flex-col justify-center">
@@ -5711,10 +5714,10 @@ import type { Slide } from "@/types";\n${text}`,
                             {/* Content Area - Exact spacing like reference image */}
                             {(slide as any).subtype === "canvas" ? (
                               <div
-                                className="absolute inset-[1px] z-0 overflow-hidden rounded-[6px]"
+                                className="absolute inset-0 z-0 overflow-hidden rounded-[6px]"
                                 ref={(el) => logCanvasThumbnailDebug("build-scroller", slide, el)}
                               >
-                                <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="cover" showBackdrop={false} debugSource="dashboard-main:queueListCard" />
+                                <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="contain" showBackdrop={false} debugSource="dashboard-main:queueListCard" />
                               </div>
                             ) : (
                             <div
@@ -5919,7 +5922,7 @@ import type { Slide } from "@/types";\n${text}`,
                                         className="absolute inset-0 w-full h-full"
                                         ref={(el) => logCanvasThumbnailDebug("media-fallback-branch", slide, el)}
                                       >
-                                        <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="cover" showBackdrop={false} debugSource="dashboard-main:secondaryQueueCard" />
+                                        <SlideCanvasRenderer content={getNormalizedCanvasPreviewContent(slide.content)} background={{type: 'transparent'}} scaleMode="contain" showBackdrop={false} debugSource="dashboard-main:secondaryQueueCard" />
                                       </div>
                                     ) : (
                                       <img

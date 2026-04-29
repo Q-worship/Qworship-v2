@@ -186,22 +186,9 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
       dy = CANVAS_HEIGHT - bottom;
     }
 
-    const layoutCenterX = (left + right) / 2;
-    const layoutCenterY = (top + bottom) / 2;
-    const centerDeltaX = CANVAS_WIDTH / 2 - layoutCenterX;
-    const centerDeltaY = CANVAS_HEIGHT / 2 - layoutCenterY;
-    const hasMeaningfulCenterDrift =
-      Math.abs(centerDeltaX) > 28 || Math.abs(centerDeltaY) > 22;
-    const canCenterWithoutCropping =
-      left + centerDeltaX >= -12 &&
-      top + centerDeltaY >= -12 &&
-      right + centerDeltaX <= CANVAS_WIDTH + 12 &&
-      bottom + centerDeltaY <= CANVAS_HEIGHT + 12;
-
     if ((dx === 0 && dy === 0) && totalOverflow < 80) {
-      if (!(hasMeaningfulCenterDrift && canCenterWithoutCropping)) return rawElements;
-      dx = centerDeltaX;
-      dy = centerDeltaY;
+      // Keep explicit author placement: do not auto-center layouts unless overflowing.
+      return rawElements;
     }
 
     if (dx === 0 && dy === 0) return rawElements;
@@ -573,7 +560,112 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
     document.addEventListener("mouseup", handleMouseUp);
   };
 
+  const handleResizeStart = (
+    e: React.MouseEvent,
+    id: string,
+    handle: "nw" | "ne" | "sw" | "se",
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    pointerInteractionRef.current.startedOnElement = true;
+    pointerInteractionRef.current.didDrag = false;
+    setSelectedId(id);
+    const element = elements.find((el) => el.id === id);
+    if (!element || element.locked) {
+      pointerInteractionRef.current.startedOnElement = false;
+      return;
+    }
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initial = { ...element };
+    const MIN_SIZE = 12;
+    const DRAG_THRESHOLD_PX = 3;
+
+    const handleMouseMove = (mvEvent: MouseEvent) => {
+      const moveX = mvEvent.clientX - startX;
+      const moveY = mvEvent.clientY - startY;
+      if (!pointerInteractionRef.current.didDrag) {
+        const distance = Math.sqrt(moveX * moveX + moveY * moveY);
+        if (distance >= DRAG_THRESHOLD_PX) {
+          pointerInteractionRef.current.didDrag = true;
+        } else {
+          return;
+        }
+      }
+      const dx = moveX / scale;
+      const dy = moveY / scale;
+
+      let nextX = initial.x;
+      let nextY = initial.y;
+      let nextW = initial.width;
+      let nextH = initial.height;
+
+      if (handle.includes("w")) {
+        nextX = initial.x + dx;
+        nextW = initial.width - dx;
+      } else {
+        nextW = initial.width + dx;
+      }
+
+      if (handle.includes("n")) {
+        nextY = initial.y + dy;
+        nextH = initial.height - dy;
+      } else {
+        nextH = initial.height + dy;
+      }
+
+      if (nextW < MIN_SIZE) {
+        if (handle.includes("w")) nextX -= MIN_SIZE - nextW;
+        nextW = MIN_SIZE;
+      }
+      if (nextH < MIN_SIZE) {
+        if (handle.includes("n")) nextY -= MIN_SIZE - nextH;
+        nextH = MIN_SIZE;
+      }
+
+      updateElement(
+        id,
+        { x: nextX, y: nextY, width: nextW, height: nextH },
+        false,
+      );
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      pointerInteractionRef.current.startedOnElement = false;
+      const dragged = pointerInteractionRef.current.didDrag;
+      pointerInteractionRef.current.didDrag = false;
+      if (!dragged) return;
+      setElements((curr) => {
+        setTimeout(() => {
+          syncState(curr, canvasBackground);
+        }, 0);
+        return curr;
+      });
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
   const selectedEl = elements.find(e => e.id === selectedId);
+  const nudgeSelectedSize = (axis: "font" | "width" | "height", delta: number) => {
+    if (!selectedEl) return;
+    if (axis === "font" && selectedEl.type === "text") {
+      const next = Math.max(8, (selectedEl.fontSize || 24) + delta);
+      updateElement(selectedEl.id, { fontSize: next });
+      return;
+    }
+    if (axis === "width") {
+      updateElement(selectedEl.id, { width: Math.max(12, selectedEl.width + delta) });
+      return;
+    }
+    if (axis === "height") {
+      updateElement(selectedEl.id, { height: Math.max(12, selectedEl.height + delta) });
+    }
+  };
   const handleCanvasBackgroundClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
     if (pointerInteractionRef.current.startedOnElement || pointerInteractionRef.current.didDrag) {
@@ -667,17 +759,36 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                       <option value="Black">Black</option>
                     </select>
 
-                    <select
-                      className="w-24 bg-[#1e1e2c] border border-gray-600 rounded-lg p-2 text-sm outline-none"
-                      value={selectedEl?.fontSize || 24}
-                      onChange={(e) => selectedEl && updateElement(selectedEl.id, { fontSize: Number(e.target.value) })}
-                    >
-                      <option value={24}>24</option>
-                      <option value={48}>48</option>
-                      <option value={72}>72</option>
-                      <option value={120}>120</option>
-                      <option value={173}>173</option>
-                    </select>
+                    <div className="w-28 bg-[#1e1e2c] border border-gray-600 rounded-lg p-1 text-sm flex items-center">
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-gray-300 hover:text-white"
+                        onClick={() => nudgeSelectedSize("font", -2)}
+                        title="Decrease font size"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={8}
+                        className="w-full bg-transparent text-center outline-none"
+                        value={selectedEl?.fontSize || 24}
+                        onChange={(e) =>
+                          selectedEl &&
+                          updateElement(selectedEl.id, {
+                            fontSize: Math.max(8, Number(e.target.value) || 8),
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-gray-300 hover:text-white"
+                        onClick={() => nudgeSelectedSize("font", 2)}
+                        title="Increase font size"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex gap-2 items-center text-gray-400">
@@ -755,10 +866,18 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                     <div className="flex bg-[#1e1e2c] rounded-lg border border-gray-600 p-2 items-center">
                       <span className="text-gray-400 w-6">W</span>
                       <input type="number" className="w-full bg-transparent outline-none" value={selectedEl?.width || 0} onChange={(e) => selectedEl && updateElement(selectedEl.id, { width: Number(e.target.value) })} />
+                      <div className="flex flex-col ml-1">
+                        <button type="button" className="text-xs text-gray-400 hover:text-white leading-none" onClick={() => nudgeSelectedSize("width", 4)}>+</button>
+                        <button type="button" className="text-xs text-gray-400 hover:text-white leading-none" onClick={() => nudgeSelectedSize("width", -4)}>-</button>
+                      </div>
                     </div>
                     <div className="flex bg-[#1e1e2c] rounded-lg border border-gray-600 p-2 items-center">
                       <span className="text-gray-400 w-6">H</span>
                       <input type="number" className="w-full bg-transparent outline-none" value={selectedEl?.height || 0} onChange={(e) => selectedEl && updateElement(selectedEl.id, { height: Number(e.target.value) })} />
+                      <div className="flex flex-col ml-1">
+                        <button type="button" className="text-xs text-gray-400 hover:text-white leading-none" onClick={() => nudgeSelectedSize("height", 4)}>+</button>
+                        <button type="button" className="text-xs text-gray-400 hover:text-white leading-none" onClick={() => nudgeSelectedSize("height", -4)}>-</button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1155,10 +1274,10 @@ export const SlideCanvasEditor: React.FC<SlideCanvasEditorProps> = ({
                   {/* Resize Handles */}
                   {isSelected && !el.locked && (
                     <>
-                      <div className="absolute -top-2 -left-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nwse-resize" />
-                      <div className="absolute -top-2 -right-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nesw-resize" />
-                      <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nesw-resize" />
-                      <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nwse-resize" />
+                      <div onMouseDown={(e) => handleResizeStart(e, el.id, "nw")} className="absolute -top-2 -left-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nwse-resize" />
+                      <div onMouseDown={(e) => handleResizeStart(e, el.id, "ne")} className="absolute -top-2 -right-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nesw-resize" />
+                      <div onMouseDown={(e) => handleResizeStart(e, el.id, "sw")} className="absolute -bottom-2 -left-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nesw-resize" />
+                      <div onMouseDown={(e) => handleResizeStart(e, el.id, "se")} className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-[#8356F3] rounded-full cursor-nwse-resize" />
                     </>
                   )}
                 </div>

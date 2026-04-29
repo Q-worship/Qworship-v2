@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { X, Plus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest, buildUrl } from "@/lib/queryClient";
+import { apiRequest, buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getAllSlideCanvasTemplates } from "@/features/dashboard/components/slideCanvasTemplateLibrary";
 
 interface RecentMediaSectionProps {
   selectedMedia: {
@@ -32,6 +33,28 @@ const ImagePreviewCard = ({ asset }: { asset: any }) => {
   }, [asset?.id]);
 
   const isVideo = asset?.type?.toLowerCase() === 'video';
+  const isTemplate = asset?.type?.toLowerCase() === 'template';
+  const templatePreview = React.useMemo(() => {
+    if (!isTemplate) return null;
+    const allTemplates = getAllSlideCanvasTemplates();
+    return allTemplates.find((template) => template.id === asset?.templateId) || null;
+  }, [isTemplate, asset?.templateId]);
+  const templateHeroText = React.useMemo(() => {
+    if (!templatePreview) return asset?.title || "Template";
+    const heroTextElement = templatePreview.elements.find(
+      (element) =>
+        element.type === "text" &&
+        typeof element.content === "string" &&
+        element.content.trim(),
+    );
+    return (heroTextElement?.content || templatePreview.name || asset?.title || "Template")
+      .split("\n")[0]
+      .trim();
+  }, [templatePreview, asset?.title]);
+  const templateBgImage =
+    templatePreview?.canvasBackground?.type === "image"
+      ? resolveMediaUrl(templatePreview.canvasBackground.value)
+      : "";
 
   // Determine the file URL if it's a video based on who owns the asset
   const videoUrl = asset?.uploadedBy === 'admin' 
@@ -51,6 +74,35 @@ const ImagePreviewCard = ({ asset }: { asset: any }) => {
         >
           Your browser does not support the video tag.
         </video>
+      </div>
+    );
+  }
+
+  if (isTemplate) {
+    return (
+      <div
+        className="w-full relative h-64 mt-[12px] mb-[12px] rounded-lg overflow-hidden shadow-inner border border-[#cea2fd]/20"
+        style={{
+          backgroundColor:
+            templatePreview?.canvasBackground?.type === "color"
+              ? templatePreview.canvasBackground.value
+              : "#171126",
+          backgroundImage: templateBgImage
+            ? `linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%), url("${templateBgImage}")`
+            : templatePreview?.preview?.gradient || "linear-gradient(145deg, #3f3f46 0%, #18181b 100%)",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div
+          className="absolute inset-x-0 bottom-0 h-2"
+          style={{ background: templatePreview?.preview?.accent || "#8356f3" }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center px-4">
+          <p className="text-white text-xl font-semibold text-center leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] line-clamp-3">
+            {templateHeroText}
+          </p>
+        </div>
       </div>
     );
   }
