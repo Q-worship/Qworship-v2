@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useAuthStore } from "@/features/auth/auth.store";
 import {
   ArrowLeft,
   Book,
@@ -69,6 +70,21 @@ export function GuidesPage() {
     "browser",
   );
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const user = useAuthStore((s) => s.user);
+  const [ltBase, setLtBase] = useState("http://localhost:3400");
+
+  useEffect(() => {
+    fetch("/api/lower-third/config", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ltBaseUrl) setLtBase(d.ltBaseUrl);
+      })
+      .catch(() => {});
+  }, []);
+
+  const userId = user?.id || "me";
+  const audienceUrl = `${ltBase}/p/${userId}`;
+  const lowerThirdUrl = `${ltBase}/r/${userId}`;
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) =>
@@ -836,9 +852,22 @@ export function GuidesPage() {
                         Audience Screen URL
                       </label>
                     </div>
-                    <code className="text-white font-mono text-sm block bg-black/30 rounded-lg px-3 py-2 border border-white/5">
-                      http://&lt;your-server&gt;/p/&lt;your-user-id&gt;
-                    </code>
+                    <div className="flex gap-2">
+                      <code className="text-white font-mono text-sm block bg-black/30 rounded-lg px-3 py-2 border border-white/5 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {audienceUrl}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(audienceUrl, "Audience URL")}
+                        className="p-2 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 hover:text-white transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        {copiedText === "Audience URL" ? (
+                          <Check className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-500 mt-2">
                       Full-screen presentation view for your audience
                     </p>
@@ -850,9 +879,22 @@ export function GuidesPage() {
                         Lower Third Overlay URL
                       </label>
                     </div>
-                    <code className="text-white font-mono text-sm block bg-black/30 rounded-lg px-3 py-2 border border-white/5">
-                      http://&lt;your-server&gt;/r/&lt;your-user-id&gt;
-                    </code>
+                    <div className="flex gap-2">
+                      <code className="text-white font-mono text-sm block bg-black/30 rounded-lg px-3 py-2 border border-white/5 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {lowerThirdUrl}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(lowerThirdUrl, "Lower Third URL")}
+                        className="p-2 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 hover:text-white transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        {copiedText === "Lower Third URL" ? (
+                          <Check className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-500 mt-2">
                       Transparent overlay for lower-third graphics
                     </p>
