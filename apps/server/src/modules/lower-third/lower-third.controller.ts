@@ -8,16 +8,18 @@ import { randomUUID } from "crypto";
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
-const LT_BASE_URL = (process.env.LT_BASE_URL || "http://localhost:3400").replace(
-  /\/$/,
-  ""
-);
+const getLTBaseUrl = () => {
+  return (process.env.LT_BASE_URL || "http://localhost:3400").replace(/\/$/, "");
+};
+
 const LT_API_KEY = process.env.LT_API_KEY || "";
-const R2_PUBLIC_URL = (
-  process.env.R2_PUBLIC_DOMAIN ||
-  process.env.R2_PUBLIC_URL ||
-  ""
-).replace(/\/$/, "");
+const getR2PublicUrl = () => {
+  return (
+    process.env.R2_PUBLIC_DOMAIN ||
+    process.env.R2_PUBLIC_URL ||
+    ""
+  ).replace(/\/$/, "");
+};
 
 const ltHeaders: Record<string, string> = {
   "Content-Type": "application/json",
@@ -41,7 +43,7 @@ export const pushState = async (req: Request, res: Response) => {
   );
 
   try {
-    const response = await fetch(`${LT_BASE_URL}/rooms/${userId}/state`, {
+    const response = await fetch(`${getLTBaseUrl()}/rooms/${userId}/state`, {
       method: "PATCH",
       headers: ltHeaders,
       body: JSON.stringify({
@@ -73,7 +75,7 @@ export const pushPreview = async (req: Request, res: Response) => {
 
   try {
     const response = await fetch(
-      `${LT_BASE_URL}/rooms/preview-${userId}/state`,
+      `${getLTBaseUrl()}/rooms/preview-${userId}/state`,
       {
         method: "PATCH",
         headers: ltHeaders,
@@ -108,7 +110,7 @@ export const snapshotTemplate = async (req: Request, res: Response) => {
   }
 
   try {
-    const snapResponse = await fetch(`${LT_BASE_URL}/snapshot`, {
+    const snapResponse = await fetch(`${getLTBaseUrl()}/snapshot`, {
       method: "POST",
       headers: ltHeaders,
       body: JSON.stringify({ template, bindingData: bindingData ?? {} }),
@@ -123,8 +125,9 @@ export const snapshotTemplate = async (req: Request, res: Response) => {
     const key = `lower-third-thumbnails/${userId}/${templateId}.png`;
     await objectStorage.uploadFile(key, pngBuffer, "image/png");
 
-    const thumbnailUrl = R2_PUBLIC_URL
-      ? `${R2_PUBLIC_URL}/${key}`
+    const r2Pub = getR2PublicUrl();
+    const thumbnailUrl = r2Pub
+      ? `${r2Pub}/${key}`
       : `/api/lower-third/thumbnail/${userId}/${templateId}`;
 
     res.json({ ok: true, thumbnailUrl });
@@ -155,8 +158,9 @@ export const uploadAsset = async (req: Request, res: Response) => {
     const key = `lower-third-assets/${userId}/${randomUUID()}.${ext}`;
     await objectStorage.uploadFile(key, buffer, mimeType);
 
-    const assetUrl = R2_PUBLIC_URL
-      ? `${R2_PUBLIC_URL}/${key}`
+    const r2Pub = getR2PublicUrl();
+    const assetUrl = r2Pub
+      ? `${r2Pub}/${key}`
       : `/api/lower-third/asset/${key}`;
 
     res.json({ ok: true, assetUrl });
@@ -224,13 +228,14 @@ export const serveThumbnail = async (req: Request, res: Response) => {
 // ─── Config (safe, no secrets) ────────────────────────────────────────────────
 
 export const getConfig = (_req: Request, res: Response) => {
-  res.json({ ltBaseUrl: LT_BASE_URL });
+  res.json({ ltBaseUrl: getLTBaseUrl() });
 };
 
 export const getStaticUrl = (_req: Request, res: Response) => {
+  const base = getLTBaseUrl();
   res.json({
-    staticBase: `${LT_BASE_URL}/r/static`,
-    previewBase: LT_BASE_URL,
+    staticBase: `${base}/r/static`,
+    previewBase: base,
   });
 };
 
