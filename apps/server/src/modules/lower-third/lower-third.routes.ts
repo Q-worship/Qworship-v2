@@ -32,8 +32,8 @@ lowerThirdRouter.get("/asset/*", serveAsset);
 lowerThirdRouter.get("/thumbnail/:userId/:templateId", protect, serveThumbnail);
 
 // ── Config (safe, no secrets) ────────────────────────────────────────────────
-lowerThirdRouter.get("/config", protect, getConfig);
-lowerThirdRouter.get("/static-url", protect, getStaticUrl);
+lowerThirdRouter.get("/config", getConfig);
+lowerThirdRouter.get("/static-url", getStaticUrl);
 
 // ── Custom template CRUD (user-scoped) ───────────────────────────────────────
 lowerThirdRouter.get("/templates", protect, listTemplates);
