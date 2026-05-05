@@ -114,6 +114,17 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
             </div>
             <div className="flex items-center gap-1.5">
               <button
+                onClick={() => hfbStore.setHfbStrictMode(!hfbStore.hfbStrictMode)}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wide transition-all ${
+                  hfbStore.hfbStrictMode
+                    ? 'bg-cyan-900/40 text-cyan-400 border border-cyan-700/50'
+                    : 'bg-gray-800/40 text-gray-400 border border-gray-700'
+                }`}
+                title={hfbStore.hfbStrictMode ? "Strict Mode: Only responds to direct commands" : "Preach Mode: Catches any scripture reference"}
+              >
+                {hfbStore.hfbStrictMode ? 'Strict Mode' : 'Preach Mode'}
+              </button>
+              <button
                 onClick={hfb.toggleMicrophone}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${
                   hfb.isListeningMode

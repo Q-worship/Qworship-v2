@@ -146,10 +146,17 @@ export const useRealtimeSocket = ({
     }
   }, []);
 
+  const setStrictMode = useCallback((strict: boolean) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "set_strict_mode", strictMode: strict }));
+    }
+  }, []);
+
   return {
     isConnected,
     connect,
     disconnect,
     sendPCMData,
+    setStrictMode,
   };
 };

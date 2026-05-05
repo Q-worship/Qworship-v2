@@ -80,6 +80,7 @@ export function setupAudioSocket(server: Server) {
     transcriptionService.connect();
 
     let lastExecutedCommandTime = 0;
+    let isStrictMode = false;
 
     const processTranscript = async (text: string, isPartial: boolean) => {
       if (!text || text.trim().length < 3) return;
@@ -89,7 +90,7 @@ export function setupAudioSocket(server: Server) {
         const words = text.trim().split(/\s+/);
         const rollingContext = words.slice(-25).join(" ");
 
-        const command = BibleService.parseVoiceCommandOptimized(rollingContext);
+        const command = BibleService.parseVoiceCommandOptimized(rollingContext, { strictMode: isStrictMode });
 
         // For partials, only act on high confidence deterministic matches
         if (isPartial && command.confidence < 0.9) {
@@ -154,7 +155,11 @@ export function setupAudioSocket(server: Server) {
             transcriptBuffer = "";
           }
         } else if (!isPartial) {
-          // AI Fallback only for final transcripts
+          // AI Fallback only for final transcripts, and ONLY if we aren't heavily penalized by strict mode
+          if (isStrictMode && command.confidence < 0.5) {
+             console.log(`[AudioSocket] Ignoring conversational text in Strict Mode: "${text}"`);
+             return;
+          }
           console.log(
             `[AudioSocket] Deterministic parse failed for: "${text}". Invoking AI fallback...`,
           );
@@ -209,6 +214,20 @@ export function setupAudioSocket(server: Server) {
     });
 
     ws.on("message", async (data: Buffer | string) => {
+      // Check for control messages
+      if (typeof data === "string") {
+        try {
+          const msg = JSON.parse(data);
+          if (msg.type === "set_strict_mode") {
+            isStrictMode = !!msg.strictMode;
+            console.log(`[AudioSocket] Strict mode set to ${isStrictMode}`);
+          }
+        } catch (e) {
+          // Ignore parse errors, might be string-encoded audio in some browsers
+        }
+        return;
+      }
+      
       // Forward incoming audio bytes strictly to OpenAI
       transcriptionService.processAudioChunk(data);
     });

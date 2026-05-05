@@ -7,7 +7,7 @@ export const useRawAudioStream = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -60,35 +60,16 @@ export const useRawAudioStream = () => {
         updateVolume(); // Start the loop
 
         // --- Raw Audio Processor Setup ---
-        // 4096 buffer size gives us chunks roughly ~170ms long at 24kHz
-        const bufferSize = 4096;
-        const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
-        processorRef.current = processor;
+        await audioContext.audioWorklet.addModule("/raw-audio-processor.js");
+        const workletNode = new AudioWorkletNode(audioContext, "raw-audio-processor");
+        workletNodeRef.current = workletNode;
 
-        processor.onaudioprocess = (e) => {
-          const inputData = e.inputBuffer.getChannelData(0); // Float32Array (-1.0 to 1.0)
-
-          // Downsample and convert to PCM16
-          // If the audioContext is running at 48kHz, but we need 24kHz, we skip every 2nd sample
-          const inputSampleRate = audioContext.sampleRate;
-          const targetSampleRate = 24000;
-          const ratio = Math.floor(inputSampleRate / targetSampleRate);
-          const step = ratio > 0 ? ratio : 1;
-
-          const pcm16 = new Int16Array(Math.floor(inputData.length / step));
-
-          let outIndex = 0;
-          for (let i = 0; i < inputData.length; i += step) {
-            let s = Math.max(-1, Math.min(1, inputData[i]));
-            // Convert to 16-bit PCM integer
-            pcm16[outIndex++] = s < 0 ? s * 0x8000 : s * 0x7fff;
-          }
-
-          onAudioData(pcm16);
+        workletNode.port.onmessage = (e) => {
+          onAudioData(e.data); // Receives Int16Array from worklet
         };
 
-        source.connect(processor);
-        processor.connect(audioContext.destination);
+        source.connect(workletNode);
+        workletNode.connect(audioContext.destination); // Required by some browsers to keep the node alive
 
         setIsRecording(true);
       } catch (err) {
@@ -109,10 +90,10 @@ export const useRawAudioStream = () => {
       animationFrameRef.current = null;
     }
 
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current.onaudioprocess = null;
-      processorRef.current = null;
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect();
+      workletNodeRef.current.port.onmessage = null;
+      workletNodeRef.current = null;
     }
 
     if (analyserRef.current) {

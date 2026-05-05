@@ -1102,9 +1102,11 @@ export class BibleService {
   /**
    * Strip conversational prefixes/suffixes from natural language input
    * Handles patterns like "Read me John 3:16", "Go to the book of Romans", etc.
+   * Returns whether a command-like prefix was stripped, useful for intent scoring.
    */
-  private static stripConversationalPhrasing(text: string): string {
+  private static stripConversationalPhrasing(text: string): { cleanText: string; hasCommandIntent: boolean } {
     let result = text.toLowerCase().trim();
+    let hasCommandIntent = false;
 
     // Remove trailing punctuation
     result = result.replace(/[.,!?]+$/, "");
@@ -1177,7 +1179,10 @@ export class BibleService {
     ];
 
     for (const prefix of prefixes) {
-      result = result.replace(prefix, "");
+      if (prefix.test(result)) {
+        hasCommandIntent = true;
+        result = result.replace(prefix, "");
+      }
     }
 
     // Conversational suffixes to strip
@@ -1200,10 +1205,13 @@ export class BibleService {
     ];
 
     for (const suffix of suffixes) {
-      result = result.replace(suffix, "");
+      if (suffix.test(result)) {
+        hasCommandIntent = true;
+        result = result.replace(suffix, "");
+      }
     }
 
-    return result.trim();
+    return { cleanText: result.trim(), hasCommandIntent };
   }
 
   /**
@@ -1618,13 +1626,20 @@ export class BibleService {
    *
    * Uses memoization cache to avoid re-parsing repeated commands
    */
-  static parseVoiceCommandOptimized(text: string): VoiceCommand {
+  static parseVoiceCommandOptimized(
+    text: string,
+    options: { strictMode?: boolean } = { strictMode: false }
+  ): VoiceCommand {
     const startTime = performance.now();
 
     // ========== PREPROCESSING: Strip conversational phrasing FIRST ==========
     // This ensures "can you show me the next verse please" becomes "next verse"
-    let cleanText = this.stripConversationalPhrasing(text);
+    let { cleanText, hasCommandIntent } = this.stripConversationalPhrasing(text);
     const lowerClean = cleanText.toLowerCase().trim();
+    
+    // In Strict Mode, if there's no command intent (i.e. just "are we doing John 3:16"),
+    // we heavily penalize the final confidence score or drop it entirely.
+    const intentPenalty = (options.strictMode && !hasCommandIntent) ? 0.3 : 1.0;
 
     // ========== STAGE 0: Navigation commands (fastest - no book lookup needed) ==========
     if (REGEX_PATTERNS.next.test(lowerClean)) {
@@ -1636,7 +1651,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "verse_change",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         navigationDirection: "next",
       };
     }
@@ -1650,7 +1665,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "verse_change",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         navigationDirection: "previous",
       };
     }
@@ -1664,7 +1679,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "chapter_change",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         navigationDirection: "next",
       };
     }
@@ -1678,7 +1693,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "chapter_change",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         navigationDirection: "previous",
       };
     }
@@ -1694,7 +1709,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "jump_to_verse",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         targetVerse,
       };
     }
@@ -1708,7 +1723,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "jump_to_verse",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         targetVerse: 1,
       };
     }
@@ -1722,7 +1737,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "last_verse",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
       };
     }
 
@@ -1740,7 +1755,7 @@ export class BibleService {
         originalText: text,
         parsedReference: null,
         commandType: "jump_relative",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
         offset,
       };
     }
@@ -1763,7 +1778,7 @@ export class BibleService {
           originalText: text,
           parsedReference: null,
           commandType: "version_change",
-          confidence: 0.95,
+          confidence: 0.95 * intentPenalty,
           requestedVersion,
         };
       }
@@ -1792,7 +1807,7 @@ export class BibleService {
         originalText: text,
         parsedReference: regexResult,
         commandType: "lookup",
-        confidence: 0.95,
+        confidence: 0.95 * intentPenalty,
       };
     }
 
@@ -1813,7 +1828,7 @@ export class BibleService {
             version: "kjv",
           },
           commandType: "lookup",
-          confidence: 0.92,
+          confidence: 0.92 * intentPenalty,
         };
       }
     }
@@ -1845,7 +1860,7 @@ export class BibleService {
               version: "kjv",
             },
             commandType: "lookup",
-            confidence: fuzzyResult.score * 0.85,
+            confidence: fuzzyResult.score * 0.85 * intentPenalty,
           };
         }
       }

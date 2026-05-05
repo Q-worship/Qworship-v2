@@ -288,7 +288,7 @@ export const useHandsfreeBible = ({
     }, INACTIVITY_TIMEOUT_MS);
   }, [clearInactivityTimer, stopRecording]);
 
-  const { connect, disconnect, sendPCMData, isConnected } = useRealtimeSocket({
+  const { connect, disconnect, sendPCMData, isConnected, setStrictMode } = useRealtimeSocket({
     onBibleMatch: (data: any) => {
       resetInactivityTimer();
       handleBibleMatch(data);
@@ -332,6 +332,15 @@ export const useHandsfreeBible = ({
       executeNavigation(commandType, direction, targetVerse, offset);
     },
   });
+
+  const hfbStrictMode = useHFBStore((state) => state.hfbStrictMode);
+
+  // Sync strict mode to the backend
+  useEffect(() => {
+    if (isConnected) {
+      setStrictMode(hfbStrictMode);
+    }
+  }, [isConnected, hfbStrictMode, setStrictMode]);
 
   // Position recalculation on resize (only if not dragged)
   useEffect(() => {

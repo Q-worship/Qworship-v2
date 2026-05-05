@@ -36,6 +36,10 @@ interface HFBStore {
   hfbVersion: string;
   setHfbVersion: (version: string) => void;
 
+  // Strict Mode
+  hfbStrictMode: boolean;
+  setHfbStrictMode: (strict: boolean) => void;
+
   // Chapter viewer state
   hfbBookName: string;
   hfbChapter: number;
@@ -71,6 +75,9 @@ interface HFBStore {
 export const useHFBStore = create<HFBStore>((set) => ({
   hfbVersion: 'KJV',
   setHfbVersion: (version) => set({ hfbVersion: version }),
+
+  hfbStrictMode: false,
+  setHfbStrictMode: (strict) => set({ hfbStrictMode: strict }),
 
   hfbBookName: '',
   hfbChapter: 0,
