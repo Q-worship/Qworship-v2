@@ -92,8 +92,14 @@ export function setupAudioSocket(server: Server) {
 
         const command = BibleService.parseVoiceCommandOptimized(rollingContext, { strictMode: isStrictMode });
 
-        // For partials, only act on high confidence deterministic matches
+        // Enforce strict confidence thresholds to prevent random phrase matches
+        // For partial transcripts, require very high confidence (>= 0.9) to prevent hallucination flicker
+        // For final transcripts, require good confidence (>= 0.7)
         if (isPartial && command.confidence < 0.9) {
+          return;
+        }
+        if (!isPartial && command.confidence < 0.7) {
+          console.log(`[AudioSocket] Ignored final transcript due to low confidence (${command.confidence}): "${text}"`);
           return;
         }
 
@@ -155,13 +161,8 @@ export function setupAudioSocket(server: Server) {
             transcriptBuffer = "";
           }
         } else if (!isPartial) {
-          // AI Fallback only for final transcripts, and ONLY if we aren't heavily penalized by strict mode
-          if (isStrictMode && command.confidence < 0.5) {
-             console.log(`[AudioSocket] Ignoring conversational text in Strict Mode: "${text}"`);
-             return;
-          }
           console.log(
-            `[AudioSocket] Deterministic parse failed for: "${text}". Invoking AI fallback...`,
+            `[AudioSocket] Deterministic parse failed or was rejected for: "${text}". Invoking AI fallback...`,
           );
           const fallbackRef = await extractReferenceWithAI(text);
           if (fallbackRef) {

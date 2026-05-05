@@ -1169,7 +1169,7 @@ export class BibleService {
       /^hey,?\s+(show|read|find|get|display|open)\s+(me\s+)?/i,
       /^ok(ay)?,?\s+(show|read|find|get|display|open)\s+(me\s+)?/i,
       /^alright,?\s+(show|read|find|get|display|open)\s+(me\s+)?/i,
-      // Simple prefixes
+      // Simple prefixes (DO NOT count as command intent)
       /^the book of\s+/i,
       /^book of\s+/i,
       /^(the\s+)?passage\s+(from\s+)?/i,
@@ -1178,10 +1178,14 @@ export class BibleService {
       /^(the\s+)?text\s+(from\s+)?/i,
     ];
 
-    for (const prefix of prefixes) {
-      if (prefix.test(result)) {
-        hasCommandIntent = true;
-        result = result.replace(prefix, "");
+    const COMMAND_PREFIX_COUNT = prefixes.length - 6; // the last 6 are simple prefixes
+
+    for (let i = 0; i < prefixes.length; i++) {
+      if (prefixes[i].test(result)) {
+        if (i < COMMAND_PREFIX_COUNT) {
+          hasCommandIntent = true;
+        }
+        result = result.replace(prefixes[i], "");
       }
     }
 
@@ -1206,7 +1210,7 @@ export class BibleService {
 
     for (const suffix of suffixes) {
       if (suffix.test(result)) {
-        hasCommandIntent = true;
+        // Suffixes are just conversational filler, they DO NOT indicate a strict command intent
         result = result.replace(suffix, "");
       }
     }
@@ -1559,10 +1563,15 @@ export class BibleService {
     const hasBookOrChapterContext = /\b(chapter|genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms|psalm|proverbs|ecclesiastes|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|zephaniah|haggai|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|philemon|hebrews|james|peter|jude|revelation)\b/i.test(result);
 
     for (const [pattern, replacement] of this.KEYWORD_CORRECTIONS) {
-      // Skip "was → verse" patterns unless there's clear biblical context.
-      // pattern.source for /\bwas\s+to\b/ is the string "\bwas\s+to\b"
-      const isWasPattern = /\\bwas\\s/.test(pattern.source);
-      if (isWasPattern && !hasBookOrChapterContext) {
+      // Skip aggressive patterns unless there's clear biblical context.
+      const sourceStr = pattern.source;
+      const isAggressivePattern = 
+        sourceStr.includes("\\bwas\\s") || 
+        sourceStr.includes("first of the") || 
+        sourceStr.includes("second of the") || 
+        sourceStr.includes("so much");
+        
+      if (isAggressivePattern && !hasBookOrChapterContext) {
         continue;
       }
       if (pattern.test(result)) {
