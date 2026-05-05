@@ -172,18 +172,19 @@ export function parseChapterVerse(
   }
 
   const patterns = [
-    // chapter X verse Y to Z (e.g., "chapter 3 and verse 16")
+    // 0: chapter X verse Y to Z (e.g., "chapter 3 and verse 16")
     /^chapter\s+(\d+)(?:[,:\s]+(?:and\s+)?(?:verse\s+)?)(\d+)(?:\s*(?:to|through|-|and)\s*(\d+))?/i,
-    // X : Y - Z (e.g., "3:16-17")
+    // 1: X : Y - Z (e.g., "3:16-17")
     /(?:^|\s)(\d+)\s*:\s*(\d+)(?:\s*(?:to|through|-|and)\s*(\d+))?/,
-    // X Y to Z (e.g., "3 16" or "3 16 to 17") - Look for pairs of numbers
-    /(?:^|\s)(\d+)[,\s]+(?:and\s+)?(?:verse\s+)?(\d+)(?:\s*(?:to|through|-|and)\s*(\d+))?/,
-    // verse Y of chapter X
-    /(?:verse\s+)?(\d+)\s+(?:of\s+)?chapter\s+(\d+)(?:\s*(?:to|through|-|and)\s*(\d+))?/i,
-    // chapter X
-    /(?:^|\s)chapter\s+(\d+)/i,
-    // just X (assume chapter X, verse 1)
-    /^(\d+)$/,
+    // 2: X Y to Z (e.g., "3 16" or "3 16 to 17") - ONLY match if it's near the start of the remaining text
+    // This prevents "Mark my words 5 6" from matching 5 6 deep in the string.
+    /^[\s,.]*(?:the\s+)?(\d+)[,\s]+(?:and\s+)?(?:verse\s+)?(\d+)(?:\s*(?:to|through|-|and)\s*(\d+))?/i,
+    // 3: verse Y of chapter X
+    /^(?:verse\s+)?(\d+)\s+(?:of\s+)?chapter\s+(\d+)(?:\s*(?:to|through|-|and)\s*(\d+))?/i,
+    // 4: chapter X
+    /^(?:^|\s)chapter\s+(\d+)/i,
+    // 5: just X (assume chapter X, verse 1)
+    /^[\s,.]*(\d+)$/,
   ];
 
   const matchPatterns = (inputStr: string) => {

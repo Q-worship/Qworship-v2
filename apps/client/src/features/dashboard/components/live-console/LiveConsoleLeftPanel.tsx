@@ -209,6 +209,14 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                   );
                 })
               )}
+              {hfbStore.hfbCurrentPartial && (
+                <div className="flex gap-1.5 items-start pl-1.5 border-l-2 border-cyan-500/30 -ml-0.5 opacity-60">
+                  <span className="text-[8px] text-gray-700 shrink-0 mt-0.5 whitespace-nowrap">NOW</span>
+                  <span className="text-[10px] leading-snug text-cyan-200 italic">
+                    {hfbStore.hfbCurrentPartial}
+                  </span>
+                </div>
+              )}
               <div ref={transcriptEndRef} />
             </div>
           </div>

@@ -1169,7 +1169,18 @@ export class BibleService {
       /^hey,?\s+(show|read|find|get|display|open)\s+(me\s+)?/i,
       /^ok(ay)?,?\s+(show|read|find|get|display|open)\s+(me\s+)?/i,
       /^alright,?\s+(show|read|find|get|display|open)\s+(me\s+)?/i,
+      /^i\s+mean,?\s+(let's\s+)?(go\s+to|open|read|show|find|get)\s+(the\s+)?/i,
+      /^i\s+want\s+to\s+(go\s+to|open|read|show|find|get)\s+(the\s+)?/i,
+      /^can\s+we\s+(go\s+to|open|read|show|find|get|look\s+at)\s+(the\s+)?/i,
+      /^we\s+are\s+looking\s+at\s+(the\s+)?/i,
+      /^let's\s+look\s+at\s+(the\s+)?/i,
+      /^let's\s+(go\s+to|open|read|find|get|display)\s+(the\s+)?/i,
+      /^so,?\s+why\s+don't\s+we\s+(go\s+to|open|read|show|find|get)\s+(the\s+)?/i,
+      /^so,?\s+(let's\s+)?(go\s+to|open|read|show|find|get)\s+(the\s+)?/i,
+      /^so\s+for\s+today,?\s+(we\s+are\s+looking\s+at|let's\s+go\s+to)\s+(the\s+)?/i,
       // Simple prefixes (DO NOT count as command intent)
+      /^i\s+mean,?\s+/i,
+      /^so,?\s+/i,
       /^the book of\s+/i,
       /^book of\s+/i,
       /^(the\s+)?passage\s+(from\s+)?/i,
@@ -1178,7 +1189,7 @@ export class BibleService {
       /^(the\s+)?text\s+(from\s+)?/i,
     ];
 
-    const COMMAND_PREFIX_COUNT = prefixes.length - 6; // the last 6 are simple prefixes
+    const COMMAND_PREFIX_COUNT = prefixes.length - 8; // the last 8 are simple prefixes
 
     for (let i = 0; i < prefixes.length; i++) {
       if (prefixes[i].test(result)) {
@@ -1599,7 +1610,7 @@ export class BibleService {
       .replace(/\btwelve\b/g, "12");
 
     const hasChapterVerseContext =
-      /\b(chapter|verse|\d+\s*:\s*\d+|\d+\s+\d+)\b/i.test(result);
+      /\b(chapter|verse|\d+\s*:\s*\d+)\b/i.test(result);
     const sortedKeys = Object.keys(this.PHONETIC_CORRECTIONS).sort(
       (a, b) => b.length - a.length,
     );
@@ -1827,6 +1838,21 @@ export class BibleService {
       if (chapterVerse) {
         const duration = performance.now() - startTime;
         console.log(`⚡ Stage 2: Alias lookup in ${duration.toFixed(2)}ms`);
+        
+        // COMMON NOUN PENALTY:
+        // If the book name is a common English word (Mark, Job, Acts, Judges, Numbers, Luke)
+        // AND the user didn't explicitly say "chapter" or use a colon (indicated by hasCommandIntent or specific formatting)
+        // we apply an extra confidence penalty to prevent false positives from casual speech.
+        const commonNouns = ["mark", "job", "acts", "judges", "numbers", "luke"];
+        const isCommonNoun = commonNouns.includes(book.name.toLowerCase());
+        const usedExplicitFormatting = /\b(chapter|verse|\d+\s*:\s*\d+)\b/i.test(normalizedText);
+        
+        let finalConfidence = 0.92 * intentPenalty;
+        if (isCommonNoun && !usedExplicitFormatting && !hasCommandIntent) {
+          finalConfidence *= 0.6; // drops from 0.92 -> 0.55, which fails the 0.7 threshold in audio.socket.ts
+          console.log(`⚠️ Applied Common Noun Penalty to "${book.name}": Confidence dropped to ${finalConfidence.toFixed(2)}`);
+        }
+
         return {
           originalText: text,
           parsedReference: {
@@ -1837,7 +1863,7 @@ export class BibleService {
             version: "kjv",
           },
           commandType: "lookup",
-          confidence: 0.92 * intentPenalty,
+          confidence: finalConfidence,
         };
       }
     }
@@ -1859,6 +1885,19 @@ export class BibleService {
           console.log(
             `⚡ Stage 3: Fuzzy match in ${duration.toFixed(2)}ms (score: ${fuzzyResult.score.toFixed(2)})`,
           );
+          
+          let finalConfidence = fuzzyResult.score * 0.85 * intentPenalty;
+          
+          // COMMON NOUN PENALTY FOR FUZZY MATCHER
+          const commonNouns = ["mark", "job", "acts", "judges", "numbers", "luke", "amos", "james", "peter", "jude", "titus", "john"];
+          const isCommonNoun = commonNouns.includes(fuzzyResult.book.name.toLowerCase());
+          const usedExplicitFormatting = /\b(chapter|verse|\d+\s*:\s*\d+)\b/i.test(normalizedText);
+          
+          if (isCommonNoun && !usedExplicitFormatting && !hasCommandIntent) {
+            finalConfidence *= 0.6;
+            console.log(`⚠️ Applied Common Noun Penalty (Fuzzy) to "${fuzzyResult.book.name}": Confidence dropped to ${finalConfidence.toFixed(2)}`);
+          }
+
           return {
             originalText: text,
             parsedReference: {
@@ -1869,18 +1908,23 @@ export class BibleService {
               version: "kjv",
             },
             commandType: "lookup",
-            confidence: fuzzyResult.score * 0.85 * intentPenalty,
+            confidence: finalConfidence,
           };
         }
       }
     }
 
-    // ========== FALLBACK: Original parser ==========
+    // ========== NO FALLBACK: Ensure strict mode is always enforced ==========
     const duration = performance.now() - startTime;
     console.log(
-      `⚠️ Falling back to legacy parser after ${duration.toFixed(2)}ms`,
+      `❌ No command detected after ${duration.toFixed(2)}ms (Strict Mode: ${options.strictMode})`,
     );
-    return this.parseVoiceCommand(text);
+    return {
+      originalText: text,
+      parsedReference: null,
+      commandType: "lookup",
+      confidence: 0,
+    };
   }
 
   /**

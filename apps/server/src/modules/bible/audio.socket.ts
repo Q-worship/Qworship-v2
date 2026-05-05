@@ -11,62 +11,6 @@ function getOpenAI() {
   return _openai;
 }
 
-/**
- * LLM fallback: ask GPT-4o-mini to extract a Bible reference from spoken text.
- * Returns a BibleReference-compatible object or null.
- */
-async function extractReferenceWithAI(transcript: string): Promise<{
-  book: string;
-  chapter: number;
-  verseStart: number;
-  verseEnd?: number;
-} | null> {
-  try {
-    const openai = getOpenAI();
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a Bible reference extractor. The user will give you a spoken sentence and you must extract the Bible reference if one exists. " +
-            'Respond ONLY with a compact JSON object. Example: {"book":"John","chapter":3,"verseStart":16} ' +
-            'or {"book":"Genesis","chapter":1,"verseStart":1,"verseEnd":3}. ' +
-            'If no Bible reference can be identified, respond with: {"error":"no_reference"}. ' +
-            "For numbered books, use the full canonical name e.g. '1 John', '2 Samuel'.",
-        },
-        {
-          role: "user",
-          content: transcript,
-        },
-      ],
-      temperature: 0,
-      max_tokens: 80,
-    });
-
-    const raw = response.choices[0]?.message?.content?.trim();
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw);
-    if (parsed.error || !parsed.book || !parsed.chapter || !parsed.verseStart) {
-      return null;
-    }
-
-    console.log(
-      `[AI Fallback] Extracted reference: ${parsed.book} ${parsed.chapter}:${parsed.verseStart}`,
-    );
-    return {
-      book: parsed.book,
-      chapter: Number(parsed.chapter),
-      verseStart: Number(parsed.verseStart),
-      verseEnd: parsed.verseEnd ? Number(parsed.verseEnd) : undefined,
-    };
-  } catch (err) {
-    console.error("[AI Fallback] Failed to extract reference:", err);
-    return null;
-  }
-}
-
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
@@ -81,121 +25,86 @@ export function setupAudioSocket(server: Server) {
 
     let lastExecutedCommandTime = 0;
     let isStrictMode = false;
+    let rawUIBuffer = ""; // Added for instant Whisper UI feedback
+    let currentContext: any = null; // Track current book/chapter for AI context
 
+    /**
+     * DORMANT: Legacy deterministic parser.
+     * We have moved to AI-Native Tool Calling for superior accuracy and zero hallucinations.
+     */
     const processTranscript = async (text: string, isPartial: boolean) => {
-      if (!text || text.trim().length < 3) return;
-
-      try {
-        // SCALPEL: Slice the block down to STRICTLY the last 25 words
-        const words = text.trim().split(/\s+/);
-        const rollingContext = words.slice(-25).join(" ");
-
-        const command = BibleService.parseVoiceCommandOptimized(rollingContext, { strictMode: isStrictMode });
-
-        // Enforce strict confidence thresholds to prevent random phrase matches
-        // For partial transcripts, require very high confidence (>= 0.9) to prevent hallucination flicker
-        // For final transcripts, require good confidence (>= 0.7)
-        if (isPartial && command.confidence < 0.9) {
-          return;
-        }
-        if (!isPartial && command.confidence < 0.7) {
-          console.log(`[AudioSocket] Ignored final transcript due to low confidence (${command.confidence}): "${text}"`);
-          return;
-        }
-
-        const now = Date.now();
-        // Prevent duplicate execution of the same command within a short window
-        if (now - lastExecutedCommandTime < 2500) {
-          return;
-        }
-
-        // Execute the command
-        lastExecutedCommandTime = now;
-
-        if (command.commandType === "sleep") {
-          ws.send(JSON.stringify({ type: "sleep_command" }));
-          transcriptBuffer = "";
-        } else if (command.commandType === "wake") {
-          ws.send(JSON.stringify({ type: "wake_command" }));
-          transcriptBuffer = "";
-        } else if (
-          command.commandType === "version_change" &&
-          command.requestedVersion
-        ) {
-          ws.send(
-            JSON.stringify({
-              type: "version_change",
-              requestedVersion: command.requestedVersion,
-            }),
-          );
-          transcriptBuffer = "";
-        } else if (
-          command.commandType === "verse_change" ||
-          command.commandType === "chapter_change" ||
-          command.commandType === "jump_to_verse" ||
-          command.commandType === "last_verse" ||
-          command.commandType === "jump_relative"
-        ) {
-          ws.send(
-            JSON.stringify({
-              type: "navigation",
-              commandType: command.commandType,
-              direction: command.navigationDirection,
-              targetVerse: command.targetVerse,
-              offset: command.offset,
-            }),
-          );
-          transcriptBuffer = "";
-        } else if (command.parsedReference) {
-          const result = await BibleService.searchBible(
-            command.parsedReference,
-          );
-          if (result) {
-            ws.send(
-              JSON.stringify({
-                type: "bible_match",
-                result: result,
-                commandType: command.commandType,
-              }),
-            );
-            transcriptBuffer = "";
-          }
-        } else if (!isPartial) {
-          console.log(
-            `[AudioSocket] Deterministic parse failed or was rejected for: "${text}". Invoking AI fallback...`,
-          );
-          const fallbackRef = await extractReferenceWithAI(text);
-          if (fallbackRef) {
-            const result = await BibleService.searchBible(fallbackRef);
-            if (result) {
-              ws.send(
-                JSON.stringify({
-                  type: "bible_match",
-                  result: result,
-                  commandType: "lookup",
-                  source: "ai_fallback",
-                }),
-              );
-            }
-          }
-        }
-      } catch (err) {
-        console.error("[AudioSocket] Error processing Voice Command:", err);
-      }
+       // This function is now just a placeholder to prevent crashes elsewhere.
+       // The actual execution logic is handled in the 'command' event below.
+       if (text.includes("[UNINTELLIGIBLE]")) {
+         transcriptBuffer = "";
+       }
     };
 
-    transcriptionService.on("partial", async (text: string) => {
+    // Handle AI Native Commands (Tool Calling)
+    transcriptionService.on("command", async (cmd: any) => {
+      console.log(`[AudioSocket] Executing AI Command: ${cmd.name}`, cmd.arguments);
+      
+      const now = Date.now();
+      if (now - lastExecutedCommandTime < 1500) return; // Throttling
+      lastExecutedCommandTime = now;
+
+      if (cmd.name === "project_bible_reference") {
+        const { book, chapter, verse_start, verse_end, version } = cmd.arguments;
+        const result = await BibleService.searchBible({
+          book,
+          chapter,
+          verseStart: verse_start,
+          verseEnd: verse_end,
+          version: version?.toLowerCase() || "kjv"
+        });
+
+        if (result) {
+          ws.send(JSON.stringify({
+            type: "bible_match",
+            result: result,
+            commandType: "lookup"
+          }));
+          
+          currentContext = {
+            book: result.book,
+            chapter: result.chapter,
+            verseStart: result.verses[0].verse
+          };
+          transcriptionService.setContext(currentContext);
+        }
+      } else if (cmd.name === "navigate_bible") {
+        ws.send(JSON.stringify({
+          type: "navigation",
+          commandType: cmd.arguments.scope === "chapter" ? "chapter_change" : "verse_change",
+          direction: cmd.arguments.direction,
+        }));
+      } else if (cmd.name === "switch_bible_version") {
+        ws.send(JSON.stringify({
+          type: "version_change",
+          requestedVersion: cmd.arguments.version.toLowerCase()
+        }));
+      }
+    });
+
+    transcriptionService.on("partial_raw", (delta: string) => {
+      rawUIBuffer += delta;
       ws.send(
         JSON.stringify({
           type: "transcript_partial",
-          text: text,
+          text: rawUIBuffer,
         }),
       );
-      await processTranscript(text, true);
+    });
+
+    transcriptionService.on("partial", async (delta: string) => {
+      transcriptBuffer += delta;
+      await processTranscript(transcriptBuffer, true);
     });
 
     transcriptionService.on("final", async (text: string) => {
       console.log(`[AudioSocket] Final Transcript: ${text}`);
+      transcriptBuffer = ""; 
+      rawUIBuffer = ""; 
       ws.send(
         JSON.stringify({
           type: "transcript_final",
@@ -215,7 +124,6 @@ export function setupAudioSocket(server: Server) {
     });
 
     ws.on("message", async (data: Buffer | string) => {
-      // Check for control messages
       if (typeof data === "string") {
         try {
           const msg = JSON.parse(data);
@@ -223,13 +131,9 @@ export function setupAudioSocket(server: Server) {
             isStrictMode = !!msg.strictMode;
             console.log(`[AudioSocket] Strict mode set to ${isStrictMode}`);
           }
-        } catch (e) {
-          // Ignore parse errors, might be string-encoded audio in some browsers
-        }
+        } catch (e) {}
         return;
       }
-      
-      // Forward incoming audio bytes strictly to OpenAI
       transcriptionService.processAudioChunk(data);
     });
 

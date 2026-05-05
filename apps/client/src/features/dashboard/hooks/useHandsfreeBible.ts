@@ -296,10 +296,12 @@ export const useHandsfreeBible = ({
     onPartialTranscript: (text) => {
       resetInactivityTimer();
       setMicrophoneStatus("Processing");
+      useHFBStore.getState().setHfbCurrentPartial(text);
     },
     onFinalTranscript: (text) => {
       resetInactivityTimer();
       setMicrophoneStatus("Listening");
+      useHFBStore.getState().setHfbCurrentPartial(""); // Clear partial when final arrives
       if (text.trim()) {
         useHFBStore.getState().addHfbTranscriptLine({
           id: Date.now(),

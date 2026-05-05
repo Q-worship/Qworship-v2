@@ -55,6 +55,8 @@ interface HFBStore {
   hfbTranscriptLines: HFBTranscriptLine[];
   addHfbTranscriptLine: (line: HFBTranscriptLine) => void;
   clearHfbTranscript: () => void;
+  hfbCurrentPartial: string;
+  setHfbCurrentPartial: (text: string) => void;
 
   // Detected verses
   hfbDetectedVerses: HFBDetectedVerse[];
@@ -92,6 +94,8 @@ export const useHFBStore = create<HFBStore>((set) => ({
   hfbTranscriptLines: [],
   addHfbTranscriptLine: (line) => set((state) => ({ hfbTranscriptLines: [...state.hfbTranscriptLines, line] })),
   clearHfbTranscript: () => set({ hfbTranscriptLines: [] }),
+  hfbCurrentPartial: '',
+  setHfbCurrentPartial: (text) => set({ hfbCurrentPartial: text }),
 
   hfbDetectedVerses: [],
   setHfbDetectedVerses: (verses) => set((state) => ({

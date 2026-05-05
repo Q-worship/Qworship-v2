@@ -8,9 +8,97 @@ export class TranscriptionService extends EventEmitter {
   private readonly apiUrl =
     "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
   private isConnected = false;
+  private currentContext: any = null;
 
   constructor() {
     super();
+  }
+
+  public setContext(context: any) {
+    this.currentContext = context;
+    if (this.isConnected) {
+      this.updateSession();
+    }
+  }
+
+  private updateSession() {
+    if (!this.openaiWs || !this.isConnected) return;
+
+    const contextStr = this.currentContext 
+      ? `Current Reference: ${this.currentContext.book} ${this.currentContext.chapter}:${this.currentContext.verseStart}`
+      : "No current reference.";
+
+    this.openaiWs.send(
+      JSON.stringify({
+        type: "session.update",
+        session: {
+          modalities: ["text"],
+          instructions:
+            `You are a professional AI Bible Assistant for a church service. ${contextStr} ` +
+            "Your job is to transcribe the audio AND execute commands using the provided tools. " +
+            "1. ALWAYS output the exact transcript of what the user said. " +
+            "2. If the user gives a command (e.g. 'Go to John 3:16', 'Next verse', 'Switch to NIV'), call the appropriate tool. " +
+            "3. If the audio is just noise or unclear, output '[UNINTELLIGIBLE]' and do NOT call any tools. " +
+            "4. NEVER be conversational. NEVER apologize. ONLY output the transcript.",
+          input_audio_format: "pcm16",
+          input_audio_transcription: {
+            model: "whisper-1",
+            language: "en",
+          },
+          voice: "alloy",
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 600,
+          },
+          tools: [
+            {
+              type: "function",
+              name: "project_bible_reference",
+              description: "Lookup and project a specific Bible verse or range.",
+              parameters: {
+                type: "object",
+                properties: {
+                  book: { type: "string", description: "The name of the Bible book." },
+                  chapter: { type: "number", description: "The chapter number." },
+                  verse_start: { type: "number", description: "The starting verse number." },
+                  verse_end: { type: "number", description: "The optional ending verse number." },
+                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV"], description: "The Bible version." }
+                },
+                required: ["book", "chapter", "verse_start"]
+              }
+            },
+            {
+              type: "function",
+              name: "navigate_bible",
+              description: "Navigate to the next/previous verse or chapter relative to the current one.",
+              parameters: {
+                type: "object",
+                properties: {
+                  direction: { type: "string", enum: ["next", "previous"] },
+                  scope: { type: "string", enum: ["verse", "chapter"] }
+                },
+                required: ["direction", "scope"]
+              }
+            },
+            {
+              type: "function",
+              name: "switch_bible_version",
+              description: "Switch the current Bible version.",
+              parameters: {
+                type: "object",
+                properties: {
+                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV"] }
+                },
+                required: ["version"]
+              }
+            }
+          ],
+          tool_choice: "auto",
+        },
+      }),
+    );
   }
 
   public connect() {
@@ -33,29 +121,7 @@ export class TranscriptionService extends EventEmitter {
     this.openaiWs.on("open", () => {
       this.isConnected = true;
       console.log("[Transcription] Connected to OpenAI Realtime API");
-
-      this.openaiWs?.send(
-        JSON.stringify({
-          type: "session.update",
-          session: {
-            modalities: ["text"], // Only requesting text out from audio in
-            instructions:
-              "You are a raw audio-to-text phonetic correction engine. Your ONLY job is to output the transcript of the audio. NEVER act conversational. NEVER apologize. NEVER say 'I did not catch that' or 'Please repeat'. NEVER reply to the user. If the audio is empty, unclear, or you cannot understand it, simply output the exact word '[UNINTELLIGIBLE]' and nothing else. Fix phonetic errors into proper Bible books (Genesis, Exodus, Leviticus, Numbers, Deuteronomy, Joshua, Judges, Ruth, Samuel, Kings, Chronicles, Ezra, Nehemiah, Esther, Job, Psalms, Proverbs, Ecclesiastes, Song of Solomon, Isaiah, Jeremiah, Lamentations, Ezekiel, Daniel, Hosea, Joel, Amos, Obadiah, Jonah, Micah, Nahum, Habakkuk, Zephaniah, Haggai, Zechariah, Malachi, Matthew, Mark, Luke, John, Acts, Romans, Corinthians, Galatians, Ephesians, Philippians, Colossians, Thessalonians, Timothy, Titus, Philemon, Hebrews, James, Peter, Jude, Revelation). Output the pure transcript and absolutely nothing else.",
-            input_audio_format: "pcm16",
-            input_audio_transcription: {
-              model: "whisper-1",
-              language: "en",
-            },
-            voice: "alloy",
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500,
-            },
-          },
-        }),
-      );
+      this.updateSession();
     });
 
     this.openaiWs.on("message", (data: WebSocket.Data) => {
@@ -137,29 +203,47 @@ export class TranscriptionService extends EventEmitter {
 
   private handleOpenAIEvent(event: any) {
     switch (event.type) {
-      // 1. REAL-TIME UI FEEDBACK: Stream fast phonetic guesses from Whisper for instant visual typing effect
+      // 1. RAW WHISPER DELTA: Extremely fast (100ms lag). 
+      // Use this for the "NOW" typing feedback in the UI.
       case "conversation.item.input_audio_transcription.delta":
-        this.emit("partial", event.delta);
+        this.emit("partial_raw", event.delta); 
         break;
 
-      // 2. IGNORE WHISPER'S FINAL TRANSCRIPT: Because it suffers from phonetic hallucinations ("JoJo666")
+      // 2. USER TRANSCRIPT COMPLETED: Emit the original transcript for the UI history.
       case "conversation.item.input_audio_transcription.completed":
+        if (event.transcript) {
+          this.emit("final", event.transcript);
+        }
         break;
 
       // 3. ACTUAL FINAL EXECUTION: Triggered ~500ms after the user stops speaking.
       // GPT-4o processes the audio natively, fixing phonetic errors Whisper couldn't understand.
-      case "response.text.done":
-        if (event.text && !event.text.includes("[UNINTELLIGIBLE]")) {
-          // If the model still tries to apologize due to LLM stubbornness, drop it.
-          const lowerText = event.text.toLowerCase();
-          if (!lowerText.includes("could you please repeat") && !lowerText.includes("i did not catch that") && !lowerText.includes("complete sentence")) {
-            this.emit("final", event.text);
+      case "response.done":
+        if (event.response?.output) {
+          for (const item of event.response.output) {
+            if (item.type === "function_call") {
+              console.log(`[Transcription] AI Tool Call: ${item.name}`, item.arguments);
+              try {
+                const args = JSON.parse(item.arguments);
+                this.emit("command", {
+                  name: item.name,
+                  arguments: args
+                });
+              } catch (e) {
+                console.error("Failed to parse tool arguments", e);
+              }
+            } else if (item.type === "message" && item.content) {
+              // We already emit 'final' from Whisper completed above, 
+              // but we can log the LLM's corrected version here if we want.
+            }
           }
         }
         break;
 
       case "response.text.delta":
       case "response.audio_transcript.delta":
+        // This is the LLM-corrected transcript delta. It follows our instructions.
+        this.emit("partial", event.delta);
         break;
     }
   }
