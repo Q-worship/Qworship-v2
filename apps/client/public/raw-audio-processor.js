@@ -1,7 +1,9 @@
 class RawAudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 4096;
+    // OPTIMIZATION: Reduce buffer size from 4096 to 1024.
+    // At 48kHz, 1024 samples = ~21ms. This sends audio to the server much faster.
+    this.bufferSize = 1024;
     this.buffer = new Float32Array(this.bufferSize);
     this.bufferIndex = 0;
   }
@@ -12,8 +14,6 @@ class RawAudioProcessor extends AudioWorkletProcessor {
 
     const channelData = input[0];
     
-    // In an AudioWorklet, process() is called with 128 frames at a time.
-    // We accumulate them until we reach our target buffer size.
     for (let i = 0; i < channelData.length; i++) {
       this.buffer[this.bufferIndex++] = channelData[i];
       
@@ -26,22 +26,16 @@ class RawAudioProcessor extends AudioWorkletProcessor {
   }
 
   flush() {
-    // We have `sampleRate` available globally in the AudioWorkletProcessor
-    const inputSampleRate = sampleRate;
-    const targetSampleRate = 24000;
-    const ratio = Math.floor(inputSampleRate / targetSampleRate);
-    const step = ratio > 0 ? ratio : 1;
-
-    const pcm16 = new Int16Array(Math.floor(this.bufferSize / step));
-    let outIndex = 0;
+    // Convert Float32 to Int16 PCM
+    // We assume the AudioContext is already at the target sample rate (e.g. 24kHz)
+    // to avoid expensive interpolation in the worklet thread.
+    const pcm16 = new Int16Array(this.bufferSize);
     
-    for (let i = 0; i < this.bufferSize; i += step) {
+    for (let i = 0; i < this.bufferSize; i++) {
       let s = Math.max(-1, Math.min(1, this.buffer[i]));
-      // Convert Float32 to Int16 PCM
-      pcm16[outIndex++] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
 
-    // Post the PCM16 buffer to the main thread
     this.port.postMessage(pcm16);
     this.bufferIndex = 0;
   }

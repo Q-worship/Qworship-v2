@@ -9,6 +9,8 @@ export class TranscriptionService extends EventEmitter {
     "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17";
   private isConnected = false;
   private currentContext: any = null;
+  private turnCount: number = 0;
+  private itemIds: string[] = []; // Track item IDs for pruning
 
   constructor() {
     super();
@@ -34,12 +36,14 @@ export class TranscriptionService extends EventEmitter {
         session: {
           modalities: ["text"],
           instructions:
-            `You are a professional AI Bible Assistant for a church service. ${contextStr} ` +
-            "Your job is to transcribe the audio AND execute commands using the provided tools. " +
-            "1. ALWAYS output the exact transcript of what the user said. " +
-            "2. If the user gives a command (e.g. 'Go to John 3:16', 'Next verse', 'Switch to NIV'), call the appropriate tool. " +
-            "3. If the audio is just noise or unclear, output '[UNINTELLIGIBLE]' and do NOT call any tools. " +
-            "4. NEVER be conversational. NEVER apologize. ONLY output the transcript.",
+            `You are a specialized Sermon-to-Scripture AI Engine. ${contextStr} ` +
+            "TOOL CALLING: You are a command-centric engine. If the user says 'next verse', 'previous chapter', 'go back', " +
+            "or mentions a version like 'NKJV' or 'NIV', you MUST call the corresponding tool immediately. " +
+            "If they say a number like '11' and a verse was just projected, assume they mean 'verse 11' of the same chapter. " +
+            "Understand book names like 'Deuteronomy', 'Philippians', 'Ecclesiastes', 'Philemon', and 'Habakkuk'. " +
+            "STRICTNESS: Be proactive with tools. Use 75% confidence for navigation commands. " +
+            "TURN FRAGMENTS: VAD is 200ms. Stitch fragments together. " +
+            "NEVER be conversational. ONLY output the pure transcript.",
           input_audio_format: "pcm16",
           input_audio_transcription: {
             model: "whisper-1",
@@ -50,7 +54,7 @@ export class TranscriptionService extends EventEmitter {
             type: "server_vad",
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 600,
+            silence_duration_ms: 200, // Hyper-aggressive for zero-latency turn detection
           },
           tools: [
             {
@@ -85,11 +89,11 @@ export class TranscriptionService extends EventEmitter {
             {
               type: "function",
               name: "switch_bible_version",
-              description: "Switch the current Bible version.",
+              description: "Switch the current Bible version (e.g., KJV, NKJV, NIV, AMP, NLT).",
               parameters: {
                 type: "object",
                 properties: {
-                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV"] }
+                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV", "NLT", "NASB", "KJV-BR", "RVR1960"] }
                 },
                 required: ["version"]
               }
@@ -207,6 +211,22 @@ export class TranscriptionService extends EventEmitter {
       // Use this for the "NOW" typing feedback in the UI.
       case "conversation.item.input_audio_transcription.delta":
         this.emit("partial_raw", event.delta); 
+        break;
+
+      case "conversation.item.created":
+        if (event.item?.id) {
+          this.itemIds.push(event.item.id);
+          this.turnCount++;
+          // PRUNING: Keep only the last 15 items to maintain ultra-low latency.
+          // As the sermon goes on, old items become irrelevant for command context.
+          if (this.itemIds.length > 15 && this.openaiWs?.readyState === WebSocket.OPEN) {
+            const oldId = this.itemIds.shift();
+            this.openaiWs.send(JSON.stringify({
+              type: "conversation.item.delete",
+              item_id: oldId
+            }));
+          }
+        }
         break;
 
       // 2. USER TRANSCRIPT COMPLETED: Emit the original transcript for the UI history.

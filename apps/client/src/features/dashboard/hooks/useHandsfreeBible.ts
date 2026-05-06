@@ -328,6 +328,13 @@ export const useHandsfreeBible = ({
       setSelectedBibleVersion(normalized);
       setZustandBibleVersion(normalized);
       setDetectedCommands(`Switched to ${normalized}`);
+
+      // Re-project the current verse in the new version
+      const ctx = currentVerseContextRef.current;
+      if (ctx && ctx.book && ctx.chapter && ctx.verse) {
+        console.log(`[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`);
+        executeNavigation("jump_to_verse", undefined, ctx.verse);
+      }
     },
     onNavigation: (commandType, direction, targetVerse, offset) => {
       resetInactivityTimer();

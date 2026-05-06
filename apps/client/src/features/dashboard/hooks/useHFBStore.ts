@@ -92,7 +92,11 @@ export const useHFBStore = create<HFBStore>((set) => ({
   setHfbActiveVerseNum: (num) => set({ hfbActiveVerseNum: num }),
 
   hfbTranscriptLines: [],
-  addHfbTranscriptLine: (line) => set((state) => ({ hfbTranscriptLines: [...state.hfbTranscriptLines, line] })),
+  addHfbTranscriptLine: (line) => set((state) => {
+    const newLines = [...state.hfbTranscriptLines, line];
+    // MEMORY MGMT: Prune to last 50 lines to prevent UI lag
+    return { hfbTranscriptLines: newLines.slice(-50) };
+  }),
   clearHfbTranscript: () => set({ hfbTranscriptLines: [] }),
   hfbCurrentPartial: '',
   setHfbCurrentPartial: (text) => set({ hfbCurrentPartial: text }),
@@ -101,7 +105,11 @@ export const useHFBStore = create<HFBStore>((set) => ({
   setHfbDetectedVerses: (verses) => set((state) => ({
     hfbDetectedVerses: typeof verses === 'function' ? verses(state.hfbDetectedVerses) : verses
   })),
-  addHfbDetectedVerse: (verse) => set((state) => ({ hfbDetectedVerses: [...state.hfbDetectedVerses, verse] })),
+  addHfbDetectedVerse: (verse) => set((state) => {
+    const newVerses = [...state.hfbDetectedVerses, verse];
+    // MEMORY MGMT: Prune to last 20 detected verses
+    return { hfbDetectedVerses: newVerses.slice(-20) };
+  }),
 
   hfbCurrentProjected: null,
   setHfbCurrentProjected: (projected) => set({ hfbCurrentProjected: projected }),
