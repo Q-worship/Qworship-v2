@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import { BibleService } from './bible.service.js';
 import type { BibleReference } from './bible.service.js';
 import { BibleVerse } from './bible.model.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const searchBible = async (req: Request, res: Response) => {
   try {
@@ -155,13 +161,24 @@ export const exportBibleVersion = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Invalid version specified' });
     }
 
-    // Fetch all verses, projecting only the requested version
+    // Try to read from static JSON file first (High Performance)
+    const dataDir = path.join(__dirname, 'data');
+    const filePath = path.join(dataDir, `${version}.json`);
+
+    if (fs.existsSync(filePath)) {
+      const rawData = fs.readFileSync(filePath, 'utf-8');
+      const payload = JSON.parse(rawData);
+      console.log(`[Bible Export] Served ${version.toUpperCase()} from local JSON (${payload.length} verses)`);
+      return res.json({ success: true, version, total: payload.length, verses: payload });
+    }
+
+    // Fallback: Fetch from MongoDB (if JSON isn't generated yet)
+    console.log(`[Bible Export] JSON not found for ${version}, falling back to MongoDB...`);
     const verses = await BibleVerse.find(
       {},
       { bookName: 1, chapter: 1, verse: 1, [version]: 1, _id: 0 }
     ).lean();
 
-    // Map into flat structure for Dexie bulk insertion
     const payload = verses.map((v: any) => ({
       book: v.bookName,
       chapter: v.chapter,

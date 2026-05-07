@@ -46,7 +46,11 @@ export class TranscriptionService extends EventEmitter {
             "NEVER be conversational. ONLY output the pure transcript.",
           input_audio_format: "pcm16",
           input_audio_transcription: {
-            model: "whisper-1",
+            model: "gpt-4o-transcribe", // Upgraded from whisper-1: GPT-4o-native model handles
+            // Bible proper nouns (Deuteronomy, Habakkuk, Ecclesiastes, etc.) far more accurately.
+            // Crucially, this transcription feeds the conversation history that GPT-4o uses
+            // for tool calling — bad transcriptions from whisper-1 were corrupting verse detection.
+            // gpt-4o-transcribe also supports streaming deltas natively (no change needed in event handlers).
             language: "en",
           },
           voice: "alloy",

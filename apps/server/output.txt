@@ -1,0 +1,26 @@
+Processing kjv from kingjames_1754194878612.js...
+✅ Saved 28641 verses to /Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/data/kjv.json
+Processing nkjv from nkjv_1754194878614.js...
+✅ Saved 31124 verses to /Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/data/nkjv.json
+Processing amp from amplified_1754194878610.js...
+✅ Saved 31089 verses to /Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/data/amp.json
+Processing msg from msg_1754194878613.js...
+Error parsing book Mark in msg: SyntaxError: Unexpected token ']'
+    at new Function (<anonymous>)
+    at fixCorruption (/Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/scratch/fix_corruption.ts:136:38)
+    at <anonymous> (/Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/scratch/fix_corruption.ts:168:1)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+✅ Saved 30415 verses to /Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/data/msg.json
+Processing esv from esv_1754194878611.js...
+Error parsing book John in esv: SyntaxError: Invalid or unexpected token
+    at new Function (<anonymous>)
+    at fixCorruption (/Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/scratch/fix_corruption.ts:136:38)
+    at <anonymous> (/Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/scratch/fix_corruption.ts:168:1)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+✅ Saved 30234 verses to /Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/data/esv.json
+Processing niv from niv_1754194878613.js...
+✅ Saved 31076 verses to /Users/rebeccashewuri/Documents/development/qworship/Qworship-v2/apps/server/src/modules/bible/data/niv.json

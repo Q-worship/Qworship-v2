@@ -89,9 +89,13 @@ export const useBibleSync = () => {
   }, [checkAndHydrateTargetVersion]);
 
   // Hook will auto-hydrate default versions if not found
+  // DISABLED: Auto-sync on load causes significant startup lag due to massive 6-version payload.
+  // Suggest moving this to a manual "Sync for Offline" button in Settings.
+  /*
   useEffect(() => {
     hydrateDefaultVersions();
   }, [hydrateDefaultVersions]);
+  */
 
   return {
     isSyncing,

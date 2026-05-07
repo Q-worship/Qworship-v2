@@ -27,7 +27,7 @@ export const useRawAudioStream = () => {
         const audioContext = new (
           window.AudioContext || (window as any).webkitAudioContext
         )({
-          sampleRate: 24000, // Try to force target sample rate if browser supports it
+          sampleRate: 16000,
         });
         audioContextRef.current = audioContext;
 

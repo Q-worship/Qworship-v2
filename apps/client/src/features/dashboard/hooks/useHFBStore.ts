@@ -63,10 +63,13 @@ interface HFBStore {
   setHfbDetectedVerses: (verses: HFBDetectedVerse[] | ((prev: HFBDetectedVerse[]) => HFBDetectedVerse[])) => void;
   addHfbDetectedVerse: (verse: HFBDetectedVerse) => void;
 
-  // Audience projection state memory
   hfbCurrentProjected: HFBProjectedVerse | null;
   setHfbCurrentProjected: (projected: HFBProjectedVerse | null) => void;
   
+  // Connection state
+  hfbConnectionStatus: "idle" | "connecting" | "connected" | "disconnected";
+  setHfbConnectionStatus: (status: "idle" | "connecting" | "connected" | "disconnected") => void;
+
   // Async actions
   fetchHFBChapter: (book: string, chapter: number, version: string, highlightVerse?: number) => Promise<void>;
   
@@ -113,6 +116,9 @@ export const useHFBStore = create<HFBStore>((set) => ({
 
   hfbCurrentProjected: null,
   setHfbCurrentProjected: (projected) => set({ hfbCurrentProjected: projected }),
+
+  hfbConnectionStatus: "idle",
+  setHfbConnectionStatus: (status) => set({ hfbConnectionStatus: status }),
 
   fetchHFBChapter: async (book, chapter, version, highlightVerse) => {
     set({ hfbBookName: book, hfbChapter: chapter, hfbChapterLoading: true, hfbChapterVerses: [] });
@@ -172,6 +178,23 @@ export const useHFBStore = create<HFBStore>((set) => ({
             number: v.verse,
             text: v[vKey] || v.kjv || "",
           }));
+
+          // --- LAZY SEEDING: Cache to IndexedDB for next time ---
+          try {
+            const dbVerses = verses.map(v => ({
+               version: vKey,
+               book: book,
+               chapter: chapter,
+               verse: v.number,
+               text: v.text
+            }));
+            // Use put to handle potential partial duplicates safely
+            await db.verses.bulkPut(dbVerses);
+            console.log(`✅ [Lazy Seed] Cached ${book} ${chapter} (${vKey}) to IndexedDB`);
+          } catch (dbErr) {
+            console.error("[Lazy Seed] Failed to cache to IndexedDB:", dbErr);
+          }
+
           set({ hfbChapterVerses: verses, hfbChapterLoading: false });
           if (highlightVerse !== undefined) {
              set({ hfbActiveVerseNum: highlightVerse });

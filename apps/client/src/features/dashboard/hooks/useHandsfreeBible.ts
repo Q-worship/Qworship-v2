@@ -340,6 +340,16 @@ export const useHandsfreeBible = ({
       resetInactivityTimer();
       executeNavigation(commandType, direction, targetVerse, offset);
     },
+    onConnectionStatus: (status) => {
+      setHfbConnectionStatus(status);
+      if (status === "connecting") {
+        setMicrophoneStatus("Connecting...");
+      } else if (status === "connected") {
+        setMicrophoneStatus("Listening");
+      } else if (status === "disconnected") {
+        setMicrophoneStatus("Disconnected");
+      }
+    }
   });
 
   const hfbStrictMode = useHFBStore((state) => state.hfbStrictMode);

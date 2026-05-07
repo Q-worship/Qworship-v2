@@ -64,6 +64,7 @@ import { songsRouter } from "./modules/songs/songs.routes.js";
 import { presentationRouter } from "./modules/presentations/presentation.routes.js";
 import { mediaRouter } from "./modules/media/media.routes.js";
 import { bibleRouter } from "./modules/bible/bible.routes.js";
+import { BibleService } from "./modules/bible/bible.service.js";
 import adminRouter from "./modules/admin/admin.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
 import { lowerThirdRouter } from "./modules/lower-third/lower-third.routes.js";
@@ -89,6 +90,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
+    await BibleService.initializeStore();
     const server = createServer(app);
     setupAudioSocket(server);
     server.listen(PORT, () => {

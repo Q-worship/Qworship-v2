@@ -110,7 +110,23 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
           <div className="px-3 py-2 bg-[#0d0d1a] border-b border-gray-800 shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <img src={qworshipLogo} alt="" className="h-4 w-auto object-contain" />
-              <span className="text-[11px] font-bold tracking-widest uppercase text-purple-300">Hands-Free Bible</span>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold tracking-widest uppercase text-purple-300">Hands-Free Bible</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${
+                    hfbStore.hfbConnectionStatus === 'connected' ? 'bg-emerald-500' :
+                    hfbStore.hfbConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                    hfbStore.hfbConnectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-gray-600'
+                  }`} />
+                  <span className={`text-[8px] font-bold uppercase tracking-tight ${
+                    hfbStore.hfbConnectionStatus === 'connected' ? 'text-emerald-500/80' :
+                    hfbStore.hfbConnectionStatus === 'connecting' ? 'text-yellow-500/80' :
+                    hfbStore.hfbConnectionStatus === 'disconnected' ? 'text-red-500/80' : 'text-gray-600'
+                  }`}>
+                    {hfbStore.hfbConnectionStatus || 'Idle'}
+                  </span>
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-1.5">
               <button

@@ -89,9 +89,13 @@ export const useSongSync = () => {
     }
   }, []);
 
+  // DISABLED: Auto-sync on load causes background lag.
+  // Suggest moving this to a manual "Refresh Library" button.
+  /*
   useEffect(() => {
     syncSongsFromServer();
   }, [syncSongsFromServer]);
+  */
 
   return {
     isSyncing,

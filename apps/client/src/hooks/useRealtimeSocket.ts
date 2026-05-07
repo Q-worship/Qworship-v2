@@ -7,6 +7,7 @@ interface RealtimeSocketProps {
   onSleepCommand?: () => void;
   onWakeCommand?: () => void;
   onVersionChange?: (version: string) => void;
+  onConnectionStatus?: (status: "idle" | "connecting" | "connected" | "disconnected") => void;
   onNavigation?: (
     commandType: string,
     direction: "next" | "previous" | undefined,
@@ -22,6 +23,7 @@ export const useRealtimeSocket = ({
   onSleepCommand,
   onWakeCommand,
   onVersionChange,
+  onConnectionStatus,
   onNavigation,
 }: RealtimeSocketProps) => {
   const socketRef = useRef<WebSocket | null>(null);
@@ -29,12 +31,7 @@ export const useRealtimeSocket = ({
 
   // Store callbacks in refs to avoid causing re-renders/re-creation of connect()
   const callbacks = useRef({
-    onBibleMatch,
-    onPartialTranscript,
-    onFinalTranscript,
-    onSleepCommand,
-    onWakeCommand,
-    onVersionChange,
+    onConnectionStatus,
     onNavigation,
   });
 
@@ -47,6 +44,7 @@ export const useRealtimeSocket = ({
       onSleepCommand,
       onWakeCommand,
       onVersionChange,
+      onConnectionStatus,
       onNavigation,
     };
   });
@@ -93,6 +91,9 @@ export const useRealtimeSocket = ({
             break;
           case "version_change":
             cb.onVersionChange?.(data.requestedVersion);
+            break;
+          case "connection_status":
+            cb.onConnectionStatus?.(data.status);
             break;
           case "navigation":
             cb.onNavigation?.(
