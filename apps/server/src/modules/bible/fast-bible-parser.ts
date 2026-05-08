@@ -1,183 +1,296 @@
 import { BibleService } from "./bible.service.js";
 
 /**
- * FastBibleParser
- * A lightweight, high-performance parser designed for sub-10ms reference extraction.
- * Optimized for streaming results (interim transcripts).
+ * FastBibleParser — QC56 Stage 1
+ *
+ * Key improvements over previous version:
+ * 1. SCAN-AND-EXTRACT: Scans anywhere inside a sentence for a Bible reference,
+ *    not just whole-string matches. Catches "...as written in Matthew 1:5 where..."
+ * 2. SPOKEN FORMAT: Handles "Matthew chapter one verse five" natural speech patterns.
+ * 3. ORDINAL NUMBERS: "first", "second", "third" etc. normalised to digits.
+ * 4. CONFIDENCE SCORING: Every match returns a confidence score (0–1).
+ * 5. NO OPENAI DEPENDENCY: Fully self-contained — zero network calls.
  */
 export class FastBibleParser {
-  private static readonly BOOK_ALIASES: Record<string, string> = BibleService.BOOK_ALIASES;
-  
-  // Pre-compiled regex for performance
-  private static readonly PATTERNS = {
-    // John 3:16 or John 3.16
-    colon: /^([a-z0-9\s]+?)\s+(\d+)[:.](\d+)(?:\s*[-–—]\s*(\d+))?$/i,
-    // John 3 16
-    space: /^([a-z0-9\s]+?)\s+(\d+)\s+(\d+)(?:\s+(?:to|through|-)\s+(\d+))?$/i,
-    // John 316 (compressed 3-digit format from voice recognition)
-    compressed: /^([a-z0-9\s]+?)\s*[,\s]*(\d)(\d{2})$/i,
-    // 1 John 3:16
-    numberedColon: /^(\d)\s*([a-z\s]+?)\s+(\d+)[:.](\d+)(?:\s*[-–—]\s*(\d+))?$/i,
-    // 1 John 3 16
-    numberedSpace: /^(\d)\s*([a-z\s]+?)\s+(\d+)\s+(\d+)(?:\s+(?:to|through|-)\s+(\d+))?$/i,
-    // Matthew 24 (chapter only)
-    chapterOnly: /^([a-z0-9\s]+?)\s+(\d+)$/i,
-    // 1 John 3 (chapter only)
-    numberedChapterOnly: /^(\d)\s*([a-z\s]+?)\s+(\d+)$/i,
+  private static readonly BOOK_ALIASES: Record<string, string> =
+    BibleService.BOOK_ALIASES;
+
+  // ─── Spoken-number normalisation maps ────────────────────────────────────
+
+  private static readonly ORDINALS: Record<string, string> = {
+    first: "1", second: "2", third: "3", fourth: "4", fifth: "5",
+    sixth: "6", seventh: "7", eighth: "8", ninth: "9", tenth: "10",
+    eleventh: "11", twelfth: "12", thirteenth: "13", fourteenth: "14",
+    fifteenth: "15", sixteenth: "16", seventeenth: "17", eighteenth: "18",
+    nineteenth: "19", twentieth: "20", "twenty-first": "21",
+    "twenty-second": "22", "twenty-third": "23", "twenty-fourth": "24",
+    "twenty-fifth": "25", "twenty-sixth": "26", "twenty-seventh": "27",
+    "twenty-eighth": "28", "twenty-ninth": "29", thirtieth: "30",
   };
 
+  private static readonly CARDINALS: Record<string, string> = {
+    zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5",
+    six: "6", seven: "7", eight: "8", nine: "9", ten: "10",
+    eleven: "11", twelve: "12", thirteen: "13", fourteen: "14",
+    fifteen: "15", sixteen: "16", seventeen: "17", eighteen: "18",
+    nineteen: "19", twenty: "20", thirty: "30", forty: "40",
+    fifty: "50", sixty: "60", seventy: "70", eighty: "80", ninety: "90",
+  };
+
+  // ─── Pre-compiled scan patterns (applied to full sentence) ───────────────
+
   /**
-   * Parses a transcript snippet for Bible references or commands.
-   * Returns a command object if a high-confidence match is found.
+   * Spoken format patterns — match references embedded anywhere in a sentence.
+   * Each pattern has named groups: book, chapter, verse (optional), verseEnd (optional).
+   *
+   * Examples caught:
+   *   "as written in Matthew chapter one verse five"
+   *   "turn to the book of John chapter three verse sixteen"
+   *   "let's look at Psalm 23"
+   *   "1 John 3:16"
+   *   "Romans 8 28"
+   */
+  private static readonly SCAN_PATTERNS: Array<{
+    re: RegExp;
+    extract: (m: RegExpMatchArray) => { rawBook: string; chapter: string; verse?: string; verseEnd?: string } | null;
+    confidence: number;
+  }> = [
+    // "Matthew chapter 1 verse 5" / "Matthew chapter one verse five"
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
+      confidence: 0.95,
+    },
+    // "Matthew chapter 1" (no verse yet — partial, used for predictive)
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2] }),
+      confidence: 0.70,
+    },
+    // "John 3:16" / "John 3:16-18" — colon format
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d+)[:.]\s*(\d+)(?:\s*[-–—]\s*(\d+))?\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
+      confidence: 0.98,
+    },
+    // "1 John 3 16" / "John 3 16" — space-separated
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d+)\s+(\d+)(?:\s+(?:to|through|-)\s+(\d+))?\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
+      confidence: 0.88,
+    },
+    // "John 316" — compressed 3-digit voice format
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d)(\d{2})\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3] }),
+      confidence: 0.85,
+    },
+    // "John 3" — chapter only (lowest confidence, partial reference)
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d{1,3})\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2] }),
+      confidence: 0.60,
+    },
+  ];
+
+  // ─── Navigation & version patterns ───────────────────────────────────────
+
+  private static readonly NAV_PATTERNS: Array<{ re: RegExp; cmd: any }> = [
+    { re: /\b(?:next verse|go next|forward|next one)\b/i,       cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } } },
+    { re: /\b(?:previous verse|go back|back one)\b/i,           cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } } },
+    { re: /\b(?:next chapter|following chapter)\b/i,            cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "chapter" } } },
+    { re: /\b(?:previous chapter|last chapter|go back a chapter)\b/i, cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "chapter" } } },
+  ];
+
+  private static readonly VERSION_PATTERN =
+    /\b(?:switch to|use|change to|show me|read in|in the)\s+(niv|kjv|nkjv|esv|amp|msg|gnt?)\b/i;
+
+  // ─── Public API ───────────────────────────────────────────────────────────
+
+  /**
+   * Main entry point. Scans the full text for any Bible reference, navigation,
+   * or version command. Returns the highest-confidence match found, or null.
    */
   static parse(text: string): any | null {
-    let cleanText = text.toLowerCase().trim().replace(/[.,!?;]$/, "");
-    if (cleanText.length < 3) return null;
+    if (!text || text.trim().length < 3) return null;
 
-    // 0. Normalize spoken numbers ("three" -> "3")
-    cleanText = this.normalizeNumbers(cleanText);
+    // Normalise: lowercase, strip trailing punctuation, expand spoken numbers
+    let clean = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
+    clean = this.normalizeNumbers(clean);
 
-    // 1. Check for Version Switch (e.g., "switch to NIV")
-    const versionMatch = cleanText.match(/(?:switch to|use|change to|show me|read in)\s+(niv|kjv|nkjv|esv|amp|msg|gn|gnt)/i);
-    if (versionMatch) {
+    // 1. Version switch
+    const verMatch = clean.match(this.VERSION_PATTERN);
+    if (verMatch) {
       return {
         name: "switch_bible_version",
-        arguments: { version: versionMatch[1].toLowerCase() }
+        arguments: { version: verMatch[1].toLowerCase().replace(/^gnt?$/, "gn") },
       };
     }
 
-    // 2. Check for Navigation (e.g., "next verse", "previous chapter")
-    if (/(?:next verse|go next|forward|next one)/i.test(cleanText)) {
-      return { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } };
-    }
-    if (/(?:previous verse|go back|back)/i.test(cleanText)) {
-      return { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } };
-    }
-    if (/(?:next chapter|following chapter)/i.test(cleanText)) {
-      return { name: "navigate_bible", arguments: { direction: "next", scope: "chapter" } };
-    }
-    if (/(?:previous chapter|last chapter)/i.test(cleanText)) {
-      return { name: "navigate_bible", arguments: { direction: "prev", scope: "chapter" } };
+    // 2. Navigation
+    for (const nav of this.NAV_PATTERNS) {
+      if (nav.re.test(clean)) return nav.cmd;
     }
 
-    // 3. Check for References
-    const ref = this.extractReference(cleanText);
-    if (ref) {
-      return {
-        name: "project_bible_reference",
-        arguments: {
-          book: ref.book,
-          chapter: ref.chapter,
-          verse_start: ref.verseStart,
-          verse_end: ref.verseEnd || null,
-          version: "kjv" // Default
+    // 3. Bible reference — scan entire sentence
+    return this.scanForReference(clean);
+  }
+
+  /**
+   * Scan the full text for an embedded Bible reference.
+   * Returns the highest-confidence complete reference found.
+   */
+  static scanForReference(text: string): any | null {
+    let best: { cmd: any; confidence: number } | null = null;
+
+    for (const pattern of this.SCAN_PATTERNS) {
+      // Reset lastIndex for global regex
+      pattern.re.lastIndex = 0;
+      let match: RegExpMatchArray | null;
+
+      while ((match = pattern.re.exec(text)) !== null) {
+        const extracted = pattern.extract(match);
+        if (!extracted) continue;
+
+        const bookName = this.normalizeBook(extracted.rawBook);
+        if (!bookName) continue;
+
+        const chapter = parseInt(this.normalizeNumbers(extracted.chapter));
+        if (isNaN(chapter) || chapter < 1 || chapter > 150) continue;
+
+        const verseStart = extracted.verse
+          ? parseInt(this.normalizeNumbers(extracted.verse))
+          : 1;
+        const verseEnd = extracted.verseEnd
+          ? parseInt(this.normalizeNumbers(extracted.verseEnd))
+          : undefined;
+
+        if (isNaN(verseStart) || verseStart < 1 || verseStart > 176) continue;
+
+        const cmd = {
+          name: "project_bible_reference",
+          arguments: {
+            book: bookName,
+            chapter,
+            verse_start: verseStart,
+            verse_end: verseEnd || null,
+            version: "kjv",
+          },
+          _confidence: pattern.confidence,
+        };
+
+        // Keep the highest-confidence match
+        if (!best || pattern.confidence > best.confidence) {
+          best = { cmd, confidence: pattern.confidence };
         }
-      };
+
+        // If we have a near-perfect match (colon format), stop scanning
+        if (pattern.confidence >= 0.95) break;
+      }
+
+      if (best && best.confidence >= 0.95) break;
     }
 
-    return null;
+    return best ? best.cmd : null;
   }
 
-  private static normalizeNumbers(text: string): string {
-    return text
-      .replace(/\bninety\b/g, "90")
-      .replace(/\beighty\b/g, "80")
-      .replace(/\bseventy\b/g, "70")
-      .replace(/\bsixty\b/g, "60")
-      .replace(/\bfifty\b/g, "50")
-      .replace(/\bforty\b/g, "40")
-      .replace(/\bthirty\b/g, "30")
-      .replace(/\btwenty\b/g, "20")
-      .replace(/\bnineteen\b/g, "19")
-      .replace(/\beighteen\b/g, "18")
-      .replace(/\bseventeen\b/g, "17")
-      .replace(/\bsixteen\b/g, "16")
-      .replace(/\bfifteen\b/g, "15")
-      .replace(/\bfourteen\b/g, "14")
-      .replace(/\bthirteen\b/g, "13")
-      .replace(/\btwelve\b/g, "12")
-      .replace(/\beleven\b/g, "11")
-      .replace(/\bten\b/g, "10")
-      .replace(/\bnine\b/g, "9")
-      .replace(/\beight\b/g, "8")
-      .replace(/\bseven\b/g, "7")
-      .replace(/\bsix\b/g, "6")
-      .replace(/\bfive\b/g, "5")
-      .replace(/\bfour\b/g, "4")
-      .replace(/\bthree\b/g, "3")
-      .replace(/\btwo\b/g, "2")
-      .replace(/\bone\b/g, "1")
-      // Handle compound numbers like "20 3" -> "23"
-      .replace(/\b(20|30|40|50|60|70|80|90)\s+(\d)\b/g, (m, p1, p2) => (parseInt(p1) + parseInt(p2)).toString());
+  // ─── Number normalisation ─────────────────────────────────────────────────
+
+  static normalizeNumbers(text: string): string {
+    let t = text;
+
+    // Ordinals first ("first" → "1")
+    for (const [word, digit] of Object.entries(this.ORDINALS)) {
+      t = t.replace(new RegExp(`\\b${word}\\b`, "gi"), digit);
+    }
+
+    // Cardinals ("twenty" → "20", then "twenty 3" → "23")
+    for (const [word, digit] of Object.entries(this.CARDINALS)) {
+      t = t.replace(new RegExp(`\\b${word}\\b`, "gi"), digit);
+    }
+
+    // Compound spoken numbers: "20 3" → "23", "30 5" → "35" etc.
+    t = t.replace(
+      /\b(10|20|30|40|50|60|70|80|90)\s+(\d)\b/g,
+      (_, tens, ones) => (parseInt(tens) + parseInt(ones)).toString(),
+    );
+
+    return t;
   }
 
-  private static extractReference(text: string) {
-    // Try numberedColon first: "1 John 3:16"
-    let match = text.match(this.PATTERNS.numberedColon);
-    if (match) {
-      const bookName = this.normalizeBook(`${match[1]} ${match[2]}`);
-      if (bookName) return { book: bookName, chapter: parseInt(match[3]), verseStart: parseInt(match[4]), verseEnd: match[5] ? parseInt(match[5]) : undefined };
-    }
+  // ─── Book name normalisation ──────────────────────────────────────────────
 
-    // Try colon: "John 3:16"
-    match = text.match(this.PATTERNS.colon);
-    if (match) {
-      const bookName = this.normalizeBook(match[1]);
-      if (bookName) return { book: bookName, chapter: parseInt(match[2]), verseStart: parseInt(match[3]), verseEnd: match[4] ? parseInt(match[4]) : undefined };
-    }
+  private static normalizeBook(raw: string): string | null {
+    // Strip noise words: "the book of", "book of", "the"
+    let clean = raw
+      .toLowerCase()
+      .trim()
+      .replace(/^(?:the\s+)?book\s+of\s+/i, "")
+      .replace(/^the\s+/i, "")
+      .trim();
 
-    // Try numberedSpace: "1 John 3 16"
-    match = text.match(this.PATTERNS.numberedSpace);
-    if (match) {
-      const bookName = this.normalizeBook(`${match[1]} ${match[2]}`);
-      if (bookName) return { book: bookName, chapter: parseInt(match[3]), verseStart: parseInt(match[4]), verseEnd: match[5] ? parseInt(match[5]) : undefined };
-    }
+    // Direct alias lookup (covers all 66 books + common abbreviations)
+    if (this.BOOK_ALIASES[clean]) return this.BOOK_ALIASES[clean];
 
-    // Try compressed: "John 316"
-    match = text.match(this.PATTERNS.compressed);
-    if (match) {
-      const bookName = this.normalizeBook(match[1]);
-      if (bookName) return { book: bookName, chapter: parseInt(match[2]), verseStart: parseInt(match[3]) };
-    }
-
-    // Try space: "John 3 16"
-    match = text.match(this.PATTERNS.space);
-    if (match) {
-      const bookName = this.normalizeBook(match[1]);
-      if (bookName) return { book: bookName, chapter: parseInt(match[2]), verseStart: parseInt(match[3]), verseEnd: match[4] ? parseInt(match[4]) : undefined };
-    }
-
-    // Try numberedChapterOnly: "1 John 3"
-    match = text.match(this.PATTERNS.numberedChapterOnly);
-    if (match) {
-      const bookName = this.normalizeBook(`${match[1]} ${match[2]}`);
-      if (bookName) return { book: bookName, chapter: parseInt(match[3]), verseStart: 1 };
-    }
-
-    // Try chapterOnly: "John 3"
-    match = text.match(this.PATTERNS.chapterOnly);
-    if (match) {
-      const bookName = this.normalizeBook(match[1]);
-      if (bookName) return { book: bookName, chapter: parseInt(match[2]), verseStart: 1 };
-    }
-
-    return null;
-  }
-
-  private static normalizeBook(name: string): string | null {
-    const clean = name.toLowerCase().trim();
-    
-    // Add common fuzzy matches for speech
-    const fuzzyMap: Record<string, string> = {
+    // Speech-specific fuzzy overrides
+    const speechMap: Record<string, string> = {
       "look": "Luke",
+      "luke": "Luke",
       "acts of the apostles": "Acts",
       "revelations": "Revelation",
-      "penniless": "Genesis", // Sometimes Genesis sounds like this?
       "songs of solomon": "Song of Solomon",
+      "song of songs": "Song of Solomon",
       "psalms": "Psalms",
       "psalm": "Psalms",
+      "proverb": "Proverbs",
+      "proverbs": "Proverbs",
+      "mathew": "Matthew",
+      "mathew": "Matthew",
+      "mathews": "Matthew",
+      "matthews": "Matthew",
+      "marc": "Mark",
+      "marks": "Mark",
+      "romans": "Romans",
+      "roman": "Romans",
+      "corinthians": "1 Corinthians",
+      "first corinthians": "1 Corinthians",
+      "second corinthians": "2 Corinthians",
+      "first thessalonians": "1 Thessalonians",
+      "second thessalonians": "2 Thessalonians",
+      "first timothy": "1 Timothy",
+      "second timothy": "2 Timothy",
+      "first peter": "1 Peter",
+      "second peter": "2 Peter",
+      "first john": "1 John",
+      "second john": "2 John",
+      "third john": "3 John",
+      "first kings": "1 Kings",
+      "second kings": "2 Kings",
+      "first samuel": "1 Samuel",
+      "second samuel": "2 Samuel",
+      "first chronicles": "1 Chronicles",
+      "second chronicles": "2 Chronicles",
+      "philippians": "Philippians",
+      "philemon": "Philemon",
+      "ephesians": "Ephesians",
+      "galatians": "Galatians",
+      "colossians": "Colossians",
+      "hebrews": "Hebrews",
+      "obadiah": "Obadiah",
+      "nahum": "Nahum",
+      "habakkuk": "Habakkuk",
+      "zephaniah": "Zephaniah",
+      "haggai": "Haggai",
+      "zechariah": "Zechariah",
+      "malachi": "Malachi",
+      "ecclesiastes": "Ecclesiastes",
+      "deuteronomy": "Deuteronomy",
+      "leviticus": "Leviticus",
+      "numbers": "Numbers",
+      "genesis": "Genesis",
+      "exodus": "Exodus",
     };
 
-    return this.BOOK_ALIASES[clean] || fuzzyMap[clean] || null;
+    return speechMap[clean] || null;
   }
 }

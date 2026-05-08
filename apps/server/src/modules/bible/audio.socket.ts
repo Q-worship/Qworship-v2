@@ -1,139 +1,76 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
-import OpenAI from "openai";
 import { DeepgramTranscriptionService } from "./deepgram.service.js";
 import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
 
-// Lazy-init - avoids cost if never called
-let _openai: OpenAI | null = null;
-function getOpenAI() {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _openai;
-}
-
+/**
+ * setupAudioSocket — QC56 Stage 1
+ *
+ * Changes from previous version:
+ * - REMOVED: convertToCommand() OpenAI GPT-3.5-turbo round-trip (was +300–800ms on every utterance)
+ * - REMOVED: OpenAI import and lazy-init (no longer needed)
+ * - FastBibleParser is now the SOLE command processor across all three tiers
+ * - Tier 1 (partial_raw): scan mid-sentence partials with confidence ≥ 0.80
+ * - Tier 2 (eot/utterance_end): flush accumulated partial on end-of-turn
+ * - Tier 3 (final): scan final transcript — no fallback API call
+ * - Confidence gate added to final handler (mirrors partial_raw gate)
+ * - 1500ms command throttle reduced to 800ms (safe dedup window)
+ */
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
   wss.on("connection", (ws: WebSocket) => {
     console.log("[AudioSocket] Client connected to live audio stream");
 
-    let transcriptBuffer = "";
+    // ── State ──────────────────────────────────────────────────────────────
+    let lastExecutedReference: string | null = null;
+    let lastExecutionTime = 0;
+    let currentPartialText = "";
+    let currentContext: any = null;
+    const DEDUP_WINDOW_MS = 800;
+    const CONFIDENCE_THRESHOLD = 0.80;
 
-    // Initialize Deepgram streaming service
+    // ── Deepgram service ───────────────────────────────────────────────────
     const transcriptionService = new DeepgramTranscriptionService();
 
-    transcriptionService.on("connecting", () => {
-      ws.send(
-        JSON.stringify({ type: "connection_status", status: "connecting" }),
-      );
-    });
-
-    transcriptionService.on("connected", () => {
-      ws.send(
-        JSON.stringify({ type: "connection_status", status: "connected" }),
-      );
-    });
-
-    transcriptionService.on("disconnected", () => {
-      ws.send(
-        JSON.stringify({ type: "connection_status", status: "disconnected" }),
-      );
-    });
+    transcriptionService.on("connecting", () =>
+      ws.send(JSON.stringify({ type: "connection_status", status: "connecting" }))
+    );
+    transcriptionService.on("connected", () =>
+      ws.send(JSON.stringify({ type: "connection_status", status: "connected" }))
+    );
+    transcriptionService.on("disconnected", () =>
+      ws.send(JSON.stringify({ type: "connection_status", status: "disconnected" }))
+    );
 
     transcriptionService.connect();
 
-    let lastExecutedCommandTime = 0;
-    let isStrictMode = false;
-    let rawUIBuffer = ""; // Added for instant Whisper UI feedback
-    let currentContext: any = null; // Track current book/chapter for AI context
-    let lastExecutedReference: string | null = null; // Deduplication for <1s latency path
-    let lastExecutionTime = 0;
-    let currentPartialText = ""; // Track latest partial for Flux EOT flushing
+    // ── Command execution ──────────────────────────────────────────────────
 
     /**
-     * DORMANT: Legacy deterministic parser.
-     * We have moved to AI-Native Tool Calling for superior accuracy and zero hallucinations.
+     * Execute a parsed command object. Handles deduplication and throttling.
+     * @param cmd  Command from FastBibleParser
+     * @param source  Label for logging ("Partial" | "EOT" | "Final")
      */
-    const processTranscript = async (text: string, isPartial: boolean) => {
-      // This function is now just a placeholder to prevent crashes elsewhere.
-      // The actual execution logic is handled in the 'command' event below.
-      if (text.includes("[UNINTELLIGIBLE]")) {
-        transcriptBuffer = "";
-      }
-    };
-
-    // NEW: Convert transcript to command using OpenAI
-    const convertToCommand = async (text: string) => {
-      try {
-        const openai = getOpenAI();
-
-        // Only call OpenAI if text is substantial
-        if (!text.trim() || text.length < 3) return null;
-
-        const completion = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
-          messages: [
-            {
-              role: "system",
-              content: `You are a Bible reference parser. Convert user speech to JSON commands.
-                
-                Possible commands with exact format:
-                
-                1. Bible verse lookup: {"name": "project_bible_reference", "arguments": {"book": string, "chapter": number, "verse_start": number, "verse_end": number|null, "version": string}}
-                   Examples:
-                   - "Show me John 3:16" → {"name":"project_bible_reference","arguments":{"book":"John","chapter":3,"verse_start":16,"verse_end":null,"version":"kjv"}}
-                   - "Read Psalm 23" → {"name":"project_bible_reference","arguments":{"book":"Psalm","chapter":23,"verse_start":1,"verse_end":null,"version":"kjv"}}
-                   - "Show me Genesis 1:1-5" → {"name":"project_bible_reference","arguments":{"book":"Genesis","chapter":1,"verse_start":1,"verse_end":5,"version":"kjv"}}
-                   - "Switch to NIV and show me Romans 8:28" → {"name":"project_bible_reference","arguments":{"book":"Romans","chapter":8,"verse_start":28,"verse_end":null,"version":"niv"}}
-                
-                2. Navigation: {"name": "navigate_bible", "arguments": {"direction": "next|prev", "scope": "verse|chapter"}}
-                   Examples:
-                   - "Next verse" → {"name":"navigate_bible","arguments":{"direction":"next","scope":"verse"}}
-                   - "Previous chapter" → {"name":"navigate_bible","arguments":{"direction":"prev","scope":"chapter"}}
-                   - "Go to next chapter" → {"name":"navigate_bible","arguments":{"direction":"next","scope":"chapter"}}
-                
-                3. Version switch: {"name": "switch_bible_version", "arguments": {"version": "kjv|niv|esv"}}
-                   Examples:
-                   - "Switch to NIV" → {"name":"switch_bible_version","arguments":{"version":"niv"}}
-                   - "Change to ESV" → {"name":"switch_bible_version","arguments":{"version":"esv"}}
-                   - "Use King James Version" → {"name":"switch_bible_version","arguments":{"version":"kjv"}}
-                
-                If the user's speech doesn't match any command pattern, return null.
-                
-                Respond with ONLY the JSON command or null. No other text.`,
-            },
-            { role: "user", content: text },
-          ],
-          temperature: 0,
-          max_tokens: 150,
-        });
-
-        const response = completion.choices[0].message.content;
-        if (response && response !== "null") {
-          return JSON.parse(response);
-        }
-        return null;
-      } catch (err) {
-        console.error("[OpenAI] Failed to parse command:", err);
-        return null;
-      }
-    };
-
-    // Handle AI Native Commands (Tool Calling)
-    transcriptionService.on("command", async (cmd: any) => {
-      console.log(
-        `[AudioSocket] Executing AI Command: ${cmd.name}`,
-        cmd.arguments,
-      );
-
+    const executeCommand = async (cmd: any, source: string) => {
+      const refKey = JSON.stringify(cmd.arguments);
       const now = Date.now();
-      if (now - lastExecutedCommandTime < 1500) return; // Throttling
-      lastExecutedCommandTime = now;
+
+      // Deduplicate: skip if same reference executed within DEDUP_WINDOW_MS
+      if (refKey === lastExecutedReference && now - lastExecutionTime < DEDUP_WINDOW_MS) {
+        console.log(`[AudioSocket] Dedup skip [${source}]: ${refKey}`);
+        return;
+      }
+
+      lastExecutedReference = refKey;
+      lastExecutionTime = now;
+
+      const conf = cmd._confidence != null ? ` [conf: ${cmd._confidence.toFixed(2)}]` : "";
+      console.log(`[AudioSocket] Executing [${source}]${conf}: ${cmd.name}`, cmd.arguments);
 
       if (cmd.name === "project_bible_reference") {
-        const { book, chapter, verse_start, verse_end, version } =
-          cmd.arguments;
+        const { book, chapter, verse_start, verse_end, version } = cmd.arguments;
         const result = await BibleService.searchBible({
           book,
           chapter,
@@ -143,14 +80,7 @@ export function setupAudioSocket(server: Server) {
         });
 
         if (result) {
-          ws.send(
-            JSON.stringify({
-              type: "bible_match",
-              result: result,
-              commandType: "lookup",
-            }),
-          );
-
+          ws.send(JSON.stringify({ type: "bible_match", result, commandType: "lookup" }));
           currentContext = {
             book: result.book,
             chapter: result.chapter,
@@ -158,135 +88,83 @@ export function setupAudioSocket(server: Server) {
           };
           transcriptionService.setContext(currentContext);
         }
+
       } else if (cmd.name === "navigate_bible") {
-        ws.send(
-          JSON.stringify({
-            type: "navigation",
-            commandType:
-              cmd.arguments.scope === "chapter"
-                ? "chapter_change"
-                : "verse_change",
-            direction: cmd.arguments.direction,
-          }),
-        );
+        ws.send(JSON.stringify({
+          type: "navigation",
+          commandType: cmd.arguments.scope === "chapter" ? "chapter_change" : "verse_change",
+          direction: cmd.arguments.direction,
+        }));
+
       } else if (cmd.name === "switch_bible_version") {
-        ws.send(
-          JSON.stringify({
-            type: "version_change",
-            requestedVersion: cmd.arguments.version.toLowerCase(),
-          }),
-        );
-      }
-    });
-
-    transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
-      currentPartialText = text; // Update for Flux EOT
-      // FAST PATH: Try to parse immediately from partials for <1s latency
-      // Only proceed if confidence is high enough to avoid misinterpretations
-      const CONFIDENCE_THRESHOLD = 0.8;
-      
-      if (confidence >= CONFIDENCE_THRESHOLD) {
-        const command = FastBibleParser.parse(text);
-        if (command) {
-          const refKey = JSON.stringify(command.arguments);
-          const now = Date.now();
-          
-          // Only execute if it's a new reference or enough time has passed
-          if (refKey !== lastExecutedReference || (now - lastExecutionTime > 3000)) {
-            console.log(`[AudioSocket] Fast Path Match (Partial) [Conf: ${confidence.toFixed(2)}]: ${text}`);
-            lastExecutedReference = refKey;
-            lastExecutionTime = now;
-            transcriptionService.emit("command", command);
-          }
-        }
-      }
-
-      ws.send(
-        JSON.stringify({
-          type: "transcript_partial",
-          text: text,
-        }),
-      );
-    });
-
-    transcriptionService.on("partial", async (delta: string) => {
-      transcriptBuffer += delta;
-      await processTranscript(transcriptBuffer, true);
-    });
-
-    // NEW: Handle Flux End-of-Turn events for ultra-low latency flushing
-    const handleFluxEOT = async (type: string) => {
-      if (!currentPartialText) return;
-      console.log(`[AudioSocket] Flux ${type} detected. Flushing: "${currentPartialText}"`);
-      
-      const command = FastBibleParser.parse(currentPartialText);
-      if (command) {
-        const refKey = JSON.stringify(command.arguments);
-        const now = Date.now();
-        if (refKey !== lastExecutedReference || (now - lastExecutionTime > 3000)) {
-          lastExecutedReference = refKey;
-          lastExecutionTime = now;
-          transcriptionService.emit("command", command);
-        }
+        ws.send(JSON.stringify({
+          type: "version_change",
+          requestedVersion: cmd.arguments.version.toLowerCase(),
+        }));
       }
     };
 
-    transcriptionService.on("eager_eot", () => handleFluxEOT("EagerEndOfTurn"));
-    transcriptionService.on("eot", () => handleFluxEOT("EndOfTurn"));
-    transcriptionService.on("utterance_end", () => handleFluxEOT("UtteranceEnd"));
+    // ── Tier 1: Partial (streaming, mid-sentence) ──────────────────────────
+    transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
+      currentPartialText = text;
 
-    // MODIFIED: Add command conversion here
+      // Send live transcript to UI immediately (no gate — always show)
+      ws.send(JSON.stringify({ type: "transcript_partial", text }));
+
+      // Fast path: only attempt parse if Deepgram confidence is high enough
+      if (confidence < CONFIDENCE_THRESHOLD) return;
+
+      const cmd = FastBibleParser.parse(text);
+      if (cmd) await executeCommand(cmd, "Partial");
+    });
+
+    // ── Tier 2: End-of-turn flush ──────────────────────────────────────────
+    const handleEOT = async (label: string) => {
+      if (!currentPartialText) return;
+      console.log(`[AudioSocket] ${label} — flushing: "${currentPartialText}"`);
+      const cmd = FastBibleParser.parse(currentPartialText);
+      if (cmd) await executeCommand(cmd, label);
+    };
+
+    transcriptionService.on("eager_eot",    () => handleEOT("EagerEndOfTurn"));
+    transcriptionService.on("eot",          () => handleEOT("EndOfTurn"));
+    transcriptionService.on("utterance_end",() => handleEOT("UtteranceEnd"));
+
+    // ── Tier 3: Final transcript ───────────────────────────────────────────
     transcriptionService.on("final", async (text: string, confidence: number) => {
-      console.log(`[AudioSocket] Final Transcript [Conf: ${confidence?.toFixed(2)}]: ${text}`);
-      transcriptBuffer = "";
-      rawUIBuffer = "";
+      console.log(`[AudioSocket] Final [conf: ${confidence?.toFixed(2)}]: "${text}"`);
+      currentPartialText = "";
 
-      ws.send(
-        JSON.stringify({
-          type: "transcript_final",
-          text: text,
-        }),
-      );
+      // Send final transcript to UI
+      ws.send(JSON.stringify({ type: "transcript_final", text }));
 
-      // NEW: Convert final transcript to command and emit
-      // Check if this was already handled by the Fast Path (partials)
-      const fastCommand = FastBibleParser.parse(text);
-      const fastRefKey = fastCommand ? JSON.stringify(fastCommand.arguments) : null;
-      
-      if (fastRefKey && fastRefKey === lastExecutedReference) {
-        console.log(`[AudioSocket] Skipping OpenAI fallback (already handled by Fast Path)`);
-      } else {
-        const command = await convertToCommand(text);
-        if (command) {
-          lastExecutedReference = JSON.stringify(command.arguments);
-          lastExecutionTime = Date.now();
-          transcriptionService.emit("command", command);
-        }
+      // Apply same confidence gate as partial path
+      if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
+        console.log(`[AudioSocket] Final below confidence threshold (${confidence?.toFixed(2)}) — skipping`);
+        return;
       }
 
-      await processTranscript(text, false);
+      const cmd = FastBibleParser.parse(text);
+      if (cmd) await executeCommand(cmd, "Final");
+      // No OpenAI fallback — FastBibleParser handles all cases locally
     });
 
+    // ── Error handling ─────────────────────────────────────────────────────
     transcriptionService.on("error", (err) => {
       console.error("[Deepgram] Error:", err);
-      ws.send(
-        JSON.stringify({
-          type: "error",
-          message: "Transcription Service Error",
-        }),
-      );
+      ws.send(JSON.stringify({ type: "error", message: "Transcription Service Error" }));
     });
 
+    // ── Incoming messages from desktop client ─────────────────────────────
     ws.on("message", async (data: Buffer | string) => {
       if (typeof data === "string") {
         try {
           const msg = JSON.parse(data);
           if (msg.type === "set_strict_mode") {
-            isStrictMode = !!msg.strictMode;
-            transcriptionService.setStrictMode(isStrictMode);
-            console.log(`[AudioSocket] Strict mode set to ${isStrictMode}`);
+            transcriptionService.setStrictMode(!!msg.strictMode);
+            console.log(`[AudioSocket] Strict mode: ${msg.strictMode}`);
           }
-        } catch (e) {}
+        } catch (_) {}
         return;
       }
       transcriptionService.sendAudio(data);
