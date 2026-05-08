@@ -12,13 +12,12 @@ import WebSocket from "ws";
  *   after silence). Now `speech_final` (Deepgram's fast VAD signal, ~150ms
  *   after silence) is used as the primary trigger. `is_final` is kept as a
  *   fallback for edge cases where `speech_final` doesn't fire.
- *
  * Fix 2 — Add missing low-latency parameters:
  *   - vad_events=true       → enable SpeechStarted/SpeechFinished events
- *   - utterance_end_ms=800  → safety-net UtteranceEnd after 800ms silence
  *   - endpointing=300       → was 150 (caused false end-of-speech on breath pauses)
- *   NOTE: no_delay is NOT a valid Nova-3 parameter — removed (caused HTTP 400 crash)
- *
+ *   NOTE: no_delay is NOT a valid Nova-3 parameter — removed (caused HTTP 400)
+ *   NOTE: utterance_end_ms is NOT accepted by this account tier — removed (caused HTTP 400)
+ *         EOT safety-net is handled server-side in audio.socket.ts instead
  * Fix 3 — Embed API key fallback (reliability):
  *   Remove the throw — use built-in Qworship key if env var not set.
  *   All users share the Qworship account key; no per-user configuration needed.
@@ -82,11 +81,10 @@ export class DeepgramTranscriptionService extends EventEmitter {
     deepgramUrl.searchParams.append("sample_rate", "16000");
     deepgramUrl.searchParams.append("channels", "1");
     // Fix 2b: vad_events=true — enable SpeechStarted/SpeechFinished events
-    // NOTE: no_delay is NOT a valid Nova-3 parameter — it causes HTTP 400 and crashes the server
+    // NOTE: no_delay is NOT a valid Nova-3 parameter — removed (caused HTTP 400)
+    // NOTE: utterance_end_ms is NOT accepted by this Deepgram account tier — removed (caused HTTP 400)
+    //       The EOT safety-net is handled in audio.socket.ts via a server-side silence timer instead.
     deepgramUrl.searchParams.append("vad_events", "true");
-    // Fix 2d: utterance_end_ms=800 — safety-net: fires UtteranceEnd after 800ms silence
-    // if speech_final was missed. Requires interim_results=true (already set above).
-    deepgramUrl.searchParams.append("utterance_end_ms", "800");
 
     try {
       this.socket = new WebSocket(deepgramUrl.toString(), {
@@ -190,7 +188,9 @@ export class DeepgramTranscriptionService extends EventEmitter {
       this._stopKeepAlive();
       console.error("[Deepgram] Connection failed:", err);
       this.emit("error", err);
-      throw err;
+      // Do NOT re-throw — an unhandled promise rejection from connect() crashes the
+      // entire Node.js process (triggerUncaughtException). The error event above
+      // is sufficient for the caller to handle the failure gracefully.
     }
   }
 
