@@ -13,11 +13,11 @@ import WebSocket from "ws";
  *   after silence) is used as the primary trigger. `is_final` is kept as a
  *   fallback for edge cases where `speech_final` doesn't fire.
  *
- * Fix 2 — Add missing low-latency parameters (saves ~150–200ms):
- *   - no_delay=true         → skip Deepgram internal output buffering
+ * Fix 2 — Add missing low-latency parameters:
  *   - vad_events=true       → enable SpeechStarted/SpeechFinished events
  *   - utterance_end_ms=800  → safety-net UtteranceEnd after 800ms silence
  *   - endpointing=300       → was 150 (caused false end-of-speech on breath pauses)
+ *   NOTE: no_delay is NOT a valid Nova-3 parameter — removed (caused HTTP 400 crash)
  *
  * Fix 3 — Embed API key fallback (reliability):
  *   Remove the throw — use built-in Qworship key if env var not set.
@@ -81,9 +81,8 @@ export class DeepgramTranscriptionService extends EventEmitter {
     deepgramUrl.searchParams.append("encoding", "linear16");
     deepgramUrl.searchParams.append("sample_rate", "16000");
     deepgramUrl.searchParams.append("channels", "1");
-    // Fix 2b: no_delay=true — skip Deepgram's internal output buffering (~50–100ms saved)
-    deepgramUrl.searchParams.append("no_delay", "true");
-    // Fix 2c: vad_events=true — enable SpeechStarted/SpeechFinished events
+    // Fix 2b: vad_events=true — enable SpeechStarted/SpeechFinished events
+    // NOTE: no_delay is NOT a valid Nova-3 parameter — it causes HTTP 400 and crashes the server
     deepgramUrl.searchParams.append("vad_events", "true");
     // Fix 2d: utterance_end_ms=800 — safety-net: fires UtteranceEnd after 800ms silence
     // if speech_final was missed. Requires interim_results=true (already set above).
