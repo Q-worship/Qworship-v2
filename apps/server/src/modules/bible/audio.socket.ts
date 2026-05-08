@@ -318,10 +318,27 @@ export function setupAudioSocket(server: Server) {
       if (typeof data === "string") {
         try {
           const msg = JSON.parse(data);
+
           if (msg.type === "set_strict_mode") {
             transcriptionService.setStrictMode(!!msg.strictMode);
             console.log(`[AudioSocket] Strict mode: ${msg.strictMode}`);
           }
+
+          // ── vad_commit: Silero VAD on the desktop detected end-of-speech ──
+          // The desktop's Silero VAD fires ~192ms after silence — much faster
+          // than Deepgram's endpointing signal (~100–300ms after silence).
+          // When vad_commit arrives, immediately flush the partial accumulator
+          // so the verse is projected without waiting for Deepgram's final.
+          //
+          // This is the most impactful single fix for conversational references:
+          // the pastor says "John 3:16" mid-sentence, keeps talking, and Silero
+          // detects the brief pause after the reference — triggering projection
+          // ~200ms earlier than Deepgram's endpointing would.
+          if (msg.type === "vad_commit") {
+            console.log(`[AudioSocket] vad_commit received — flushing partial accumulator immediately`);
+            await handleEOT("VadCommit");
+          }
+
         } catch (_) {}
         return;
       }

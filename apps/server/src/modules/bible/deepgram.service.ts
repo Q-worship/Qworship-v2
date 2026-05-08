@@ -12,12 +12,13 @@ import WebSocket from "ws";
  *   after silence). Now `speech_final` (Deepgram's fast VAD signal, ~150ms
  *   after silence) is used as the primary trigger. `is_final` is kept as a
  *   fallback for edge cases where `speech_final` doesn't fire.
- * Fix 2 — Add missing low-latency parameters:
- *   - vad_events=true       → enable SpeechStarted/SpeechFinished events
- *   - endpointing=300       → was 150 (caused false end-of-speech on breath pauses)
- *   NOTE: no_delay is NOT a valid Nova-3 parameter — removed (caused HTTP 400)
- *   NOTE: utterance_end_ms is NOT accepted by this account tier — removed (caused HTTP 400)
- *         EOT safety-net is handled server-side in audio.socket.ts instead
+ * Fix 2 — Low-latency Deepgram parameters (QC56 Stage 4):
+ *   - model=nova-2          → Nova-2 emits more frequent partials than Nova-3 (~300ms faster)
+ *   - endpointing=100       → was 300 — 100ms silence triggers speech_final (saves ~200ms)
+ *   - smart_format REMOVED  → smart_format adds post-processing delay on partials (~100ms)
+ *   - vad_events=true       → enable SpeechStarted events
+ *   NOTE: no_delay is NOT a valid parameter — removed (caused HTTP 400)
+ *   NOTE: utterance_end_ms is NOT accepted on this account tier — removed (caused HTTP 400)
  * Fix 3 — Embed API key fallback (reliability):
  *   Remove the throw — use built-in Qworship key if env var not set.
  *   All users share the Qworship account key; no per-user configuration needed.
@@ -61,29 +62,28 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
     this.isConnecting = true;
     this.emit("connecting");
-    console.log(`[Deepgram] Connecting with Nova-3 (Stage 3 low-latency params)...`);
+    console.log(`[Deepgram] Connecting with Nova-2 (Stage 4 low-latency params)...`);
 
     // Build the Deepgram WebSocket URL with all low-latency parameters
     const deepgramUrl = new URL("wss://api.deepgram.com/v1/listen");
-    deepgramUrl.searchParams.append("model", "nova-3");
+    // Fix 2: nova-2 emits more frequent partials than nova-3 (~300ms faster first partial)
+    deepgramUrl.searchParams.append("model", "nova-2");
     deepgramUrl.searchParams.append("language", "en-US");
-    deepgramUrl.searchParams.append("smart_format", "true");
+    // smart_format REMOVED — adds ~100ms post-processing delay on every partial
     deepgramUrl.searchParams.append("interim_results", "true");
-    // Fix 2a: endpointing=300 (was 150) — prevents false end-of-speech on breath pauses.
-    // A pastor breathing mid-reference (100–200ms pause) would previously trigger
-    // is_final prematurely, splitting "Genesis chapter 8 [breath] verse 12" into two
-    // separate utterances. 300ms gives enough room for natural breath pauses.
-    deepgramUrl.searchParams.append("endpointing", "300");
+    // Fix 2: endpointing=100 (was 300) — 100ms silence triggers speech_final
+    // This saves ~200ms on every utterance. The vad_commit from the desktop's
+    // Silero VAD provides an additional early-flush safety net for mid-sentence refs.
+    deepgramUrl.searchParams.append("endpointing", "100");
     deepgramUrl.searchParams.append("punctuate", "true");
     deepgramUrl.searchParams.append("dictation", "true");
     deepgramUrl.searchParams.append("numerals", "true");
     deepgramUrl.searchParams.append("encoding", "linear16");
     deepgramUrl.searchParams.append("sample_rate", "16000");
     deepgramUrl.searchParams.append("channels", "1");
-    // Fix 2b: vad_events=true — enable SpeechStarted/SpeechFinished events
-    // NOTE: no_delay is NOT a valid Nova-3 parameter — removed (caused HTTP 400)
-    // NOTE: utterance_end_ms is NOT accepted by this Deepgram account tier — removed (caused HTTP 400)
-    //       The EOT safety-net is handled in audio.socket.ts via a server-side silence timer instead.
+    // vad_events=true — enable SpeechStarted events for early detection
+    // NOTE: no_delay is NOT a valid parameter — removed (caused HTTP 400)
+    // NOTE: utterance_end_ms is NOT accepted on this account tier — removed (caused HTTP 400)
     deepgramUrl.searchParams.append("vad_events", "true");
 
     try {
@@ -96,7 +96,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
       this.socket.on("open", () => {
         this.isConnecting = false;
         this.emit("connected");
-        console.log("[Deepgram] Connection established (Nova-3, low-latency mode)");
+        console.log("[Deepgram] Connection established (Nova-2, Stage 4 low-latency mode)");
         // Fix 4: Start KeepAlive pings to prevent 10-second timeout during silence
         this._startKeepAlive();
       });
