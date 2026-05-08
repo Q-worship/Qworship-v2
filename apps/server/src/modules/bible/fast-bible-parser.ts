@@ -311,7 +311,6 @@ export class FastBibleParser {
       "proverb": "Proverbs",
       "proverbs": "Proverbs",
       "mathew": "Matthew",
-      "mathew": "Matthew",
       "mathews": "Matthew",
       "matthews": "Matthew",
       "marc": "Mark",
