@@ -81,7 +81,9 @@ export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
   wss.on("connection", (ws: WebSocket) => {
-    console.log("[AudioSocket] Client connected to live audio stream");
+    const sessionStart = Date.now();
+    const T = () => `+${Date.now() - sessionStart}ms`;
+    console.log(`[AudioSocket] Client connected to live audio stream`);
 
     // ── Session state ──────────────────────────────────────────────────────
     let lastExecutedReference: string | null = null;
@@ -147,7 +149,7 @@ export function setupAudioSocket(server: Server) {
       lastExecutionTime = now;
 
       const conf = cmd._confidence != null ? ` [conf: ${cmd._confidence.toFixed(2)}]` : "";
-      console.log(`[AudioSocket] Executing [${source}]${conf}: ${cmd.name}`, cmd.arguments);
+      console.log(`[AudioSocket][${T()}] EXECUTE [${source}]${conf}: ${cmd.name}`, cmd.arguments);
 
       if (cmd.name === "project_bible_reference") {
         const { book, chapter, verse_start, verse_end, version } = cmd.arguments;
@@ -160,6 +162,7 @@ export function setupAudioSocket(server: Server) {
         });
 
         if (result) {
+          console.log(`[AudioSocket][${T()}] BIBLE_MATCH SENT: ${result.book} ${result.chapter}:${result.verses?.[0]?.verse}`);
           ws.send(JSON.stringify({ type: "bible_match", result, commandType: "lookup" }));
           currentContext = {
             book: result.book,
@@ -253,6 +256,7 @@ export function setupAudioSocket(server: Server) {
     // ── Tier 1: Partial (streaming, mid-sentence) ──────────────────────────
     transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
       currentPartialText = text;
+      console.log(`[AudioSocket][${T()}] PARTIAL [conf:${confidence?.toFixed(2)}]: "${text.slice(0,80)}"`);
       await processPartial(text, confidence);
     });
 
@@ -292,7 +296,7 @@ export function setupAudioSocket(server: Server) {
 
     // ── Tier 3: Final transcript ───────────────────────────────────────────
     transcriptionService.on("final", async (text: string, confidence: number) => {
-      console.log(`[AudioSocket] Final [conf: ${confidence?.toFixed(2)}]: "${text}"`);
+      console.log(`[AudioSocket][${T()}] FINAL [conf:${confidence?.toFixed(2)}]: "${text.slice(0,80)}"`);
       currentPartialText = "";
       resetPartialState();
 
@@ -314,6 +318,7 @@ export function setupAudioSocket(server: Server) {
     });
 
     // ── Incoming messages from desktop client ─────────────────────────────
+    let firstAudioAt = 0;
     ws.on("message", async (data: Buffer | string) => {
       if (typeof data === "string") {
         try {
@@ -342,6 +347,7 @@ export function setupAudioSocket(server: Server) {
         } catch (_) {}
         return;
       }
+      if (!firstAudioAt) { firstAudioAt = Date.now(); console.log(`[AudioSocket][${T()}] FIRST AUDIO CHUNK received`); }
       transcriptionService.sendAudio(data);
     });
 
