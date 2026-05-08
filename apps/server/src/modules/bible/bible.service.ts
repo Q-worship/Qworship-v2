@@ -238,7 +238,7 @@ export class BibleService {
   }
 
   // Book name mappings for flexible recognition
-  private static readonly BOOK_ALIASES = {
+  public static readonly BOOK_ALIASES = {
     genesis: "Genesis",
     gen: "Genesis",
     exodus: "Exodus",

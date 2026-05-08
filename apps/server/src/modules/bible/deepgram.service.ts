@@ -26,7 +26,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
     this.isConnecting = true;
     this.emit("connecting");
-    console.log("[Deepgram] Connecting with nova-3...");
+    console.log(`[Deepgram] Connecting with Nova-3...`);
 
     // Build the Deepgram WebSocket URL with parameters
     const deepgramUrl = new URL("wss://api.deepgram.com/v1/listen");
@@ -34,7 +34,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
     deepgramUrl.searchParams.append("language", "en-US");
     deepgramUrl.searchParams.append("smart_format", "true");
     deepgramUrl.searchParams.append("interim_results", "true");
-    deepgramUrl.searchParams.append("endpointing", "300");
+    deepgramUrl.searchParams.append("endpointing", "150");
     deepgramUrl.searchParams.append("punctuate", "true");
     deepgramUrl.searchParams.append("dictation", "true");
     deepgramUrl.searchParams.append("numerals", "true");
@@ -42,6 +42,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
     deepgramUrl.searchParams.append("sample_rate", "16000");
     deepgramUrl.searchParams.append("channels", "1");
 
+    // Keywords removed to prevent 400 Bad Request
     try {
       // Create WebSocket connection
       this.socket = new WebSocket(deepgramUrl.toString(), {
@@ -64,15 +65,30 @@ export class DeepgramTranscriptionService extends EventEmitter {
           // Handle different message types
           if (response.type === "Results") {
             const transcript = response.channel?.alternatives?.[0]?.transcript;
+            const confidence = response.channel?.alternatives?.[0]?.confidence;
             const isFinal = response.is_final;
+            const isUtteranceEnd = response.speech_final;
 
             if (transcript && transcript.trim()) {
               if (isFinal) {
-                this.emit("final", transcript);
+                this.emit("final", transcript, confidence);
               } else {
-                this.emit("partial_raw", transcript);
+                this.emit("partial_raw", transcript, confidence);
               }
             }
+          }
+
+          // Handle Flux End-of-Turn events
+          if (response.type === "EagerEndOfTurn") {
+            this.emit("eager_eot");
+          }
+
+          if (response.type === "EndOfTurn") {
+            this.emit("eot");
+          }
+
+          if (response.type === "UtteranceEnd") {
+            this.emit("utterance_end");
           }
 
           // Log errors from Deepgram

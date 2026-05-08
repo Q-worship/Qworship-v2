@@ -23,6 +23,18 @@ services:
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      # QC54: Deepgram key for HFB Online — built-in fallback is embedded in code,
+      # but setting this here allows override via Coolify environment variables.
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+    labels:
+      # QC54: Traefik WebSocket passthrough for HFB Online audio-stream endpoint.
+      # Without these labels, Traefik drops WebSocket upgrade requests over HTTP/2.
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.server-ws.rule=PathPrefix(`/api/bible/audio-stream` )"
+      - "traefik.http.routers.server-ws.entrypoints=websecure"
+      - "traefik.http.routers.server-ws.tls=true"
+      - "traefik.http.services.server-ws.loadbalancer.server.port=5000"
     restart: unless-stopped
 
   client:

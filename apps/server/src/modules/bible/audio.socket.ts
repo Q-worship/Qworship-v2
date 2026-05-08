@@ -3,6 +3,7 @@ import type { Server } from "http";
 import OpenAI from "openai";
 import { DeepgramTranscriptionService } from "./deepgram.service.js";
 import { BibleService } from "./bible.service.js";
+import { FastBibleParser } from "./fast-bible-parser.js";
 
 // Lazy-init - avoids cost if never called
 let _openai: OpenAI | null = null;
@@ -46,6 +47,9 @@ export function setupAudioSocket(server: Server) {
     let isStrictMode = false;
     let rawUIBuffer = ""; // Added for instant Whisper UI feedback
     let currentContext: any = null; // Track current book/chapter for AI context
+    let lastExecutedReference: string | null = null; // Deduplication for <1s latency path
+    let lastExecutionTime = 0;
+    let currentPartialText = ""; // Track latest partial for Flux EOT flushing
 
     /**
      * DORMANT: Legacy deterministic parser.
@@ -175,7 +179,28 @@ export function setupAudioSocket(server: Server) {
       }
     });
 
-    transcriptionService.on("partial_raw", (text: string) => {
+    transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
+      currentPartialText = text; // Update for Flux EOT
+      // FAST PATH: Try to parse immediately from partials for <1s latency
+      // Only proceed if confidence is high enough to avoid misinterpretations
+      const CONFIDENCE_THRESHOLD = 0.8;
+      
+      if (confidence >= CONFIDENCE_THRESHOLD) {
+        const command = FastBibleParser.parse(text);
+        if (command) {
+          const refKey = JSON.stringify(command.arguments);
+          const now = Date.now();
+          
+          // Only execute if it's a new reference or enough time has passed
+          if (refKey !== lastExecutedReference || (now - lastExecutionTime > 3000)) {
+            console.log(`[AudioSocket] Fast Path Match (Partial) [Conf: ${confidence.toFixed(2)}]: ${text}`);
+            lastExecutedReference = refKey;
+            lastExecutionTime = now;
+            transcriptionService.emit("command", command);
+          }
+        }
+      }
+
       ws.send(
         JSON.stringify({
           type: "transcript_partial",
@@ -189,9 +214,30 @@ export function setupAudioSocket(server: Server) {
       await processTranscript(transcriptBuffer, true);
     });
 
+    // NEW: Handle Flux End-of-Turn events for ultra-low latency flushing
+    const handleFluxEOT = async (type: string) => {
+      if (!currentPartialText) return;
+      console.log(`[AudioSocket] Flux ${type} detected. Flushing: "${currentPartialText}"`);
+      
+      const command = FastBibleParser.parse(currentPartialText);
+      if (command) {
+        const refKey = JSON.stringify(command.arguments);
+        const now = Date.now();
+        if (refKey !== lastExecutedReference || (now - lastExecutionTime > 3000)) {
+          lastExecutedReference = refKey;
+          lastExecutionTime = now;
+          transcriptionService.emit("command", command);
+        }
+      }
+    };
+
+    transcriptionService.on("eager_eot", () => handleFluxEOT("EagerEndOfTurn"));
+    transcriptionService.on("eot", () => handleFluxEOT("EndOfTurn"));
+    transcriptionService.on("utterance_end", () => handleFluxEOT("UtteranceEnd"));
+
     // MODIFIED: Add command conversion here
-    transcriptionService.on("final", async (text: string) => {
-      console.log(`[AudioSocket] Final Transcript: ${text}`);
+    transcriptionService.on("final", async (text: string, confidence: number) => {
+      console.log(`[AudioSocket] Final Transcript [Conf: ${confidence?.toFixed(2)}]: ${text}`);
       transcriptBuffer = "";
       rawUIBuffer = "";
 
@@ -203,9 +249,19 @@ export function setupAudioSocket(server: Server) {
       );
 
       // NEW: Convert final transcript to command and emit
-      const command = await convertToCommand(text);
-      if (command) {
-        transcriptionService.emit("command", command);
+      // Check if this was already handled by the Fast Path (partials)
+      const fastCommand = FastBibleParser.parse(text);
+      const fastRefKey = fastCommand ? JSON.stringify(fastCommand.arguments) : null;
+      
+      if (fastRefKey && fastRefKey === lastExecutedReference) {
+        console.log(`[AudioSocket] Skipping OpenAI fallback (already handled by Fast Path)`);
+      } else {
+        const command = await convertToCommand(text);
+        if (command) {
+          lastExecutedReference = JSON.stringify(command.arguments);
+          lastExecutionTime = Date.now();
+          transcriptionService.emit("command", command);
+        }
       }
 
       await processTranscript(text, false);
