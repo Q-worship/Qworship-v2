@@ -5,9 +5,27 @@ import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
 
 /**
- * setupAudioSocket — QC56 Stage 2
+ * setupAudioSocket — QC56 Stage 3
  *
- * PREDICTIVE STREAMING EXTRACTION
+ * CHANGES FROM STAGE 2:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Fix 5 — Reference-keyed dedup with 5-second window (non-stop speaker fix):
+ *
+ *   PROBLEM: The Stage 2 dedup window was only 800ms. For a non-stop speaker
+ *   who says "Genesis chapter 8 verse 12" and keeps talking, the predictive
+ *   accumulator correctly projects the verse at ~800ms. But when speech_final
+ *   eventually fires (potentially 5–10 seconds later, when the pastor finally
+ *   pauses), the 800ms dedup window has expired and the same verse gets
+ *   projected a SECOND TIME — interrupting the flow.
+ *
+ *   FIX: The dedup window is extended to 5000ms AND the dedup key is now
+ *   based on the REFERENCE (book+chapter+verse) rather than the full command
+ *   JSON. This means:
+ *   - If the exact same verse was projected within the last 5 seconds, skip it
+ *   - Different verses are never blocked (e.g. John 3:16 then John 3:17)
+ *   - The 5-second window covers even the longest continuous speech segments
+ *
+ * PREDICTIVE ACCUMULATOR (unchanged from Stage 2):
  * ─────────────────────────────────────────────────────────────────────────────
  * A stateful PartialReferenceState accumulator tracks the progressive assembly
  * of a Bible reference across multiple Deepgram partial events:
@@ -28,12 +46,10 @@ import { FastBibleParser } from "./fast-bible-parser.js";
  *
  *   t=1600ms speech_final fires → Tier 3 final confirms same ref → dedup skips
  *
- * Three-tier pipeline (unchanged from Stage 1):
+ * Three-tier pipeline:
  *   Tier 1 (partial_raw): predictive accumulator + immediate full-ref detection
  *   Tier 2 (eot/utterance_end): flush accumulated partial on end-of-turn
  *   Tier 3 (final): final confirmation — dedup prevents double projection
- *
- * No changes to deepgram.service.ts (Stage 2 scope).
  */
 
 /** Tracks the progressive state of a reference being assembled from partials */
@@ -44,6 +60,21 @@ interface PartialReferenceState {
   verseEnd: number | null;
   lastPartialText: string;
   bookDetectedAt: number;
+}
+
+/**
+ * Build a stable dedup key from a command's arguments.
+ * Keyed on book+chapter+verse_start so that:
+ *   - Same verse projected twice → dedup fires
+ *   - Different verses → never blocked
+ *   - Navigation/version commands → use full JSON (unchanged behaviour)
+ */
+function buildDedupKey(cmd: any): string {
+  if (cmd.name === "project_bible_reference") {
+    const { book, chapter, verse_start } = cmd.arguments;
+    return `${cmd.name}:${book}:${chapter}:${verse_start ?? 1}`;
+  }
+  return JSON.stringify(cmd.arguments);
 }
 
 export function setupAudioSocket(server: Server) {
@@ -57,8 +88,12 @@ export function setupAudioSocket(server: Server) {
     let lastExecutionTime = 0;
     let currentPartialText = "";
     let currentContext: any = null;
-    const DEDUP_WINDOW_MS = 800;
-    const CONFIDENCE_THRESHOLD = 0.75; // Slightly relaxed for partial path
+
+    // Fix 5: Extended dedup window — 5000ms (was 800ms).
+    // Covers non-stop speakers who quote a reference mid-sentence and keep
+    // talking for several seconds before speech_final fires.
+    const DEDUP_WINDOW_MS = 5000;
+    const CONFIDENCE_THRESHOLD = 0.75;
 
     // Predictive accumulator — tracks in-progress reference assembly
     let partialState: PartialReferenceState = {
@@ -99,11 +134,12 @@ export function setupAudioSocket(server: Server) {
 
     // ── Command execution ──────────────────────────────────────────────────
     const executeCommand = async (cmd: any, source: string) => {
-      const refKey = JSON.stringify(cmd.arguments);
+      // Fix 5: Use reference-keyed dedup (book+chapter+verse) with 5s window
+      const refKey = buildDedupKey(cmd);
       const now = Date.now();
 
       if (refKey === lastExecutedReference && now - lastExecutionTime < DEDUP_WINDOW_MS) {
-        console.log(`[AudioSocket] Dedup skip [${source}]: ${refKey}`);
+        console.log(`[AudioSocket] Dedup skip [${source}]: ${refKey} (${now - lastExecutionTime}ms ago)`);
         return;
       }
 
@@ -231,7 +267,7 @@ export function setupAudioSocket(server: Server) {
       const cmd = FastBibleParser.parse(textToFlush);
       if (cmd) await executeCommand(cmd, label);
 
-      // If we had a partial state with book+chapter but no verse, try with chapter 1 as fallback
+      // If we had a partial state with book+chapter but no verse, project chapter:1 as fallback
       else if (partialState.book && partialState.chapter) {
         console.log(`[AudioSocket] ${label} — partial state flush: ${partialState.book} ${partialState.chapter}`);
         await executeCommand({
