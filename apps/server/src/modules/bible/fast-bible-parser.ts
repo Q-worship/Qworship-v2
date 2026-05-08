@@ -61,6 +61,13 @@ export class FastBibleParser {
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.95,
     },
+    // "Matthew chapter 7 7" / "Matthew chapter 7 verse 7" without 'verse' keyword
+    // This catches the common pattern where Deepgram drops the word 'verse'
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)\s+(\d+)(?:\s+(?:to|through|and)\s+(\d+))?\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
+      confidence: 0.92,
+    },
     // "Matthew chapter 1" (no verse yet — partial, used for predictive)
     {
       re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)\b/gi,
