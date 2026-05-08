@@ -5,31 +5,82 @@ import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
 
 /**
- * setupAudioSocket — QC56 Stage 1
+ * setupAudioSocket — QC56 Stage 2
  *
- * Changes from previous version:
- * - REMOVED: convertToCommand() OpenAI GPT-3.5-turbo round-trip (was +300–800ms on every utterance)
- * - REMOVED: OpenAI import and lazy-init (no longer needed)
- * - FastBibleParser is now the SOLE command processor across all three tiers
- * - Tier 1 (partial_raw): scan mid-sentence partials with confidence ≥ 0.80
- * - Tier 2 (eot/utterance_end): flush accumulated partial on end-of-turn
- * - Tier 3 (final): scan final transcript — no fallback API call
- * - Confidence gate added to final handler (mirrors partial_raw gate)
- * - 1500ms command throttle reduced to 800ms (safe dedup window)
+ * PREDICTIVE STREAMING EXTRACTION
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A stateful PartialReferenceState accumulator tracks the progressive assembly
+ * of a Bible reference across multiple Deepgram partial events:
+ *
+ *   t=0ms    partial: "On my way to church"
+ *            → scan: no book found → skip
+ *
+ *   t=800ms  partial: "...as written in Matthew"
+ *            → scan: book=Matthew detected → state.book set, waiting for chapter
+ *            → UI notified: "book detected: Matthew"
+ *
+ *   t=1100ms partial: "...Matthew chapter one"
+ *            → scan: book+chapter found → state.chapter=1 set, waiting for verse
+ *
+ *   t=1400ms partial: "...Matthew chapter one verse 5"
+ *            → scan: FULL REFERENCE → fetch Matthew 1:5 → PROJECT immediately
+ *            → speaker still saying "where we are reminded..."
+ *
+ *   t=1600ms speech_final fires → Tier 3 final confirms same ref → dedup skips
+ *
+ * Three-tier pipeline (unchanged from Stage 1):
+ *   Tier 1 (partial_raw): predictive accumulator + immediate full-ref detection
+ *   Tier 2 (eot/utterance_end): flush accumulated partial on end-of-turn
+ *   Tier 3 (final): final confirmation — dedup prevents double projection
+ *
+ * No changes to deepgram.service.ts (Stage 2 scope).
  */
+
+/** Tracks the progressive state of a reference being assembled from partials */
+interface PartialReferenceState {
+  book: string | null;
+  chapter: number | null;
+  verse: number | null;
+  verseEnd: number | null;
+  lastPartialText: string;
+  bookDetectedAt: number;
+}
+
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
   wss.on("connection", (ws: WebSocket) => {
     console.log("[AudioSocket] Client connected to live audio stream");
 
-    // ── State ──────────────────────────────────────────────────────────────
+    // ── Session state ──────────────────────────────────────────────────────
     let lastExecutedReference: string | null = null;
     let lastExecutionTime = 0;
     let currentPartialText = "";
     let currentContext: any = null;
     const DEDUP_WINDOW_MS = 800;
-    const CONFIDENCE_THRESHOLD = 0.80;
+    const CONFIDENCE_THRESHOLD = 0.75; // Slightly relaxed for partial path
+
+    // Predictive accumulator — tracks in-progress reference assembly
+    let partialState: PartialReferenceState = {
+      book: null,
+      chapter: null,
+      verse: null,
+      verseEnd: null,
+      lastPartialText: "",
+      bookDetectedAt: 0,
+    };
+
+    // Reset the partial accumulator (called on final/EOT)
+    const resetPartialState = () => {
+      partialState = {
+        book: null,
+        chapter: null,
+        verse: null,
+        verseEnd: null,
+        lastPartialText: "",
+        bookDetectedAt: 0,
+      };
+    };
 
     // ── Deepgram service ───────────────────────────────────────────────────
     const transcriptionService = new DeepgramTranscriptionService();
@@ -47,17 +98,10 @@ export function setupAudioSocket(server: Server) {
     transcriptionService.connect();
 
     // ── Command execution ──────────────────────────────────────────────────
-
-    /**
-     * Execute a parsed command object. Handles deduplication and throttling.
-     * @param cmd  Command from FastBibleParser
-     * @param source  Label for logging ("Partial" | "EOT" | "Final")
-     */
     const executeCommand = async (cmd: any, source: string) => {
       const refKey = JSON.stringify(cmd.arguments);
       const now = Date.now();
 
-      // Deduplicate: skip if same reference executed within DEDUP_WINDOW_MS
       if (refKey === lastExecutedReference && now - lastExecutionTime < DEDUP_WINDOW_MS) {
         console.log(`[AudioSocket] Dedup skip [${source}]: ${refKey}`);
         return;
@@ -104,49 +148,127 @@ export function setupAudioSocket(server: Server) {
       }
     };
 
+    // ── Predictive accumulator ─────────────────────────────────────────────
+    /**
+     * Called on every partial_raw event. Implements the progressive detection:
+     *   1. Try to parse a FULL reference immediately (highest priority)
+     *   2. If not found, check if we have a partial state to update:
+     *      - No state: scan for book-only → set state.book
+     *      - Has book: scan for book+chapter → set state.chapter
+     *      - Has book+chapter: scan for full ref again (verse may have just arrived)
+     *   3. Notify UI of progressive state changes
+     */
+    const processPartial = async (text: string, confidence: number) => {
+      // Always send live transcript to UI
+      ws.send(JSON.stringify({ type: "transcript_partial", text }));
+
+      if (confidence < CONFIDENCE_THRESHOLD) return;
+
+      // ── Step 1: Try full reference parse first ─────────────────────────
+      const fullCmd = FastBibleParser.parse(text);
+      if (fullCmd && fullCmd.name === "project_bible_reference") {
+        // Full reference found — execute immediately and reset state
+        await executeCommand(fullCmd, "Partial");
+        resetPartialState();
+        return;
+      }
+
+      // Handle navigation/version commands immediately
+      if (fullCmd && fullCmd.name !== "project_bible_reference") {
+        await executeCommand(fullCmd, "Partial");
+        return;
+      }
+
+      // ── Step 2: Progressive accumulation ──────────────────────────────
+      const stage = FastBibleParser.parseStage(text);
+
+      if (!stage) {
+        // No book detected yet — if we had a state older than 5s, reset it
+        if (partialState.book && Date.now() - partialState.bookDetectedAt > 5000) {
+          resetPartialState();
+        }
+        return;
+      }
+
+      if (stage.type === "book_only") {
+        // New book detected — start or update accumulator
+        if (partialState.book !== stage.book) {
+          console.log(`[AudioSocket] Predictive: book detected → "${stage.book}"`);
+          partialState.book = stage.book;
+          partialState.chapter = null;
+          partialState.verse = null;
+          partialState.bookDetectedAt = Date.now();
+          // Notify UI that a book has been detected (for visual feedback)
+          ws.send(JSON.stringify({ type: "book_detected", book: stage.book }));
+        }
+
+      } else if (stage.type === "book_chapter" && stage.book && stage.chapter) {
+        // Book + chapter detected — update accumulator
+        if (partialState.book !== stage.book || partialState.chapter !== stage.chapter) {
+          console.log(`[AudioSocket] Predictive: book+chapter → "${stage.book} ${stage.chapter}"`);
+          partialState.book = stage.book;
+          partialState.chapter = stage.chapter;
+          partialState.verse = null;
+          if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
+        }
+      }
+    };
+
     // ── Tier 1: Partial (streaming, mid-sentence) ──────────────────────────
     transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
       currentPartialText = text;
-
-      // Send live transcript to UI immediately (no gate — always show)
-      ws.send(JSON.stringify({ type: "transcript_partial", text }));
-
-      // Fast path: only attempt parse if Deepgram confidence is high enough
-      if (confidence < CONFIDENCE_THRESHOLD) return;
-
-      const cmd = FastBibleParser.parse(text);
-      if (cmd) await executeCommand(cmd, "Partial");
+      await processPartial(text, confidence);
     });
 
     // ── Tier 2: End-of-turn flush ──────────────────────────────────────────
     const handleEOT = async (label: string) => {
-      if (!currentPartialText) return;
-      console.log(`[AudioSocket] ${label} — flushing: "${currentPartialText}"`);
-      const cmd = FastBibleParser.parse(currentPartialText);
+      const textToFlush = currentPartialText;
+      if (!textToFlush) return;
+
+      console.log(`[AudioSocket] ${label} — flushing: "${textToFlush}"`);
+
+      // Try full parse on the accumulated text
+      const cmd = FastBibleParser.parse(textToFlush);
       if (cmd) await executeCommand(cmd, label);
+
+      // If we had a partial state with book+chapter but no verse, try with chapter 1 as fallback
+      else if (partialState.book && partialState.chapter) {
+        console.log(`[AudioSocket] ${label} — partial state flush: ${partialState.book} ${partialState.chapter}`);
+        await executeCommand({
+          name: "project_bible_reference",
+          arguments: {
+            book: partialState.book,
+            chapter: partialState.chapter,
+            verse_start: 1,
+            verse_end: null,
+            version: "kjv",
+          },
+          _confidence: 0.65,
+        }, `${label}:PartialState`);
+      }
+
+      resetPartialState();
     };
 
-    transcriptionService.on("eager_eot",    () => handleEOT("EagerEndOfTurn"));
-    transcriptionService.on("eot",          () => handleEOT("EndOfTurn"));
-    transcriptionService.on("utterance_end",() => handleEOT("UtteranceEnd"));
+    transcriptionService.on("eager_eot",     () => handleEOT("EagerEndOfTurn"));
+    transcriptionService.on("eot",           () => handleEOT("EndOfTurn"));
+    transcriptionService.on("utterance_end", () => handleEOT("UtteranceEnd"));
 
     // ── Tier 3: Final transcript ───────────────────────────────────────────
     transcriptionService.on("final", async (text: string, confidence: number) => {
       console.log(`[AudioSocket] Final [conf: ${confidence?.toFixed(2)}]: "${text}"`);
       currentPartialText = "";
+      resetPartialState();
 
-      // Send final transcript to UI
       ws.send(JSON.stringify({ type: "transcript_final", text }));
 
-      // Apply same confidence gate as partial path
       if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
-        console.log(`[AudioSocket] Final below confidence threshold (${confidence?.toFixed(2)}) — skipping`);
+        console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
         return;
       }
 
       const cmd = FastBibleParser.parse(text);
       if (cmd) await executeCommand(cmd, "Final");
-      // No OpenAI fallback — FastBibleParser handles all cases locally
     });
 
     // ── Error handling ─────────────────────────────────────────────────────

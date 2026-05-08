@@ -1,7 +1,7 @@
 import { BibleService } from "./bible.service.js";
 
 /**
- * FastBibleParser — QC56 Stage 1
+ * FastBibleParser — QC56 Stage 2
  *
  * Key improvements over previous version:
  * 1. SCAN-AND-EXTRACT: Scans anywhere inside a sentence for a Bible reference,
@@ -106,6 +106,65 @@ export class FastBibleParser {
     /\b(?:switch to|use|change to|show me|read in|in the)\s+(niv|kjv|nkjv|esv|amp|msg|gnt?)\b/i;
 
   // ─── Public API ───────────────────────────────────────────────────────────
+
+  /**
+   * parseStage — used by the predictive accumulator in audio.socket.ts.
+   *
+   * Returns the current detection stage for a partial transcript:
+   *   { type: 'book_only', book }          — book name detected, no chapter yet
+   *   { type: 'book_chapter', book, chapter } — book + chapter detected, no verse
+   *   null                                  — no book name found
+   *
+   * This is intentionally separate from parse() so the accumulator can track
+   * progressive state without triggering a full command execution.
+   */
+  static parseStage(
+    text: string,
+  ): { type: "book_only"; book: string } | { type: "book_chapter"; book: string; chapter: number } | null {
+    if (!text || text.trim().length < 3) return null;
+
+    let clean = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
+    clean = this.normalizeNumbers(clean);
+
+    // Try book+chapter pattern first (more specific)
+    const bookChapterRe = /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\d+)\b/gi;
+    let m = bookChapterRe.exec(clean);
+    if (m) {
+      const book = this.normalizeBook(m[1]);
+      const chapter = parseInt(m[2]);
+      if (book && !isNaN(chapter) && chapter >= 1 && chapter <= 150) {
+        return { type: "book_chapter", book, chapter };
+      }
+    }
+
+    // Also try numeric chapter format: "Matthew 1" (but only if confidence is high enough
+    // — avoid false positives from random numbers after book names in normal speech)
+    const bookNumRe = /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d{1,3})\b/gi;
+    bookNumRe.lastIndex = 0;
+    let m2 = bookNumRe.exec(clean);
+    while (m2) {
+      const book = this.normalizeBook(m2[1]);
+      const chapter = parseInt(m2[2]);
+      if (book && !isNaN(chapter) && chapter >= 1 && chapter <= 150) {
+        return { type: "book_chapter", book, chapter };
+      }
+      m2 = bookNumRe.exec(clean);
+    }
+
+    // Try book-only: scan for any known book name in the text
+    // Use word-boundary scan across all known aliases
+    const words = clean.split(/\s+/);
+    // Try 3-word, 2-word, 1-word sequences
+    for (let len = 3; len >= 1; len--) {
+      for (let i = 0; i <= words.length - len; i++) {
+        const candidate = words.slice(i, i + len).join(" ");
+        const book = this.normalizeBook(candidate);
+        if (book) return { type: "book_only", book };
+      }
+    }
+
+    return null;
+  }
 
   /**
    * Main entry point. Scans the full text for any Bible reference, navigation,
