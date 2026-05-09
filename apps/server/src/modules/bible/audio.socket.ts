@@ -78,19 +78,31 @@ interface PartialReferenceState {
  * For verse_start > 1 the guard always returns true (no ambiguity).
  * For the FINAL transcript path this guard is NOT applied — defaults are fine there.
  */
-function hasExplicitVerse(text: string, verseStart: number): boolean {
-  if (verseStart !== 1) return true; // any verse other than 1 is always explicit
+function hasExplicitVerse(text: string, _verseStart: number): boolean {
+  // QC59b strict mode: the partial scanner must NEVER project unless a verse
+  // number is explicitly present in the raw transcript text.
+  // This applies to ALL verses — there are no defaults or fallbacks on partials.
+  // The final/EOT path is unaffected (this function is only called from processPartial).
   const t = text.toLowerCase();
-  // Colon notation: "genesis 2:1"
-  if (/:1\b/.test(t)) return true;
-  // "verse 1" / "verse one"
-  if (/\bverse\s+(?:1|one)\b/.test(t)) return true;
-  // "v 1" / "v. 1"
-  if (/\bv\.?\s+1\b/.test(t)) return true;
-  // Compact: chapter number followed immediately by " 1" (e.g. "chapter 2 1")
-  if (/\bchapter\s+\d+\s+1\b/.test(t)) return true;
-  // Space-separated compact: "genesis 2 1"
-  if (/\b\d+\s+1\b/.test(t)) return true;
+
+  // Colon notation: "genesis 2:8" / "john 3:16"
+  if (/:\d+\b/.test(t)) return true;
+
+  // "verse N" / "verse one" / "verse twenty" etc.
+  if (/\bverse\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b/.test(t)) return true;
+
+  // "v. N" / "v N"
+  if (/\bv\.?\s+\d+\b/.test(t)) return true;
+
+  // Compact spoken: chapter number followed by a space and a digit
+  // e.g. "genesis chapter 2 8" / "matthew chapter 5 3"
+  if (/\bchapter\s+\d+\s+\d+\b/.test(t)) return true;
+
+  // Space-separated compact: "john 3 16" / "genesis 2 8"
+  // Must have book + two distinct numbers
+  if (/\b\d+\s+\d+\b/.test(t)) return true;
+
+  // No explicit verse found — suppress partial projection
   return false;
 }
 
