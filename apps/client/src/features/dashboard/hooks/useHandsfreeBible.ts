@@ -86,7 +86,7 @@ export const useHandsfreeBible = ({
   }, [selectedBibleVersion]);
 
   // Handle Socket Events
-  const handleBibleMatch = (data: any) => {
+  const handleBibleMatch = (data: any, overrideVersion?: string) => {
     if (data.success === false) {
       setDetectedCommands(data.error || "Command not recognized");
       return;
@@ -101,10 +101,16 @@ export const useHandsfreeBible = ({
       setSelectedBibleVersion(newVersion);
     }
 
-    const effectiveVersion =
-      data.commandType === "version_change" && data.requestedVersion
-        ? data.requestedVersion.toUpperCase()
-        : selectedBibleVersion;
+    // QC64 fix: Use overrideVersion if provided (version-switch re-projection),
+    // then fall back to requestedVersion (direct version_change from server),
+    // then use the synchronous ref (always current, unlike selectedBibleVersion state).
+    const effectiveVersion = (
+      overrideVersion ||
+      (data.commandType === "version_change" && data.requestedVersion
+        ? data.requestedVersion
+        : null) ||
+      selectedBibleVersionRef.current
+    ).toUpperCase();
     const versionKey = effectiveVersion.toLowerCase();
     const text = verseData?.[versionKey] || verseData?.kjv || "";
 
@@ -252,10 +258,12 @@ export const useHandsfreeBible = ({
         const data = await response.json();
         console.log("[HandsfreeBible] Navigation API response:", data);
         if (data.success && data.result) {
+          // QC64 fix: Pass overrideVersion so handleBibleMatch uses the correct
+          // version key when looking up text (avoids stale selectedBibleVersion state).
           handleBibleMatch({
             result: data.result,
             commandType: data.commandType,
-          });
+          }, overrideVersion);
         } else {
           console.warn("[HandsfreeBible] Navigation failed:", data.error);
         }
