@@ -88,6 +88,71 @@ export class DeepgramTranscriptionService extends EventEmitter {
     // NOTE: utterance_end_ms is NOT accepted on this account tier — removed (caused HTTP 400)
     deepgramUrl.searchParams.append("vad_events", "true");
 
+    // ── QC62: Keyterm Prompting — Tier 1 (Bible Books) + Tier 2 (Navigation) ──────────────
+    //
+    // Keyterms bias Deepgram's decoder probability toward domain-specific vocabulary.
+    // This is NOT forced recognition — it increases confidence for rare/unusual words.
+    // Zero latency impact: keyterms are sent once at connection time, not per-chunk.
+    //
+    // Tier 1: All 66 canonical Bible book names + spoken variants + common mispronunciations
+    // Tier 2: Navigation and command phrases used in Qworship HFB
+    //
+    // Benefits both the Qworship V2 web app AND the Live Console desktop app
+    // (both connect to this same server endpoint).
+    const BIBLE_KEYTERMS: string[] = [
+      // ── Old Testament ──────────────────────────────────────────────────────
+      // Torah / Pentateuch
+      "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
+      // Historical Books
+      "Joshua", "Judges", "Ruth",
+      "First Samuel", "1 Samuel", "Second Samuel", "2 Samuel",
+      "First Kings", "1 Kings", "Second Kings", "2 Kings",
+      "First Chronicles", "1 Chronicles", "Second Chronicles", "2 Chronicles",
+      "Ezra", "Nehemiah", "Esther",
+      // Wisdom / Poetry
+      "Job", "Psalms", "Psalm", "Proverbs", "Ecclesiastes", "Ecclesiasticus",
+      "Song of Solomon", "Song of Songs", "Song of Song",
+      // Major Prophets
+      "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel",
+      // Minor Prophets
+      "Hosea", "Joel", "Amos", "Obadiah", "Obadia",
+      "Jonah", "Micah", "Nahum", "Habakkuk", "Habakuk", "Habacuc",
+      "Zephaniah", "Zephania", "Haggai", "Haggay",
+      "Zechariah", "Zachariah", "Malachi", "Malacy",
+      // ── New Testament ──────────────────────────────────────────────────────
+      // Gospels
+      "Matthew", "Mark", "Luke", "John",
+      // Acts
+      "Acts", "Acts of the Apostles",
+      // Pauline Epistles
+      "Romans",
+      "First Corinthians", "1 Corinthians", "Second Corinthians", "2 Corinthians",
+      "Galatians", "Galations",
+      "Ephesians", "Philippians", "Philipians", "Colossians",
+      "First Thessalonians", "1 Thessalonians", "Second Thessalonians", "2 Thessalonians",
+      "First Timothy", "1 Timothy", "Second Timothy", "2 Timothy",
+      "Titus", "Philemon",
+      // General Epistles
+      "Hebrews", "James",
+      "First Peter", "1 Peter", "Second Peter", "2 Peter",
+      "First John", "1 John", "Second John", "2 John", "Third John", "3 John",
+      "Jude", "Revelation", "Revelations",
+      // ── Tier 2: Navigation and HFB command phrases ─────────────────────────
+      "show me", "show verse", "project", "display",
+      "next verse", "previous verse", "next chapter", "previous chapter",
+      "chapter", "verse", "chapter and verse",
+      "King James", "New King James", "New International", "English Standard",
+      "Amplified", "The Message",
+      "KJV", "NKJV", "NIV", "ESV", "AMP", "MSG",
+      "switch to", "change to", "read from", "open to",
+      "let me see", "let us read", "turn to", "go to",
+    ];
+
+    for (const term of BIBLE_KEYTERMS) {
+      deepgramUrl.searchParams.append("keyterms", term);
+    }
+    console.log(`[Deepgram] QC62: ${BIBLE_KEYTERMS.length} keyterms loaded (Tier 1 Bible books + Tier 2 navigation)`);
+
     try {
       this.socket = new WebSocket(deepgramUrl.toString(), {
         headers: {
