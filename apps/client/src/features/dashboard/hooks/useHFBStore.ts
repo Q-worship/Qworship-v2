@@ -147,20 +147,32 @@ export const useHFBStore = create<HFBStore>((set) => ({
       const endTime = performance.now();
 
       if (localVerses && localVerses.length > 0) {
-        // Sort verses to ensure correct order
-        localVerses.sort((a: any, b: any) => a.verse - b.verse);
-        
-        const mappedVerses = localVerses.map((v: any) => ({
-          number: v.verse,
-          text: v.text || '',
-        }));
+        // QC65 defensive check: if ALL cached verses have empty text, the cache
+        // is stale (e.g. AMP/MSG cached before the data was populated). Treat as
+        // a miss and fall through to the cloud API to get the real data.
+        const hasAnyText = localVerses.some((v: any) => v.text && v.text.trim().length > 0);
+        if (!hasAnyText) {
+          console.warn(`[IndexedDB HFB] All ${localVerses.length} cached verses for ${book} ${chapter} (${vKey}) are empty — treating as cache miss.`);
+          // Purge the stale empty entries so they don't block future fetches
+          try {
+            await db.verses.where({ version: vKey, book, chapter }).delete();
+          } catch (_) { /* non-critical */ }
+        } else {
+          // Sort verses to ensure correct order
+          localVerses.sort((a: any, b: any) => a.verse - b.verse);
+          
+          const mappedVerses = localVerses.map((v: any) => ({
+            number: v.verse,
+            text: v.text || '',
+          }));
 
-        set({ hfbChapterVerses: mappedVerses, hfbChapterLoading: false });
-        if (highlightVerse !== undefined) {
-           set({ hfbActiveVerseNum: highlightVerse });
+          set({ hfbChapterVerses: mappedVerses, hfbChapterLoading: false });
+          if (highlightVerse !== undefined) {
+             set({ hfbActiveVerseNum: highlightVerse });
+          }
+          console.log(`🚀 [IndexedDB HFB] Fetched ${book} ${chapter} (${vKey}) locally in ${(endTime - startTime).toFixed(2)}ms`);
+          return; // Success, skip cloud fallback
         }
-        console.log(`🚀 [IndexedDB HFB] Fetched ${book} ${chapter} (${vKey}) locally in ${(endTime - startTime).toFixed(2)}ms`);
-        return; // Success, skip cloud fallback
       }
 
       console.warn(`[Local DB] Verses not found for ${book} ${chapter} (${vKey}). Falling back to Cloud API...`);
