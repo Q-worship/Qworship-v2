@@ -63,6 +63,38 @@ interface PartialReferenceState {
 }
 
 /**
+ * QC59b (V2 port): Guard against premature verse-1 projection on partials.
+ *
+ * When FastBibleParser matches only "Genesis chapter 2" (no verse spoken yet),
+ * it returns verse_start=1 as a default. On a PARTIAL transcript this causes
+ * Genesis 2:1 to project immediately — then corrects to the actual verse when
+ * the number is finally heard.
+ *
+ * This guard returns true only when verse_start=1 is EXPLICITLY spoken:
+ *   - The digit "1" appears after the chapter number in the text, OR
+ *   - The word "one" appears after the chapter number, OR
+ *   - A colon-notation ":1" is present (e.g. "Genesis 2:1")
+ *
+ * For verse_start > 1 the guard always returns true (no ambiguity).
+ * For the FINAL transcript path this guard is NOT applied — defaults are fine there.
+ */
+function hasExplicitVerse(text: string, verseStart: number): boolean {
+  if (verseStart !== 1) return true; // any verse other than 1 is always explicit
+  const t = text.toLowerCase();
+  // Colon notation: "genesis 2:1"
+  if (/:1\b/.test(t)) return true;
+  // "verse 1" / "verse one"
+  if (/\bverse\s+(?:1|one)\b/.test(t)) return true;
+  // "v 1" / "v. 1"
+  if (/\bv\.?\s+1\b/.test(t)) return true;
+  // Compact: chapter number followed immediately by " 1" (e.g. "chapter 2 1")
+  if (/\bchapter\s+\d+\s+1\b/.test(t)) return true;
+  // Space-separated compact: "genesis 2 1"
+  if (/\b\d+\s+1\b/.test(t)) return true;
+  return false;
+}
+
+/**
  * Build a stable dedup key from a command's arguments.
  * Keyed on book+chapter+verse_start so that:
  *   - Same verse projected twice → dedup fires
@@ -206,7 +238,23 @@ export function setupAudioSocket(server: Server) {
       // ── Step 1: Try full reference parse first ─────────────────────────
       const fullCmd = FastBibleParser.parse(text);
       if (fullCmd && fullCmd.name === "project_bible_reference") {
-        // Full reference found — execute immediately and reset state
+        // QC59b (V2 port): Guard against premature verse-1 default projection.
+        // If verse_start=1 was not explicitly spoken (e.g. only "Genesis chapter 2"
+        // was heard so far), hold off — the verse number is still incoming.
+        // This prevents the pattern: project Gen 2:1 → immediately correct to Gen 2:8.
+        const verseStart = fullCmd.arguments?.verse_start ?? 1;
+        if (!hasExplicitVerse(text, verseStart)) {
+          console.log(`[AudioSocket] QC59b: Partial verse-1 default suppressed — waiting for explicit verse in: "${text.slice(0, 60)}"`);
+          // Still update progressive state so we track book+chapter
+          const stage = FastBibleParser.parseStage(text);
+          if (stage?.type === "book_chapter") {
+            partialState.book = stage.book;
+            partialState.chapter = stage.chapter;
+            if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
+          }
+          return;
+        }
+        // Full reference found with explicit verse — execute immediately and reset state
         await executeCommand(fullCmd, "Partial");
         resetPartialState();
         return;
