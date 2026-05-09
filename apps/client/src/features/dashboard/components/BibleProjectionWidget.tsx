@@ -3,6 +3,7 @@ import { SearchIcon, XIcon, BookOpen } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDisplayModeStore } from "@/stores/useDisplayModeStore";
+import { apiClient } from '../../../lib/api';
 
 interface BibleVerse {
   number: number;
@@ -142,41 +143,36 @@ export const BibleProjectionWidget: React.FC<BibleProjectionWidgetProps> = ({
     setSearchError(null);
 
     try {
-      const response = await fetch(`/api/bible/search?reference=${encodeURIComponent(searchQuery.trim())}&version=${selectedVersion.toLowerCase()}`);
-      
-      if (response.ok) {
-        const data = await response.json();
+      // Use apiClient (axios) — DO NOT use fetch('/api/...') relative URLs in production
+      const response = await apiClient.get(`/bible/search?reference=${encodeURIComponent(searchQuery.trim())}&version=${selectedVersion.toLowerCase()}`);
+      const data = response.data;
+      if (data?.success && data?.passage) {
+        const passage: BiblePassage = {
+          book: data.passage.book || "",
+          chapter: data.passage.chapter || 0,
+          verses: data.passage.verses,
+          version: data.passage.version,
+          reference: data.passage.reference
+        };
         
-        if (data?.success && data?.passage) {
-          const passage: BiblePassage = {
-            book: data.passage.book || "",
-            chapter: data.passage.chapter || 0,
-            verses: data.passage.verses,
-            version: data.passage.version,
-            reference: data.passage.reference
-          };
+        setSelectedPassage(passage);
+        setCurrentVerseIndex(0);
+        setSearchError(null);
+        
+        // Auto-project first verse immediately after search
+        if (passage.verses.length > 0) {
+          const firstVerse = passage.verses[0];
+          const referenceMatch = passage.reference.match(/^(.+?)\s+(?:Chapter\s+)?(\d+)/);
+          const bookName = referenceMatch ? referenceMatch[1] : passage.reference;
+          const chapter = referenceMatch ? referenceMatch[2] : '';
+          const reference = `${bookName} ${chapter}:${firstVerse.number}`;
+          const verseText = `${firstVerse.number} ${firstVerse.text}`;
           
-          setSelectedPassage(passage);
-          setCurrentVerseIndex(0);
-          setSearchError(null);
-          
-          // Auto-project first verse immediately after search
-          if (passage.verses.length > 0) {
-            const firstVerse = passage.verses[0];
-            const referenceMatch = passage.reference.match(/^(.+?)\s+(?:Chapter\s+)?(\d+)/);
-            const bookName = referenceMatch ? referenceMatch[1] : passage.reference;
-            const chapter = referenceMatch ? referenceMatch[2] : '';
-            const reference = `${bookName} ${chapter}:${firstVerse.number}`;
-            const verseText = `${firstVerse.number} ${firstVerse.text}`;
-            
-            setDisplayMode('on-screen-bible');
-            onProjectVerse(reference, verseText, passage.version, passage);
-          }
-        } else {
-          setSearchError(data?.message || "Scripture not found. Please check your reference.");
+          setDisplayMode('on-screen-bible');
+          onProjectVerse(reference, verseText, passage.version, passage);
         }
       } else {
-        setSearchError("Error searching Bible. Please try again.");
+        setSearchError(data?.message || "Scripture not found. Please check your reference.");
       }
     } catch (error) {
       console.error("Bible search error:", error);
@@ -207,12 +203,10 @@ export const BibleProjectionWidget: React.FC<BibleProjectionWidgetProps> = ({
     if (selectedPassage && searchQuery) {
       setIsSearching(true);
       try {
-        const response = await fetch(`/api/bible/search?reference=${encodeURIComponent(searchQuery.trim())}&version=${newVersion.toLowerCase()}`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data?.success && data?.passage) {
+        // Use apiClient (axios) — DO NOT use fetch('/api/...') relative URLs in production
+        const response = await apiClient.get(`/bible/search?reference=${encodeURIComponent(searchQuery.trim())}&version=${newVersion.toLowerCase()}`);
+        const data = response.data;
+        if (data?.success && data?.passage) {
             const passage: BiblePassage = {
               book: data.passage.book || "",
               chapter: data.passage.chapter || 0,
@@ -239,7 +233,6 @@ export const BibleProjectionWidget: React.FC<BibleProjectionWidgetProps> = ({
               onProjectVerse(reference, verseText, passage.version, passage);
             }
           }
-        }
       } catch (error) {
         console.error("Error changing Bible version:", error);
       } finally {

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { db } from '../../../lib/db';
 import { useBibleRAMCache } from './useBibleRAMCache';
+import { apiClient } from '../../../lib/api';
 
 
 export interface HFBChapterVerse {
@@ -177,42 +178,43 @@ export const useHFBStore = create<HFBStore>((set) => ({
 
       console.warn(`[Local DB] Verses not found for ${book} ${chapter} (${vKey}). Falling back to Cloud API...`);
       
-      // 2. Fallback to Cloud MongoDB API if local sync failed or isn't complete
-      const resp = await fetch("/api/bible/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ book, chapter, verseStart: 1, verseEnd: 150, version: vKey }),
+      // 2. Fallback to Cloud API if local sync failed or isn't complete
+      // Use apiClient (axios) which correctly resolves to https://api.qworship.com/api
+      // DO NOT use fetch('/api/bible/search') — relative URLs resolve to qworship.com/api
+      // which returns the React SPA HTML, not JSON.
+      const resp = await apiClient.post('/bible/search', {
+        book, chapter, verseStart: 1, verseEnd: 150, version: vKey
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data?.success && data?.result) {
-          const verses = (data.result.verses as any[]).map(v => ({
-            number: v.verse,
-            text: v[vKey] || v.kjv || "",
+      const data = resp.data;
+      if (data?.success && data?.result) {
+        const verses = (data.result.verses as any[]).map((v: any) => ({
+          number: v.verse,
+          text: v[vKey] || v.kjv || "",
+        }));
+
+        // --- LAZY SEEDING: Cache to IndexedDB for next time ---
+        try {
+          const dbVerses = verses.map((v: any) => ({
+             version: vKey,
+             book: book,
+             chapter: chapter,
+             verse: v.number,
+             text: v.text
           }));
+          // Use put to handle potential partial duplicates safely
+          await db.verses.bulkPut(dbVerses);
+          console.log(`✅ [Lazy Seed] Cached ${book} ${chapter} (${vKey}) to IndexedDB`);
+        } catch (dbErr) {
+          console.error("[Lazy Seed] Failed to cache to IndexedDB:", dbErr);
+        }
 
-          // --- LAZY SEEDING: Cache to IndexedDB for next time ---
-          try {
-            const dbVerses = verses.map(v => ({
-               version: vKey,
-               book: book,
-               chapter: chapter,
-               verse: v.number,
-               text: v.text
-            }));
-            // Use put to handle potential partial duplicates safely
-            await db.verses.bulkPut(dbVerses);
-            console.log(`✅ [Lazy Seed] Cached ${book} ${chapter} (${vKey}) to IndexedDB`);
-          } catch (dbErr) {
-            console.error("[Lazy Seed] Failed to cache to IndexedDB:", dbErr);
-          }
+        // Also seed RAM cache so next access is instant
+        const ramVerses = verses.map((v: any) => ({ number: v.number, text: v.text }));
+        useBibleRAMCache.getState().setChapterInRam(vKey, book, chapter, ramVerses);
 
-          set({ hfbChapterVerses: verses, hfbChapterLoading: false });
-          if (highlightVerse !== undefined) {
-             set({ hfbActiveVerseNum: highlightVerse });
-          }
-        } else {
-          set({ hfbChapterLoading: false });
+        set({ hfbChapterVerses: verses, hfbChapterLoading: false });
+        if (highlightVerse !== undefined) {
+           set({ hfbActiveVerseNum: highlightVerse });
         }
       } else {
         set({ hfbChapterLoading: false });

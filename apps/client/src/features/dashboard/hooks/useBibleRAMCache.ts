@@ -18,6 +18,9 @@ interface RAMCacheStore {
   
   loadFromDisk: () => Promise<void>;
   getChapter: (version: string, book: string, chapter: number) => MemoryVerse[] | null;
+  // QC66: Lazy seed a single chapter into the RAM cache after a cloud API fetch.
+  // This ensures subsequent accesses to the same chapter are instant (0ms).
+  setChapterInRam: (version: string, book: string, chapter: number, verses: MemoryVerse[]) => void;
 }
 
 export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
@@ -76,5 +79,17 @@ export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
   getChapter: (version: string, book: string, chapter: number) => {
     const dict = get().dictionary;
     return dict[version]?.[book]?.[chapter] || null;
-  }
+  },
+
+  // QC66: Merge a single chapter into the RAM dictionary.
+  // Called after a successful cloud API fetch so subsequent lookups hit RAM (0ms).
+  setChapterInRam: (version: string, book: string, chapter: number, verses: MemoryVerse[]) => {
+    set((state) => {
+      const dict = { ...state.dictionary };
+      if (!dict[version]) dict[version] = {};
+      if (!dict[version][book]) dict[version][book] = {};
+      dict[version][book][chapter] = [...verses].sort((a, b) => a.number - b.number);
+      return { dictionary: dict };
+    });
+  },
 }));

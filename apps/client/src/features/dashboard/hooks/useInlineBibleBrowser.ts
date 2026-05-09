@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { BIBLE_BOOKS_LCC, BIBLE_VERSIONS_LCC } from '../data/bibleBooks';
 import { db } from '../../../lib/db';
 import { useBibleRAMCache } from './useBibleRAMCache';
+import { apiClient } from '../../../lib/api';
 
 export interface BibleVerse { number: number; text: string }
 export interface BiblePassage {
@@ -83,34 +84,38 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
       }
 
       // 2. Fallback to Cloud API
-      const resp = await fetch('/api/bible/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          book: bookName, chapter,
-          verseStart: 1, verseEnd,
-          version: vKey,
-        }),
+      // Use apiClient (axios) which correctly resolves to https://api.qworship.com/api
+      // DO NOT use fetch('/api/bible/search') — relative URLs resolve to qworship.com/api
+      // which returns the React SPA HTML, not JSON.
+      const resp = await apiClient.post('/bible/search', {
+        book: bookName, chapter,
+        verseStart: 1, verseEnd,
+        version: vKey,
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data?.success && data?.result) {
-          const verses: BibleVerse[] = (data.result.verses || []).map((v: any) => ({
-            number: v.verse,
-            text: v[vKey] || v.kjv || '',
+      const data = resp.data;
+      if (data?.success && data?.result) {
+        const verses: BibleVerse[] = (data.result.verses || []).map((v: any) => ({
+          number: v.verse,
+          text: v[vKey] || v.kjv || '',
+        }));
+        const p: BiblePassage = {
+          book: bookName, chapter, verses,
+          version: version.toUpperCase(),
+          reference: `${bookName} ${chapter}`,
+        };
+        // Seed RAM cache so next access is instant (0ms)
+        useBibleRAMCache.getState().setChapterInRam(vKey, bookName, chapter, verses);
+        // Lazy seed IndexedDB for offline access
+        try {
+          const dbVerses = verses.map((v: any) => ({
+            version: vKey, book: bookName, chapter, verse: v.number, text: v.text
           }));
-          const p: BiblePassage = {
-            book: bookName, chapter, verses,
-            version: version.toUpperCase(),
-            reference: `${bookName} ${chapter}`,
-          };
-          setBiblePassage(p);
-          return p;
-        } else {
-          setBibleSearchError(data?.message || 'Chapter not found.');
-        }
+          await db.verses.bulkPut(dbVerses);
+        } catch (_) { /* non-critical */ }
+        setBiblePassage(p);
+        return p;
       } else {
-        setBibleSearchError('Error loading chapter.');
+        setBibleSearchError(data?.message || 'Chapter not found.');
       }
     } catch {
       setBibleSearchError('Error loading chapter.');
@@ -173,48 +178,45 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
     setBibleIsLoading(true);
     setBibleSearchError(null);
     try {
-      const resp = await fetch(`/api/bible/search?reference=${encodeURIComponent(bibleSearch.trim())}&version=${selBibleVersion.toLowerCase()}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data?.success && data?.passage && data.passage.verses && data.passage.verses.length > 0) {
-          const targetVerseNumber = Number(data.passage.verses[0].number);
-          const bookName = (data.passage.book || "").trim();
-          const chapterNum = Number(data.passage.chapter);
+      // Use apiClient (axios) — DO NOT use fetch('/api/...') relative URLs in production
+      const resp = await apiClient.get(`/bible/search?reference=${encodeURIComponent(bibleSearch.trim())}&version=${selBibleVersion.toLowerCase()}`);
+      const data = resp.data;
+      if (data?.success && data?.passage && data.passage.verses && data.passage.verses.length > 0) {
+        const targetVerseNumber = Number(data.passage.verses[0].number);
+        const bookName = (data.passage.book || "").trim();
+        const chapterNum = Number(data.passage.chapter);
+        
+        // Now fetch the FULL chapter into the browser state so the user can see adjacent verses
+        const fullChapterPassage = await fetchBibleChapter(bookName, chapterNum, selBibleVersion);
+        
+        if (fullChapterPassage && fullChapterPassage.verses.length > 0) {
+          setBiblePassage(fullChapterPassage);
           
-          // Now fetch the FULL chapter into the browser state so the user can see adjacent verses
-          const fullChapterPassage = await fetchBibleChapter(bookName, chapterNum, selBibleVersion);
+          const bIdx = BIBLE_BOOKS_LCC.findIndex(
+            b => b.name.toLowerCase() === bookName.toLowerCase()
+          );
+          if (bIdx !== -1) setBibleBookIndex(bIdx);
           
-          if (fullChapterPassage && fullChapterPassage.verses.length > 0) {
-            setBiblePassage(fullChapterPassage);
-            
-            const bIdx = BIBLE_BOOKS_LCC.findIndex(
-              b => b.name.toLowerCase() === bookName.toLowerCase()
-            );
-            if (bIdx !== -1) setBibleBookIndex(bIdx);
-            
-            setBibleChapterNum(chapterNum);
-            
-            // Find the specific verse the user queried in the full chapter
-            const targetIdx = fullChapterPassage.verses.findIndex((v: any) => v.number === targetVerseNumber);
-            const finalIdx = targetIdx !== -1 ? targetIdx : 0;
-            
-            setBibleVerseIndex(finalIdx);
-            projectVerse(fullChapterPassage, finalIdx);
-            
-            // Scroll the verse into view after a short delay to allow React to render the list
-            setTimeout(() => {
-              if (bibleVerseListRef.current && bibleVerseListRef.current.children[finalIdx]) {
-                (bibleVerseListRef.current.children[finalIdx] as HTMLElement).scrollIntoView({ block: 'center' });
-              }
-            }, 100);
-          } else {
-            setBibleSearchError('Could not load chapter context.');
-          }
+          setBibleChapterNum(chapterNum);
+          
+          // Find the specific verse the user queried in the full chapter
+          const targetIdx = fullChapterPassage.verses.findIndex((v: any) => v.number === targetVerseNumber);
+          const finalIdx = targetIdx !== -1 ? targetIdx : 0;
+          
+          setBibleVerseIndex(finalIdx);
+          projectVerse(fullChapterPassage, finalIdx);
+          
+          // Scroll the verse into view after a short delay to allow React to render the list
+          setTimeout(() => {
+            if (bibleVerseListRef.current && bibleVerseListRef.current.children[finalIdx]) {
+              (bibleVerseListRef.current.children[finalIdx] as HTMLElement).scrollIntoView({ block: 'center' });
+            }
+          }, 100);
         } else {
-          setBibleSearchError('Scripture not found.');
+          setBibleSearchError('Could not load chapter context.');
         }
       } else {
-        setBibleSearchError('Error searching Bible.');
+        setBibleSearchError('Scripture not found.');
       }
     } catch {
       setBibleSearchError('Error searching Bible.');

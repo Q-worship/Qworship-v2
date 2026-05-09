@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SearchIcon, InfoIcon, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, ChevronDown, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { apiClient } from '../../../lib/api';
 
 interface OnScreenBibleEditorProps {
   content: any;
@@ -61,12 +62,10 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
     setIsSearching(true);
 
     try {
-      const response = await fetch(`/api/bible/search?reference=${encodeURIComponent(searchInput.trim())}&version=${activeVersion.toLowerCase()}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data?.success && data?.passage) {
+      // Use apiClient (axios) — DO NOT use fetch('/api/...') relative URLs in production
+      const response = await apiClient.get(`/bible/search?reference=${encodeURIComponent(searchInput.trim())}&version=${activeVersion.toLowerCase()}`);
+      const data = response.data;
+      if (data?.success && data?.passage) {
           const result = data.passage;
           
           // Create bible verses array
@@ -147,11 +146,8 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
             description: `${searchInput.trim()} (${activeVersion})`,
             className: "bg-gradient-to-r from-purple-900/90 to-purple-800/90 border-purple-500/30 text-white"
           });
-        } else {
-          throw new Error('Scripture not found');
-        }
       } else {
-        throw new Error('Failed to search Bible');
+        throw new Error('Scripture not found');
       }
     } catch (error) {
       toast({
@@ -178,12 +174,10 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
       setIsSearching(true);
       
       try {
-        const response = await fetch(`/api/bible/search?reference=${encodeURIComponent(searchInput.trim())}&version=${version.toLowerCase()}`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data?.success && data?.passage) {
+        // Use apiClient (axios) — DO NOT use fetch('/api/...') relative URLs in production
+        const response = await apiClient.get(`/bible/search?reference=${encodeURIComponent(searchInput.trim())}&version=${version.toLowerCase()}`);
+        const data = response.data;
+        if (data?.success && data?.passage) {
             const result = data.passage;
             
             // Create bible verses array with new translation
@@ -259,7 +253,6 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
               description: `Changed to ${version} translation`,
               className: "bg-gradient-to-r from-purple-900/90 to-purple-800/90 border-purple-500/30 text-white"
             });
-          }
         }
       } catch (error) {
         console.error('Error changing Bible version:', error);
