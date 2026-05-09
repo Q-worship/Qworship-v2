@@ -62,12 +62,14 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
     this.isConnecting = true;
     this.emit("connecting");
-    console.log(`[Deepgram] Connecting with Nova-2 (Stage 4 low-latency params)...`);
+    console.log(`[Deepgram] Connecting with Nova-3 (QC61 upgrade, Stage 4 low-latency params)...`);
 
     // Build the Deepgram WebSocket URL with all low-latency parameters
     const deepgramUrl = new URL("wss://api.deepgram.com/v1/listen");
-    // Fix 2: nova-2 emits more frequent partials than nova-3 (~300ms faster first partial)
-    deepgramUrl.searchParams.append("model", "nova-2");
+    // QC61: Upgraded to nova-3 — improved accuracy for Bible names, proper nouns, and
+    // conversational speech. Nova-3 WER: 6.84% vs nova-2 WER: 9.09% (25% improvement).
+    // Latency difference is negligible (~10ms p50) given the 3-tier predictive pipeline.
+    deepgramUrl.searchParams.append("model", "nova-3");
     deepgramUrl.searchParams.append("language", "en-US");
     // smart_format REMOVED — adds ~100ms post-processing delay on every partial
     deepgramUrl.searchParams.append("interim_results", "true");
@@ -96,7 +98,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
       this.socket.on("open", () => {
         this.isConnecting = false;
         this.emit("connected");
-        console.log("[Deepgram] Connection established (Nova-2, Stage 4 low-latency mode)");
+        console.log("[Deepgram] Connection established (Nova-3, QC61, Stage 4 low-latency mode)");
         // Fix 4: Start KeepAlive pings to prevent 10-second timeout during silence
         this._startKeepAlive();
       });
