@@ -185,6 +185,11 @@ export const handleVoiceCommand = async (req: Request, res: Response) => {
     }
 
     if (command.commandType === 'lookup' && command.parsedReference) {
+      // Apply context.version if provided (overrides any version parsed from the text)
+      const contextVersion = (context?.version as string)?.toLowerCase();
+      if (contextVersion) {
+        command.parsedReference.version = contextVersion as any;
+      }
       const result = await BibleService.searchBible(command.parsedReference);
       if (result && result.verses.length > 0) {
         return res.json({ 
