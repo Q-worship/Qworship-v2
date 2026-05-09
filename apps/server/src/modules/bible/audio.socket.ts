@@ -217,10 +217,29 @@ export function setupAudioSocket(server: Server) {
         }
 
       } else if (cmd.name === "navigate_bible") {
+        const { direction, scope, verse: targetVerse } = cmd.arguments;
+        // QC63: Map internal direction names to client-expected values.
+        // Server uses "prev"; client onNavigation callback expects "previous".
+        // Server uses "goto"; client expects commandType="jump_to_verse" + targetVerse.
+        let commandType: string;
+        let clientDirection: "next" | "previous" | undefined;
+
+        if (direction === "goto" && scope === "verse") {
+          commandType = "jump_to_verse";
+          clientDirection = undefined;
+        } else if (scope === "chapter") {
+          commandType = "chapter_change";
+          clientDirection = direction === "next" ? "next" : "previous";
+        } else {
+          commandType = "verse_change";
+          clientDirection = direction === "next" ? "next" : "previous";
+        }
+
         ws.send(JSON.stringify({
           type: "navigation",
-          commandType: cmd.arguments.scope === "chapter" ? "chapter_change" : "verse_change",
-          direction: cmd.arguments.direction,
+          commandType,
+          direction: clientDirection,
+          ...(targetVerse !== undefined ? { targetVerse } : {}),
         }));
 
       } else if (cmd.name === "switch_bible_version") {

@@ -74,10 +74,106 @@ export const searchBible = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * QC63 — Updated handleVoiceCommand
+ *
+ * Handles two call patterns:
+ *
+ * Pattern A — Text-only lookup (legacy):
+ *   { text: "John 3:16" }
+ *   → Parses text, fetches verse, returns { success, result }
+ *
+ * Pattern B — Navigation with context (from executeNavigation in useHandsfreeBible.ts):
+ *   {
+ *     text: "Next verse",
+ *     commandType: "verse_change" | "chapter_change" | "jump_to_verse" | ...,
+ *     direction: "next" | "previous",
+ *     targetVerse: 10,          // for jump_to_verse
+ *     currentBook: "John",
+ *     currentChapter: 3,
+ *     currentVerse: 16,
+ *     currentVersion: "kjv"
+ *   }
+ *   → Computes new verse from context, fetches it, returns { success, result }
+ *
+ * The client's handleBibleMatch() expects { success: true, result: BibleSearchResult }.
+ */
 export const handleVoiceCommand = async (req: Request, res: Response) => {
   try {
-    const { text, context } = req.body;
+    const {
+      text,
+      context,
+      // Navigation context fields sent by executeNavigation()
+      commandType: reqCommandType,
+      direction,
+      targetVerse,
+      currentBook,
+      currentChapter,
+      currentVerse,
+      currentVersion,
+    } = req.body;
 
+    // ── Pattern B: Navigation command with current context ─────────────────
+    // When the client already knows the commandType and current verse context,
+    // compute the new verse directly without re-parsing the text.
+    if (
+      reqCommandType &&
+      reqCommandType !== 'lookup' &&
+      currentBook &&
+      currentChapter != null &&
+      currentVerse != null
+    ) {
+      const book = currentBook as string;
+      const chapter = parseInt(currentChapter);
+      const verse = parseInt(currentVerse);
+      const version = ((currentVersion as string) || 'kjv').toLowerCase();
+
+      let newVerseStart: number;
+
+      if (reqCommandType === 'verse_change') {
+        if (direction === 'next') {
+          newVerseStart = verse + 1;
+        } else {
+          // previous
+          newVerseStart = Math.max(1, verse - 1);
+        }
+      } else if (reqCommandType === 'jump_to_verse') {
+        newVerseStart = parseInt(targetVerse) || verse;
+      } else if (reqCommandType === 'chapter_change') {
+        // Chapter navigation — keep verse 1 of next/previous chapter
+        const newChapter = direction === 'next' ? chapter + 1 : Math.max(1, chapter - 1);
+        const ref: BibleReference = {
+          book,
+          chapter: newChapter,
+          verseStart: 1,
+          version: version as any,
+        };
+        const result = await BibleService.searchBible(ref);
+        if (result && result.verses.length > 0) {
+          return res.json({ success: true, result, commandType: reqCommandType });
+        }
+        return res.json({ success: false, error: 'Verse not found', commandType: reqCommandType });
+      } else {
+        // Unknown navigation type — fall through to text parsing
+        newVerseStart = verse;
+      }
+
+      const ref: BibleReference = {
+        book,
+        chapter,
+        verseStart: newVerseStart,
+        version: version as any,
+      };
+
+      console.log(`[VoiceCommand] Navigation (${reqCommandType}/${direction}): ${book} ${chapter}:${newVerseStart} [${version}]`);
+      const result = await BibleService.searchBible(ref);
+      if (result && result.verses.length > 0) {
+        return res.json({ success: true, result, commandType: reqCommandType });
+      }
+      return res.json({ success: false, error: 'Verse not found', commandType: reqCommandType });
+    }
+
+    // ── Pattern A: Text-based lookup (legacy path) ─────────────────────────
     if (!text) {
       return res.status(400).json({ success: false, message: 'Text is required' });
     }
@@ -95,14 +191,15 @@ export const handleVoiceCommand = async (req: Request, res: Response) => {
             success: true, 
             commandType: 'lookup',
             parsedReference: command.parsedReference,
-            data: result 
+            result,
+            data: result  // legacy field kept for backward compat
         });
       } else {
         return res.json({ success: false, commandType: 'lookup', message: 'Not found' });
       }
     }
 
-    // For non-lookup commands (navigation, version change)
+    // For non-lookup commands (navigation, version change) without context
     return res.json({
         success: true,
         commandType: command.commandType,

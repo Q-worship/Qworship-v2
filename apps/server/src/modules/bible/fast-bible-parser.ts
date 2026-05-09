@@ -1,7 +1,7 @@
 import { BibleService } from "./bible.service.js";
 
 /**
- * FastBibleParser — QC56 Stage 2
+ * FastBibleParser — QC56 Stage 2 + QC63 Navigation Expansion
  *
  * Key improvements over previous version:
  * 1. SCAN-AND-EXTRACT: Scans anywhere inside a sentence for a Bible reference,
@@ -10,6 +10,13 @@ import { BibleService } from "./bible.service.js";
  * 3. ORDINAL NUMBERS: "first", "second", "third" etc. normalised to digits.
  * 4. CONFIDENCE SCORING: Every match returns a confidence score (0–1).
  * 5. NO OPENAI DEPENDENCY: Fully self-contained — zero network calls.
+ *
+ * QC63 — Navigation command expansion:
+ * - All 10 user-specified navigation variants now supported:
+ *     "Next Verse", "Next", "Show me the Next Verse", "Take me to the Next Verse"
+ *     "Previous Verse", "Previous", "Show me the Previous Verse", "Take me to the Previous Verse"
+ *     "Take me to Verse 10", "Verse 10"
+ * - New goto_verse pattern: extracts verse number from "verse N" / "take me to verse N"
  */
 export class FastBibleParser {
   private static readonly BOOK_ALIASES: Record<string, string> =
@@ -102,9 +109,67 @@ export class FastBibleParser {
 
   // ─── Navigation & version patterns ───────────────────────────────────────
 
+  /**
+   * QC63 — Goto-verse pattern (captures verse number).
+   *
+   * Matches:
+   *   "take me to verse 10"  →  goto verse 10
+   *   "go to verse 5"        →  goto verse 5
+   *   "show me verse 3"      →  goto verse 3
+   *   "jump to verse 7"      →  goto verse 7
+   *   "verse 10"             →  goto verse 10  (bare form)
+   *
+   * NOTE: This is intentionally checked BEFORE the NAV_PATTERNS loop in parse()
+   * because "verse N" could otherwise be confused with a partial Bible reference.
+   * The pattern only fires when there is NO book name in the transcript (navigation
+   * commands are context-free — they operate on the current book+chapter).
+   */
+  private static readonly GOTO_VERSE_RE =
+    /\b(?:take me to|go to|show me|jump to)?\s*verse\s+(\d+)\b/i;
+
+  /**
+   * QC63 — Expanded navigation patterns.
+   *
+   * Supported commands:
+   *   Next verse:
+   *     "next verse", "next", "go next", "forward", "next one"
+   *     "show me the next verse", "take me to the next verse"
+   *     "show me the next", "take me to the next"
+   *
+   *   Previous verse:
+   *     "previous verse", "previous", "go back", "back one"
+   *     "show me the previous verse", "take me to the previous verse"
+   *     "show me the previous", "take me to the previous"
+   *
+   *   Chapter navigation (unchanged):
+   *     "next chapter", "following chapter"
+   *     "previous chapter", "last chapter", "go back a chapter"
+   *
+   * IMPORTANT: Longer / more-specific phrases are listed FIRST so they match
+   * before the shorter bare-word patterns ("next", "previous").
+   */
   private static readonly NAV_PATTERNS: Array<{ re: RegExp; cmd: any }> = [
-    { re: /\b(?:next verse|go next|forward|next one)\b/i,       cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } } },
-    { re: /\b(?:previous verse|go back|back one)\b/i,           cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } } },
+    // ── Next verse (all variants) ────────────────────────────────────────────
+    {
+      re: /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse|go next|forward|next one)\b/i,
+      cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } },
+    },
+    // Bare "next" — must be a standalone word to avoid false positives
+    {
+      re: /^next$/i,
+      cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } },
+    },
+    // ── Previous verse (all variants) ────────────────────────────────────────
+    {
+      re: /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse|go back|back one)\b/i,
+      cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } },
+    },
+    // Bare "previous" — must be a standalone word to avoid false positives
+    {
+      re: /^previous$/i,
+      cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } },
+    },
+    // ── Chapter navigation ────────────────────────────────────────────────────
     { re: /\b(?:next chapter|following chapter)\b/i,            cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "chapter" } } },
     { re: /\b(?:previous chapter|last chapter|go back a chapter)\b/i, cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "chapter" } } },
   ];
@@ -193,7 +258,29 @@ export class FastBibleParser {
       };
     }
 
-    // 2. Navigation
+    // 2a. Goto-verse (QC63): "verse N" / "take me to verse N" / "go to verse N"
+    //     Checked BEFORE NAV_PATTERNS so "verse 10" doesn't get swallowed by
+    //     the Bible reference scanner (which could misparse "verse" as a book name).
+    //     Only fires when the transcript contains NO recognised book name — if a
+    //     book IS present, this is a full reference (e.g. "John chapter 3 verse 16")
+    //     and the SCAN_PATTERNS below will handle it correctly.
+    const gotoMatch = clean.match(this.GOTO_VERSE_RE);
+    if (gotoMatch) {
+      const verseNum = parseInt(gotoMatch[1]);
+      if (!isNaN(verseNum) && verseNum >= 1 && verseNum <= 176) {
+        // Only treat as a navigation command if no book name is present in the text.
+        // If a book IS present, fall through to the Bible reference scanner.
+        const hasBook = this.parseStage(clean) !== null;
+        if (!hasBook) {
+          return {
+            name: "navigate_bible",
+            arguments: { direction: "goto", scope: "verse", verse: verseNum },
+          };
+        }
+      }
+    }
+
+    // 2b. Navigation (next/previous verse/chapter)
     for (const nav of this.NAV_PATTERNS) {
       if (nav.re.test(clean)) return nav.cmd;
     }
