@@ -70,10 +70,20 @@ export const useHandsfreeBible = ({
     verse: number;
   } | null>(null);
   const liveWindowRef = useRef<Window | null>(null);
+  // QC64: Keep a synchronous ref to the selected version so that onVersionChange
+  // can pass the NEW version to executeNavigation immediately, before the React
+  // state setter (setSelectedBibleVersion) has had a chance to flush.
+  const selectedBibleVersionRef = useRef<string>("KJV");
 
   useEffect(() => {
     liveWindowRef.current = liveWindow;
   }, [liveWindow]);
+
+  // QC64: Keep selectedBibleVersionRef in sync with the React state so that
+  // executeNavigation always reads the latest version even when changed via UI.
+  useEffect(() => {
+    selectedBibleVersionRef.current = selectedBibleVersion;
+  }, [selectedBibleVersion]);
 
   // Handle Socket Events
   const handleBibleMatch = (data: any) => {
@@ -170,6 +180,7 @@ export const useHandsfreeBible = ({
     direction: "next" | "previous" | undefined,
     targetVerse?: number,
     offset?: number,
+    overrideVersion?: string,  // QC64: explicit version override for version-switch re-projection
   ) => {
     let commandText = "";
     if (commandType === "chapter_change") {
@@ -226,8 +237,9 @@ export const useHandsfreeBible = ({
           currentChapter: currentContext.chapter,
           currentVerse: currentContext.verse,
           currentVersion:
+            overrideVersion?.toLowerCase() ||
             (currentContext as any).version ||
-            selectedBibleVersion.toLowerCase(),
+            selectedBibleVersionRef.current.toLowerCase(),
           commandType,
           direction,
           targetVerse,
@@ -325,6 +337,10 @@ export const useHandsfreeBible = ({
     onVersionChange: (version) => {
       resetInactivityTimer();
       const normalized = version.toUpperCase();
+      // QC64: Update the synchronous ref FIRST so executeNavigation reads the
+      // new version immediately (React state setter is async and won't flush
+      // until the next render cycle).
+      selectedBibleVersionRef.current = normalized;
       setSelectedBibleVersion(normalized);
       setZustandBibleVersion(normalized);
       setDetectedCommands(`Switched to ${normalized}`);
@@ -333,7 +349,9 @@ export const useHandsfreeBible = ({
       const ctx = currentVerseContextRef.current;
       if (ctx && ctx.book && ctx.chapter && ctx.verse) {
         console.log(`[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`);
-        executeNavigation("jump_to_verse", undefined, ctx.verse);
+        // Pass normalized as overrideVersion so the API call uses the new version,
+        // not the stale selectedBibleVersion React state value.
+        executeNavigation("jump_to_verse", undefined, ctx.verse, undefined, normalized);
       }
     },
     onNavigation: (commandType, direction, targetVerse, offset) => {

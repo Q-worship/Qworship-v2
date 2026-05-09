@@ -1,7 +1,7 @@
 import { BibleService } from "./bible.service.js";
 
 /**
- * FastBibleParser — QC56 Stage 2 + QC63 Navigation Expansion
+ * FastBibleParser — QC56 Stage 2 + QC63 Navigation Expansion + QC64 Version Switch
  *
  * Key improvements over previous version:
  * 1. SCAN-AND-EXTRACT: Scans anywhere inside a sentence for a Bible reference,
@@ -17,6 +17,16 @@ import { BibleService } from "./bible.service.js";
  *     "Previous Verse", "Previous", "Show me the Previous Verse", "Take me to the Previous Verse"
  *     "Take me to Verse 10", "Verse 10"
  * - New goto_verse pattern: extracts verse number from "verse N" / "take me to verse N"
+ *
+ * QC64 — Version switch expansion:
+ * - Replaced single VERSION_PATTERN regex with VERSION_PATTERNS array (16 entries)
+ * - Supports all 20 user-specified version commands across 6 Bible versions:
+ *     KJV:  "KJV", "Show me the KJV", "King James Version"
+ *     NKJV: "NKJV", "Show me the NKJV", "New King James Version"
+ *     NIV:  "NIV", "Show me the NIV", "New International Version"
+ *     ESV:  "ESV", "Let's see the ESV", "English Standard Version"
+ *     AMP:  "AMP", "Amplified", "Amplified Bible", "Amplified Version"
+ *     MSG:  "MSG", "Message", "Message Bible", "Message Version"
  */
 export class FastBibleParser {
   private static readonly BOOK_ALIASES: Record<string, string> =
@@ -174,8 +184,47 @@ export class FastBibleParser {
     { re: /\b(?:previous chapter|last chapter|go back a chapter)\b/i, cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "chapter" } } },
   ];
 
-  private static readonly VERSION_PATTERN =
-    /\b(?:switch to|use|change to|show me|read in|in the)\s+(niv|kjv|nkjv|esv|amp|msg|gnt?)\b/i;
+  /**
+   * QC64 — Expanded version-switch patterns.
+   *
+   * Supported commands (20 variants across 6 Bible versions):
+   *
+   *   KJV:  "KJV", "Show me the KJV", "King James Version"
+   *   NKJV: "NKJV", "Show me the NKJV", "New King James Version"
+   *   NIV:  "NIV", "Show me the NIV", "New International Version"
+   *   ESV:  "ESV", "Let's see the ESV", "English Standard Version"
+   *   AMP:  "AMP", "Amplified", "Amplified Bible", "Amplified Version"
+   *   MSG:  "MSG", "Message", "Message Bible", "Message Version"
+   *
+   * Design notes:
+   *   - Full version names are matched FIRST (higher specificity) to prevent
+   *     partial matches from shadowing them.
+   *   - Bare abbreviations use word-boundary anchors (\b) to prevent false
+   *     positives inside longer words.
+   *   - Each entry maps to a canonical lowercase version key.
+   */
+  private static readonly VERSION_PATTERNS: Array<{ re: RegExp; version: string }> = [
+    // ── KJV ──────────────────────────────────────────────────────────────────
+    { re: /\bking\s+james\s+version\b/i,                version: "kjv" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?kjv\b/i, version: "kjv" },
+    // ── NKJV ─────────────────────────────────────────────────────────────────
+    { re: /\bnew\s+king\s+james\s+version\b/i,          version: "nkjv" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?nkjv\b/i, version: "nkjv" },
+    // ── NIV ──────────────────────────────────────────────────────────────────
+    { re: /\bnew\s+international\s+version\b/i,         version: "niv" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?niv\b/i, version: "niv" },
+    // ── ESV ──────────────────────────────────────────────────────────────────
+    { re: /\benglish\s+standard\s+version\b/i,          version: "esv" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?esv\b/i, version: "esv" },
+    // ── AMP ──────────────────────────────────────────────────────────────────
+    { re: /\bamplified\s+(?:bible|version)\b/i,         version: "amp" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?amplified\b/i, version: "amp" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?amp\b/i,       version: "amp" },
+    // ── MSG ──────────────────────────────────────────────────────────────────
+    { re: /\bmessage\s+(?:bible|version)\b/i,           version: "msg" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?(?:the\s+)?message\b/i, version: "msg" },
+    { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?msg\b/i,           version: "msg" },
+  ];
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
@@ -249,13 +298,14 @@ export class FastBibleParser {
     let clean = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
     clean = this.normalizeNumbers(clean);
 
-    // 1. Version switch
-    const verMatch = clean.match(this.VERSION_PATTERN);
-    if (verMatch) {
-      return {
-        name: "switch_bible_version",
-        arguments: { version: verMatch[1].toLowerCase().replace(/^gnt?$/, "gn") },
-      };
+    // 1. Version switch — QC64: scan all VERSION_PATTERNS (full names first, then abbreviations)
+    for (const vp of this.VERSION_PATTERNS) {
+      if (vp.re.test(clean)) {
+        return {
+          name: "switch_bible_version",
+          arguments: { version: vp.version },
+        };
+      }
     }
 
     // 2a. Goto-verse (QC63): "verse N" / "take me to verse N" / "go to verse N"
