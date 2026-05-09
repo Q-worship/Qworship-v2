@@ -203,6 +203,29 @@ export class BibleService {
   }
 
   /**
+   * Returns a summary of the in-memory store for diagnostic purposes.
+   */
+  static getStoreStatus() {
+    const versions = Object.keys(this.bibleStore);
+    const summary: Record<string, { books: number; verses: number }> = {};
+    for (const version of versions) {
+      let verseCount = 0;
+      const bookCount = Object.keys(this.bibleStore[version]).length;
+      for (const book of Object.keys(this.bibleStore[version])) {
+        for (const chapter of Object.keys(this.bibleStore[version][book])) {
+          verseCount += (this.bibleStore[version][book] as Record<string, MemoryVerse[]>)[chapter].length;
+        }
+      }
+      summary[version] = { books: bookCount, verses: verseCount };
+    }
+    return {
+      isInitialized: this.isInitialized,
+      versionsLoaded: versions,
+      summary,
+    };
+  }
+
+  /**
    * Get verses from memory store (Blazing fast, 0.05ms)
    */
   private static getFromMemory(ref: BibleReference): BibleSearchResult | null {
