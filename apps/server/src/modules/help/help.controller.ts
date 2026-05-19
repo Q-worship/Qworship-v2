@@ -125,6 +125,20 @@ const inferSource = (req: Request) => {
   return 'unknown';
 };
 
+/**
+ * Build a direct Cloudflare CDN URL for a storage key using the R2 public domain.
+ * This allows the browser to download directly from Cloudflare's CDN edge — no backend
+ * proxy needed, no gateway timeouts, and no "Access Denied" from the private S3 API endpoint.
+ * Returns null if R2_PUBLIC_URL is not configured (private-bucket-only setup).
+ */
+const buildPublicCdnUrl = (storageKey: string): string | null => {
+  const publicBase = process.env.R2_PUBLIC_URL;
+  if (!publicBase) return null;
+  const base = publicBase.replace(/\/$/, '');
+  const key = storageKey.startsWith('/') ? storageKey.slice(1) : storageKey;
+  return `${base}/${key}`;
+};
+
 const trackDownloadEvent = (req: Request, file: any, platformOverride?: 'windows' | 'mac' | 'other') => {
   const platform = platformOverride || file?.platform || 'other';
   const source = inferSource(req);
@@ -371,14 +385,30 @@ export const downloadPublishedFile = async (req: Request, res: Response) => {
 
     const safeName = sanitizeDownloadFilename(file.originalName);
     trackDownloadEvent(req, file);
-    const signedUrl = await objectStorage.getSignedDownloadUrl(file.storageKey, 300, {
-      filename: safeName,
-      mimeType: file.mimeType || 'application/octet-stream'
-    });
-    return res.redirect(signedUrl);
+
+    // Prefer a direct CDN redirect via the R2 public domain (pub-xxx.r2.dev).
+    // This serves the file from Cloudflare's CDN edge — no backend proxy, no
+    // gateway timeouts, and no "Access Denied" from the private S3 API endpoint.
+    const cdnUrl = buildPublicCdnUrl(file.storageKey);
+    if (cdnUrl) {
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+      return res.redirect(302, cdnUrl);
+    }
+
+    // Fallback: stream through the backend if no public CDN URL is configured
+    // (i.e. fully private bucket setup). Data flows continuously so Cloudflare's
+    // read-timeout won't trigger for actively transferring files.
+    const { stream, contentLength } = await objectStorage.streamFile(file.storageKey);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    res.setHeader('Cache-Control', 'no-store');
+    (stream as any).pipe(res);
   } catch (error) {
     console.error('Error downloading published file:', error);
-    res.status(500).json({ message: 'Failed to download file' });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to download file' });
+    }
   }
 };
 
@@ -413,14 +443,30 @@ export const downloadDesktopByPlatform = async (req: Request, res: Response) => 
 
     const safeName = sanitizeDownloadFilename(file.originalName);
     trackDownloadEvent(req, file, platform);
-    const signedUrl = await objectStorage.getSignedDownloadUrl(file.storageKey, 300, {
-      filename: safeName,
-      mimeType: file.mimeType || 'application/octet-stream'
-    });
-    return res.redirect(signedUrl);
+
+    // Prefer a direct CDN redirect via the R2 public domain (pub-xxx.r2.dev).
+    // This serves the file from Cloudflare's CDN edge — no backend proxy, no
+    // gateway timeouts, and no "Access Denied" from the private S3 API endpoint.
+    const cdnUrl = buildPublicCdnUrl(file.storageKey);
+    if (cdnUrl) {
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+      return res.redirect(302, cdnUrl);
+    }
+
+    // Fallback: stream through the backend if no public CDN URL is configured
+    // (i.e. fully private bucket setup). Data flows continuously so Cloudflare's
+    // read-timeout won't trigger for actively transferring files.
+    const { stream, contentLength } = await objectStorage.streamFile(file.storageKey);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    res.setHeader('Cache-Control', 'no-store');
+    (stream as any).pipe(res);
   } catch (error) {
     console.error('Error downloading desktop file by platform:', error);
-    res.status(500).json({ message: 'Failed to download file' });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to download file' });
+    }
   }
 };
 

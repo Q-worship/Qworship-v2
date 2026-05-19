@@ -108,6 +108,42 @@ export class ObjectStorageService {
     }
   }
 
+  /**
+   * Stream a file directly from R2 without buffering the whole thing in memory.
+   * Use this for large file downloads (installers, etc.) to proxy the stream
+   * through the backend instead of redirecting the browser to the raw R2 endpoint.
+   * (The *.r2.cloudflarestorage.com endpoint is an S3 API endpoint — Cloudflare
+   * blocks direct browser access to it, so redirect-based downloads fail.)
+   */
+  async streamFile(key: string): Promise<{
+    stream: NodeJS.ReadableStream;
+    contentLength?: number;
+    contentType?: string;
+  }> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: getBucketName(),
+        Key: key,
+      });
+
+      const response = await getS3Client().send(command);
+      if (!response.Body) {
+        throw new ObjectNotFoundError();
+      }
+
+      return {
+        stream: response.Body as unknown as NodeJS.ReadableStream,
+        contentLength: response.ContentLength,
+        contentType: response.ContentType,
+      };
+    } catch (error: any) {
+      if (error.name === "NoSuchKey") {
+        throw new ObjectNotFoundError();
+      }
+      throw error;
+    }
+  }
+
   // Check if file exists
   async fileExists(key: string): Promise<boolean> {
     try {
