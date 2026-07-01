@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "new-website",
+  "compatibility_date": "2026-06-24",
+  "main": "./workers/site/src/index.ts",
+  "services": [
+    {
+      "binding": "CHAT_API",
+      "service": "qworship-whatsapp-chat"
+    }
+  ],
+  "assets": {
+    "directory": "./apps/marketing/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/chat/*", "/api/auth/*"]
+  },
+  "migrations": [
+    {
+      "tag": "v1-remove-chat-session",
+      "deleted_classes": ["ChatSession"]
+    }
+  ],
+  "vars": {
+    "AUTH_API_ORIGIN": "https://app.qworship.com"
+  }
+}

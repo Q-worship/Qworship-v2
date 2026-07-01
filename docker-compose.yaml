@@ -5,13 +5,15 @@ services:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
-    ports:
-      - "5000:5000"
+    expose:
+      - "5000"
     environment:
-      # Inject necessary backend environment variables.
-      # When deployed on Coolify, these will be populated from the application's Secret configurations.
       - NODE_ENV=production
       - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - FRONTEND_URL=${FRONTEND_URL:-https://app.qworship.com}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SESSION_SECRET=${SESSION_SECRET}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
@@ -23,18 +25,14 @@ services:
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
-      # QC54: Deepgram key for HFB Online — built-in fallback is embedded in code,
-      # but setting this here allows override via Coolify environment variables.
-      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
-    labels:
-      # QC54: Traefik WebSocket passthrough for HFB Online audio-stream endpoint.
-      # Without these labels, Traefik drops WebSocket upgrade requests over HTTP/2.
-      - "traefik.enable=true"
-      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
-      - "traefik.http.routers.server-ws.rule=PathPrefix(`/api/bible/audio-stream` )"
-      - "traefik.http.routers.server-ws.entrypoints=websecure"
-      - "traefik.http.routers.server-ws.tls=true"
-      - "traefik.http.services.server-ws.loadbalancer.server.port=5000"
+    restart: unless-stopped
+
+  marketing:
+    build:
+      context: .
+      dockerfile: apps/marketing/Dockerfile
+    expose:
+      - "80"
     restart: unless-stopped
 
   client:
@@ -42,12 +40,24 @@ services:
       context: .
       dockerfile: apps/client/Dockerfile
       args:
-        # Vite requires these values AT BUILD TIME to inject them into the static bundle.
-        # You will set these in Coolify's environment variables.
-        - VITE_API_URL=${VITE_API_URL}
+        - VITE_API_URL=${VITE_API_URL:-/api}
         - VITE_WS_URL=${VITE_WS_URL}
-    ports:
-      - "3000:80"
+    expose:
+      - "80"
     depends_on:
       - server
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: infra/gateway/Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - CHAT_API_ORIGIN=${CHAT_API_ORIGIN:-https://new-website.vianneycm.workers.dev}
+    depends_on:
+      - server
+      - marketing
+      - client
     restart: unless-stopped

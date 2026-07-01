@@ -1,0 +1,26 @@
+# Auth-only API for marketing site sign-up / OTP (no full monorepo required).
+# Deploy: Render (render.yaml), Railway, Fly.io, or docker build -f Dockerfile.auth .
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+RUN node -e "\
+  const fs = require('fs'); \
+  const p = JSON.parse(fs.readFileSync('package.json', 'utf8')); \
+  delete p.dependencies['@qworship/shared']; \
+  delete p.dependencies['@qworship/types']; \
+  fs.writeFileSync('package.json', JSON.stringify(p, null, 2)); \
+" \
+  && npm install --omit=dev \
+  && npm install tsx
+
+COPY src ./src
+
+ENV NODE_ENV=production
+EXPOSE 5000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT:-5000}/health || exit 1
+
+CMD ["npx", "tsx", "src/auth-dev.ts"]
