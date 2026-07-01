@@ -35,20 +35,23 @@ services:
       - "80"
     restart: unless-stopped
 
-  client:
+  # v2 product SPA (internal only — reached via gateway)
+  product:
     build:
       context: .
       dockerfile: apps/client/Dockerfile
       args:
         - VITE_API_URL=${VITE_API_URL:-/api}
-        - VITE_WS_URL=${VITE_WS_URL}
+        - VITE_WS_URL=${VITE_WS_URL:-wss://app.qworship.com}
     expose:
       - "80"
     depends_on:
       - server
     restart: unless-stopped
 
-  gateway:
+  # Public entry for app.qworship.com (Coolify domain target).
+  # Runs gateway nginx so existing "client" domain mappings work without panel changes.
+  client:
     build:
       context: .
       dockerfile: infra/gateway/Dockerfile
@@ -59,5 +62,5 @@ services:
     depends_on:
       - server
       - marketing
-      - client
+      - product
     restart: unless-stopped

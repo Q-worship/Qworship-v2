@@ -1,0 +1,26 @@
+name: Deploy app.qworship.com
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH || '/data/coolify/applications/qworship-v2' }}"
+            git fetch origin main
+            git checkout main
+            git pull origin main
+            docker compose down
+            docker compose build --no-cache marketing client product server
+            docker compose up -d --build
+            sleep 10
+            curl -sf http://127.0.0.1:3000/ | head -c 200 || true
