@@ -6,9 +6,9 @@ Upgrade path: new marketing UI from `apps/marketing` (ported from New-Website `s
 
 | Service | Role |
 |---------|------|
-| `gateway` | Public nginx — routes `/api/*` to server, product paths to client, everything else to marketing |
+| `client` | **Public** nginx gateway — routes `/api/*` to server, product paths to `product`, everything else to marketing. Coolify should keep `app.qworship.com` on this service (same name as before). |
 | `marketing` | New marketing SPA (`@qworship/marketing`) |
-| `client` | v2 product SPA (`@qworship/client`) |
+| `product` | v2 product SPA (`@qworship/client`) — internal only |
 | `server` | Express API + auth — **same MongoDB** as before |
 
 ## Coolify / Docker Compose
@@ -24,15 +24,25 @@ Upgrade path: new marketing UI from `apps/marketing` (ported from New-Website `s
 | `FRONTEND_URL` | Yes | `https://app.qworship.com` |
 | `VITE_API_URL` | No | `/api` (same-origin via gateway) |
 | `VITE_WS_URL` | Yes for product | `wss://app.qworship.com` or your WS URL |
-| `CHAT_API_ORIGIN` | Yes for chat widget | Your chat worker URL, e.g. `https://qworship-whatsapp-chat.<account>.workers.dev` |
+| `CHAT_API_ORIGIN` | Yes for chat widget | Your chat worker URL, e.g. `https://new-website.vianneycm.workers.dev` |
 
-2. Deploy:
+See [`production.env.example`](production.env.example) for a full template.
+
+2. Deploy (on the VPS / Coolify host):
 
 ```bash
+bash scripts/deploy-production.sh
+```
+
+Or manually:
+
+```bash
+docker compose down
+docker compose build --no-cache marketing client product server
 docker compose up -d --build
 ```
 
-3. Point `app.qworship.com` DNS to the **gateway** service (port 80/443 via Coolify proxy).
+3. **Coolify domain:** keep `app.qworship.com` on the **`client`** service (port 80 inside the container). The `client` service is now the gateway nginx — no panel change needed if the domain was already on `client`. Do **not** expose `marketing` or `product` publicly.
 
 ## Smoke tests
 

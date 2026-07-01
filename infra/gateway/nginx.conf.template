@@ -30,11 +30,11 @@ server {
 
     # Product SPA static assets
     location /client-assets/ {
-        proxy_pass http://client:80/client-assets/;
+        proxy_pass http://product:80/client-assets/;
     }
 
     location /figmaAssets/ {
-        proxy_pass http://client:80/figmaAssets/;
+        proxy_pass http://product:80/figmaAssets/;
     }
 
     # Marketing static assets and public files
@@ -48,7 +48,7 @@ server {
 
     # Product app routes (v2 client SPA)
     location ~ ^/(dashboard|dashboard-assets|dashboard-help|bible|live|presentations|songs|super-admin|organization-setup|plan-selection|project-selection|lower-third-settings|main-presentation-settings|desktop-auth)(/|$) {
-        proxy_pass http://client:80;
+        proxy_pass http://product:80;
         proxy_set_header Host $host;
     }
 
