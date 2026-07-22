@@ -10,7 +10,6 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
     proxy: {
       '/api/auth': {
         target: 'http://localhost:5000',
@@ -21,8 +20,5 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-  },
-  build: {
-    assetsDir: 'marketing-assets',
   },
 })

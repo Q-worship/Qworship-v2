@@ -1,0 +1,23 @@
+name = "qworship-whatsapp-chat"
+main = "src/index.ts"
+compatibility_date = "2026-06-24"
+
+[[durable_objects.bindings]]
+name = "CHAT_SESSION"
+class_name = "ChatSession"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ChatSession"]
+
+[[kv_namespaces]]
+binding = "CHAT_KV"
+# Run: node scripts/setup-chat-worker.mjs (after wrangler login)
+id = "76d8e50dff5a4d8c9cf3aa0c3dd8f35e"
+preview_id = "c9ac064e78974139a3285f30148a659b"
+
+[vars]
+WHATSAPP_PHONE_NUMBER_ID = ""
+
+[ai]
+binding = "AI"

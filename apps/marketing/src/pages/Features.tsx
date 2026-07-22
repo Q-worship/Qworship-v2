@@ -6,17 +6,19 @@ import { HandsFreeFeatureSection } from '@/components/sections/HandsFreeFeatureS
 
 import { OnScreenBibleFeatureSection } from '@/components/sections/OnScreenBibleFeatureSection'
 
-import { PrePastorsHandsFreeSection } from '@/components/sections/PrePastorsHandsFreeSection'
+import { SongbookFeatureSection } from '@/components/sections/SongbookFeatureSection'
 
 import { BuiltByPastorsSection } from '@/components/sections/BuiltByPastorsSection'
 
-import { PostPastorsAccordionFeatureSection } from '@/components/sections/PostPastorsAccordionFeatureSection'
+import { ServiceSlidesFeatureSection } from '@/components/sections/ServiceSlidesFeatureSection'
 
 import { MoreFeaturesSection } from '@/components/sections/MoreFeaturesSection'
 
-import { MoreFeaturesAccordionFeatureSection } from '@/components/sections/MoreFeaturesAccordionFeatureSection'
+import { MediaFeatureSection } from '@/components/sections/MediaFeatureSection'
 
 import { AssetLibrarySection } from '@/components/sections/AssetLibrarySection'
+
+import { LowerThirdBuilderFeatureSection } from '@/components/sections/LowerThirdBuilderFeatureSection'
 
 import { CompatibleSystemsSection } from '@/components/sections/CompatibleSystemsSection'
 
@@ -54,15 +56,15 @@ export function Features() {
 
       </section>
 
-      <PrePastorsHandsFreeSection />
+      <SongbookFeatureSection />
 
       <BuiltByPastorsSection />
 
-      <PostPastorsAccordionFeatureSection />
+      <ServiceSlidesFeatureSection />
 
       <MoreFeaturesSection showViewAllLink />
 
-      <MoreFeaturesAccordionFeatureSection />
+      <MediaFeatureSection />
 
       <section className="section-gap asset-library-pricing-section reveal">
 
@@ -70,11 +72,7 @@ export function Features() {
 
       </section>
 
-      <CompatibleSystemsSection
-        afterMarquee={
-          <PrePastorsHandsFreeSection sectionId="hands-free-bible-compatible" />
-        }
-      />
+      <CompatibleSystemsSection afterMarquee={<LowerThirdBuilderFeatureSection />} />
 
       <FinalCTASection />
 

@@ -7,12 +7,14 @@ function BeliefIcon({ icon }: { icon: CoreBelief['icon'] }) {
     return (
       <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
         <path
-          d="M16 4L18.5 11.5L26 14L18.5 16.5L16 24L13.5 16.5L6 14L13.5 11.5L16 4Z"
+          d="M16 6C11.5817 6 8 9.47918 8 13.7778C8 16.6135 9.5 18.5 11 20C11.6667 20.6667 12 21.6 12 22.5V23.5H20V22.5C20 21.6 20.3333 20.6667 21 20C22.5 18.5 24 16.6135 24 13.7778C24 9.47918 20.4183 6 16 6Z"
           stroke="#00C2A8"
           strokeWidth="1.75"
           strokeLinejoin="round"
         />
-        <path d="M22 6L23 9L26 10L23 11L22 14L21 11L18 10L21 9L22 6Z" stroke="#00C2A8" strokeWidth="1.5" />
+        <path d="M12.5 26.5H19.5" stroke="#00C2A8" strokeWidth="1.75" strokeLinecap="round" />
+        <path d="M13.5 23.5V22" stroke="#00C2A8" strokeWidth="1.75" strokeLinecap="round" />
+        <path d="M18.5 23.5V22" stroke="#00C2A8" strokeWidth="1.75" strokeLinecap="round" />
       </svg>
     )
   }

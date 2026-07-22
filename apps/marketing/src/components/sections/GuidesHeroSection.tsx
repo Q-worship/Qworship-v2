@@ -1,3 +1,4 @@
+import { Link } from 'wouter'
 import { guidesHeroCopy } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
@@ -17,19 +18,19 @@ export function GuidesHeroSection() {
             <p className="features-hero-body">{guidesHeroCopy.body}</p>
 
             <div className="features-hero-actions cta-pair-mobile-inline">
-              <button type="button" className="features-hero-download-btn">
+              <Link href="/downloads" className="features-hero-download-btn">
                 {guidesHeroCopy.primaryCta}
-              </button>
-              <button type="button" className="features-hero-secondary-btn">
+              </Link>
+              <Link href="/signup" className="features-hero-secondary-btn">
                 {guidesHeroCopy.secondaryCta}
-              </button>
+              </Link>
             </div>
           </div>
 
           <div className="features-hero-media">
             <img
               src={guidesHeroCopy.image}
-              alt="Team collaborating on church presentation software"
+              alt="Operator running Q-worship on multiple screens during a live service"
               className="features-hero-image"
               loading="eager"
             />

@@ -43,7 +43,10 @@ export function JobDetailSection({ job }: JobDetailSectionProps) {
             <div className="careers-list">
               {job.skills.map((item) => (
                 <p key={item} className="careers-list-item">
-                  {item}
+                  <span className="careers-list-icon">
+                    <MaterialIcon name="check" filled className="text-[12px]" />
+                  </span>
+                  <span>{item}</span>
                 </p>
               ))}
             </div>
@@ -56,7 +59,10 @@ export function JobDetailSection({ job }: JobDetailSectionProps) {
             <div className="careers-list">
               {job.values.map((item) => (
                 <p key={item} className="careers-list-item">
-                  {item}
+                  <span className="careers-list-icon">
+                    <MaterialIcon name="check" filled className="text-[12px]" />
+                  </span>
+                  <span>{item}</span>
                 </p>
               ))}
             </div>
@@ -69,7 +75,10 @@ export function JobDetailSection({ job }: JobDetailSectionProps) {
             <div className="careers-list">
               {job.ideal.map((item) => (
                 <p key={item} className="careers-list-item">
-                  {item}
+                  <span className="careers-list-icon">
+                    <MaterialIcon name="check" filled className="text-[12px]" />
+                  </span>
+                  <span>{item}</span>
                 </p>
               ))}
             </div>

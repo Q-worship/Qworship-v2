@@ -1,3 +1,4 @@
+import { Link } from 'wouter'
 import { assetLibraryVideos } from '@/lib/theme'
 
 import { SiteContainer } from '@/components/layout/SiteContainer'
@@ -18,12 +19,12 @@ export function AssetLibrarySection() {
           library. Find the perfect backdrop in seconds, not minutes.
         </p>
         <div className="asset-library-actions cta-pair-mobile-inline flex flex-row flex-wrap justify-center gap-4 sm:gap-6">
-          <button
-            type="button"
+          <Link
+            href="/signup"
             className="asset-library-primary-btn bg-white text-background px-10 py-4 rounded-full font-bold hover:bg-primary hover:text-white transition-all touch-target"
           >
             Start for free today
-          </button>
+          </Link>
           <GlassButton
             icon="play_circle"
             iconFilled

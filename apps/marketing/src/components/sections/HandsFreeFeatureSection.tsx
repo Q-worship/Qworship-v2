@@ -5,7 +5,6 @@ export function HandsFreeFeatureSection() {
   return (
     <FeatureSpotlightChecklistSection
       content={handsFreeFeatureSpotlight}
-      showListeningOverlay
     />
   )
 }

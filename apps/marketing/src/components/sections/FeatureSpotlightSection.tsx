@@ -4,6 +4,7 @@ import type { AccordionSpotlightContent, ChecklistSpotlightContent } from '@/typ
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { HandsFreeTranscriptionOverlay } from '@/components/sections/HandsFreeTranscriptionOverlay'
+import { useSpotlightCopyHeight } from '@/hooks/useSpotlightCopyHeight'
 
 const SCROLL_OFFSET = 120
 
@@ -13,10 +14,14 @@ interface ChecklistCardsProps {
 }
 
 function ChecklistCardsSpotlight({ content, visualOverlay }: ChecklistCardsProps) {
+  const gridRef = useRef<HTMLDivElement>(null)
+  const copyRef = useRef<HTMLDivElement>(null)
+  useSpotlightCopyHeight(gridRef, copyRef)
+
   return (
     <section id={content.id} className="feature-spotlight-section section-gap reveal scroll-mt-28">
       <SiteContainer>
-        <div className="feature-spotlight-grid">
+        <div ref={gridRef} className="feature-spotlight-grid">
           <div className="feature-spotlight-visual">
             <img
               src={content.image}
@@ -27,16 +32,26 @@ function ChecklistCardsSpotlight({ content, visualOverlay }: ChecklistCardsProps
             {visualOverlay}
           </div>
 
-          <div className="feature-spotlight-copy">
+          <div ref={copyRef} className="feature-spotlight-copy">
             <h2 className="feature-spotlight-title font-headline font-bold">
-              <span className="feature-spotlight-title-line text-white">
+              <span
+                className={`feature-spotlight-title-line ${
+                  content.title.gradientLine === 1 ? 'build-section-entire-gradient' : 'text-white'
+                }`}
+              >
                 {content.title.line1}
               </span>
               <span className="feature-spotlight-title-line">
                 {content.title.line2Before ? (
                   <span className="text-white">{content.title.line2Before} </span>
                 ) : null}
-                <span className="build-section-entire-gradient">{content.title.accent}</span>
+                <span
+                  className={
+                    content.title.gradientLine === 1 ? 'text-white' : 'build-section-entire-gradient'
+                  }
+                >
+                  {content.title.accent}
+                </span>
               </span>
             </h2>
 
@@ -75,6 +90,7 @@ interface AccordionSpotlightProps {
   nextSectionId?: string
   imagePosition?: 'left' | 'right'
   showListeningOverlay?: boolean
+  visualSlot?: ReactNode
 }
 
 function AccordionSpotlight({
@@ -84,8 +100,13 @@ function AccordionSpotlight({
   nextSectionId,
   imagePosition = 'right',
   showListeningOverlay = false,
+  visualSlot,
 }: AccordionSpotlightProps) {
   const sectionRef = useRef<HTMLElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const accordionListRef = useRef<HTMLDivElement>(null)
+  useSpotlightCopyHeight(gridRef, accordionListRef)
+
   const activeItemIdRef = useRef(content.items[0].id)
   const isTransitioningRef = useRef(false)
 
@@ -167,7 +188,12 @@ function AccordionSpotlight({
   const handleItemActivate = (itemId: string) => switchItem(itemId)
 
   const accordionList = (
-    <div className="feature-spotlight-accordion-list" role="tablist" aria-label="On-screen Bible features">
+    <div
+      ref={accordionListRef}
+      className="feature-spotlight-accordion-list"
+      role="tablist"
+      aria-label="On-screen Bible features"
+    >
       {content.items.map((item) => {
         const isActive = item.id === activeItemId
 
@@ -214,12 +240,14 @@ function AccordionSpotlight({
 
   const visualColumn = (
     <div className="feature-spotlight-visual">
-      <img
-        src={content.image}
-        alt={content.imageAlt}
-        className="feature-spotlight-image"
-        loading="lazy"
-      />
+      {visualSlot ?? (
+        <img
+          src={content.image}
+          alt={content.imageAlt}
+          className="feature-spotlight-image"
+          loading="lazy"
+        />
+      )}
       {showListeningOverlay && <HandsFreeTranscriptionOverlay variant="features" />}
     </div>
   )
@@ -236,6 +264,11 @@ function AccordionSpotlight({
             <span className="feature-spotlight-accordion-heading-line text-white">
               {content.header.line1}
             </span>
+            {content.header.line2 ? (
+              <span className="feature-spotlight-accordion-heading-line text-white">
+                {content.header.line2}
+              </span>
+            ) : null}
             <span className="feature-spotlight-accordion-heading-line">
               {content.header.line2Before ? (
                 <span className="text-white">{content.header.line2Before} </span>
@@ -249,7 +282,7 @@ function AccordionSpotlight({
           </p>
         </div>
 
-        <div className="feature-spotlight-accordion-grid">
+        <div ref={gridRef} className="feature-spotlight-accordion-grid">
           {imagePosition === 'left' ? (
             <>
               {visualColumn}
@@ -289,6 +322,7 @@ export function FeatureSpotlightAccordionSection({
   nextSectionId,
   imagePosition,
   showListeningOverlay,
+  visualSlot,
 }: AccordionSpotlightProps) {
   return (
     <AccordionSpotlight
@@ -298,6 +332,7 @@ export function FeatureSpotlightAccordionSection({
       nextSectionId={nextSectionId}
       imagePosition={imagePosition}
       showListeningOverlay={showListeningOverlay}
+      visualSlot={visualSlot}
     />
   )
 }

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'wouter'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
-import { signUp } from '@/lib/authApi'
+import { signUp, resetOnboardingForUser } from '@/lib/authApi'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -57,6 +57,15 @@ export function SignUpForm() {
       }
 
       const verifiedEmail = response.email ?? email.trim().toLowerCase()
+      resetOnboardingForUser(verifiedEmail)
+      sessionStorage.setItem(
+        'mock_signup_user',
+        JSON.stringify({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: verifiedEmail,
+        }),
+      )
       sessionStorage.setItem('verifyEmail', verifiedEmail)
       setLocation(`/verify?email=${encodeURIComponent(verifiedEmail)}`)
     } catch (err) {
@@ -67,7 +76,7 @@ export function SignUpForm() {
   }
 
   return (
-    <div className="login-form">
+    <div className="login-form login-form--signup">
       <h1 className="login-form__title login-form__title--single-line">
         Welcome, lets get you started
       </h1>

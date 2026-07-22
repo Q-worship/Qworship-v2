@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { useLocation } from 'wouter'
-import { persistAuthSession, resendVerification, verifyEmail } from '@/lib/authApi'
+import { persistAuthSession, resendVerification, resetOnboardingForUser, verifyEmail } from '@/lib/authApi'
 
 const OTP_LENGTH = 6
 
@@ -103,8 +103,9 @@ export function VerifyForm() {
       }
 
       persistAuthSession(response.token, response.user)
+      resetOnboardingForUser(email)
       sessionStorage.removeItem('verifyEmail')
-      setLocation(response.nextStep ?? '/dashboard')
+      setLocation('/onboarding')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed. Please try again.')
     } finally {
@@ -117,7 +118,7 @@ export function VerifyForm() {
   }
 
   return (
-    <div className="login-form">
+    <div className="login-form login-form--verify">
       <h1 className="login-form__title">Let&apos;s verify account</h1>
       <p className="verify-form__subtitle">
         Please share the 6 digit code sent to{' '}
@@ -127,7 +128,7 @@ export function VerifyForm() {
       <form className="login-form__fields" onSubmit={handleSubmit}>
         <div className="login-form__field">
           <label className="login-form__label">Please enter code</label>
-          <div className="verify-form__otp">
+          <div className="verify-form__otp" role="group" aria-label="Verification code">
             {digits.map((digit, index) => (
               <input
                 key={index}

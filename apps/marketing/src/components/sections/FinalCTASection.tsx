@@ -1,3 +1,4 @@
+import { Link } from 'wouter'
 import { finalCtaCopy, images } from '@/lib/theme'
 
 import { SiteContainer } from '@/components/layout/SiteContainer'
@@ -31,15 +32,17 @@ export function FinalCTASection() {
             <span className="final-cta-download-patch" aria-hidden />
           </div>
           <div className="final-cta-actions cta-pair-mobile-inline">
-            <PrimaryButton className="final-cta-primary-btn px-10 py-4 rounded-xl text-lg shadow-xl shadow-primary/30 hover:shadow-primary/50 transition-all">
-              {finalCtaCopy.primaryCta}
-            </PrimaryButton>
-            <a
-              href="#"
+            <Link href="/signup">
+              <PrimaryButton className="final-cta-primary-btn px-10 py-4 rounded-xl text-lg shadow-xl shadow-primary/30 hover:shadow-primary/50 transition-all">
+                {finalCtaCopy.primaryCta}
+              </PrimaryButton>
+            </Link>
+            <Link
+              href="/downloads"
               className="final-cta-download-link flex items-center gap-3 font-bold text-lg hover:text-primary transition-colors"
             >
               {finalCtaCopy.downloadCta} <MaterialIcon name="download" className="text-lg" />
-            </a>
+            </Link>
           </div>
         </GlassCard>
       </SiteContainer>

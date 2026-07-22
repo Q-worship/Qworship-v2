@@ -1,3 +1,4 @@
+import { Link } from 'wouter'
 import { heroCopy, images } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
@@ -36,12 +37,12 @@ export function HeroSection() {
           </p>
 
           <div className="flex flex-row flex-wrap justify-center gap-4 cta-pair-mobile-inline">
-            <button
-              type="button"
+            <Link
+              href="/downloads"
               className="hero-download-btn px-10 py-3.5 rounded-xl text-base font-bold"
             >
               Download
-            </button>
+            </Link>
             <button
               type="button"
               className="hero-demo-btn px-10 py-3.5 rounded-xl text-base font-bold flex items-center gap-2.5"

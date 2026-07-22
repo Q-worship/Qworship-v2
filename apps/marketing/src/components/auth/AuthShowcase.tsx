@@ -52,9 +52,6 @@ export function AuthShowcase({
   return (
     <div className={rootClass}>
       <div className={isCard ? 'auth-showcase__visual' : 'login-showcase__visual'}>
-        {'badge' in activeSlide && activeSlide.badge ? (
-          <span className="auth-showcase__badge">{activeSlide.badge}</span>
-        ) : null}
         <div
           className={
             isCard ? 'auth-showcase__frame login-showcase__stage' : 'login-showcase__stage'

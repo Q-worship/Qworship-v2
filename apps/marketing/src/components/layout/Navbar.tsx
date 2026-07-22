@@ -132,9 +132,11 @@ export function Navbar() {
                 Sign in
               </PrimaryButton>
             </Link>
-            <GlassButton className="px-3 sm:px-6 py-2.5 rounded-lg text-sm border border-white/30 touch-target">
-              Get started
-            </GlassButton>
+            <Link href="/signup">
+              <GlassButton className="px-3 sm:px-6 py-2.5 rounded-lg text-sm border border-white/30 touch-target">
+                Get started
+              </GlassButton>
+            </Link>
             <button
               type="button"
               className="mobile-nav-toggle md:hidden"
@@ -189,9 +191,11 @@ export function Navbar() {
                   Sign in
                 </PrimaryButton>
               </Link>
-              <GlassButton className="mobile-nav-actions__item w-full py-3 rounded-lg text-sm border border-white/30 touch-target">
-                Get started
-              </GlassButton>
+              <Link href="/signup" onClick={closeMobileNav} className="mobile-nav-actions__item">
+                <GlassButton className="w-full py-3 rounded-lg text-sm border border-white/30 touch-target">
+                  Get started
+                </GlassButton>
+              </Link>
             </div>
           </div>
         </>

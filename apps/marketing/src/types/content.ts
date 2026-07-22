@@ -185,8 +185,43 @@ export interface GuideCard {
   categoryId: string
   title: string
   description: string
+  heroBody?: string
   image: string
   imageAlt: string
+  imageFit?: 'cover' | 'contain'
+  article: GuideArticleContent
+  steps?: GuideStepsContent
+  cloudSteps?: GuideStepsContent
+}
+
+export interface GuideArticleContent {
+  title: { line1: string; line2Before?: string; accent?: string; gradientLine?: 1 | 2 }
+  body: string
+}
+
+export type GuideStepBlock =
+  | { type: 'checklist'; items: string[] }
+  | { type: 'tip'; body: string }
+  | { type: 'warning'; body: string }
+  | { type: 'modes'; items: { label: string; body: string }[] }
+
+export interface GuideStep {
+  id: string
+  title: string
+  body: string
+  blocks?: GuideStepBlock[]
+}
+
+export interface GuideStepSection {
+  id: string
+  label: string
+  description: string
+  steps: GuideStep[]
+}
+
+export interface GuideStepsContent {
+  summary: string
+  sections: GuideStepSection[]
 }
 
 export interface FaqCategoryItem {
@@ -249,7 +284,7 @@ export interface FeatureSpotlightCard {
 
 export interface ChecklistSpotlightContent {
   id: string
-  title: { line1: string; line2Before: string; accent: string }
+  title: { line1: string; line2Before: string; accent: string; gradientLine?: 1 | 2 }
   body: string
   checklist: string[]
   cards: FeatureSpotlightCard[]
@@ -266,7 +301,7 @@ export interface AccordionSpotlightItem {
 
 export interface AccordionSpotlightContent {
   id: string
-  header: { line1: string; line2Before: string; accent: string }
+  header: { line1: string; line2?: string; line2Before?: string; accent: string }
   subtitle: { line1: string; line2: string }
   items: AccordionSpotlightItem[]
   image: string

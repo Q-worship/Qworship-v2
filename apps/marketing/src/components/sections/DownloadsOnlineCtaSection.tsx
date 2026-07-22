@@ -1,3 +1,4 @@
+import { Link } from 'wouter'
 import { downloadsPageCopy } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
@@ -24,12 +25,12 @@ export function DownloadsOnlineCtaSection() {
             <p className="downloads-online-cta-body">{onlineCta.body}</p>
 
             <div className="downloads-online-cta-actions cta-pair-mobile-inline">
-              <button type="button" className="features-hero-download-btn">
+              <Link href="/downloads" className="features-hero-download-btn">
                 {onlineCta.primaryCta}
-              </button>
-              <button type="button" className="features-hero-secondary-btn">
+              </Link>
+              <Link href="/signup" className="features-hero-secondary-btn">
                 {onlineCta.secondaryCta}
-              </button>
+              </Link>
             </div>
           </div>
         </div>

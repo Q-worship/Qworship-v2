@@ -1,6 +1,14 @@
-import { serviceSlidesSpotlight } from '@/lib/theme'
-import { FeatureSpotlightChecklistSection } from '@/components/sections/FeatureSpotlightSection'
+import { serviceSlidesAccordionSpotlight } from '@/lib/theme'
+import { FeatureSpotlightAccordionSection } from '@/components/sections/FeatureSpotlightSection'
 
 export function ServiceSlidesFeatureSection() {
-  return <FeatureSpotlightChecklistSection content={serviceSlidesSpotlight} />
+  return (
+    <FeatureSpotlightAccordionSection
+      content={serviceSlidesAccordionSpotlight}
+      autoAdvance
+      advanceDurationS={6}
+      nextSectionId="media"
+      imagePosition="left"
+    />
+  )
 }
