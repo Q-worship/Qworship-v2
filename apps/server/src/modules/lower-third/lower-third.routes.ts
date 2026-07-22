@@ -1,6 +1,6 @@
 import { Router } from "express";
 import express from "express";
-import { protect } from "../auth/auth.middleware.js";
+import { protect, requireProductAccess } from "../auth/auth.middleware.js";
 import {
   pushState,
   pushPreview,
@@ -22,21 +22,21 @@ export const lowerThirdRouter = Router();
 lowerThirdRouter.use(express.json({ limit: "20mb" }));
 
 // ── Proxy to microservice ────────────────────────────────────────────────────
-lowerThirdRouter.post("/push", protect, pushState);
-lowerThirdRouter.patch("/push-preview", protect, pushPreview);
-lowerThirdRouter.post("/snapshot", protect, snapshotTemplate);
-lowerThirdRouter.post("/upload-asset", protect, uploadAsset);
+lowerThirdRouter.post("/push", protect, requireProductAccess, pushState);
+lowerThirdRouter.patch("/push-preview", protect, requireProductAccess, pushPreview);
+lowerThirdRouter.post("/snapshot", protect, requireProductAccess, snapshotTemplate);
+lowerThirdRouter.post("/upload-asset", protect, requireProductAccess, uploadAsset);
 
 // ── R2 asset serving ─────────────────────────────────────────────────────────
 lowerThirdRouter.get("/asset/*", serveAsset);
-lowerThirdRouter.get("/thumbnail/:userId/:templateId", protect, serveThumbnail);
+lowerThirdRouter.get("/thumbnail/:userId/:templateId", protect, requireProductAccess, serveThumbnail);
 
 // ── Config (safe, no secrets) ────────────────────────────────────────────────
 lowerThirdRouter.get("/config", getConfig);
 lowerThirdRouter.get("/static-url", getStaticUrl);
 
 // ── Custom template CRUD (user-scoped) ───────────────────────────────────────
-lowerThirdRouter.get("/templates", protect, listTemplates);
-lowerThirdRouter.post("/templates", protect, createTemplate);
-lowerThirdRouter.put("/templates/:templateId", protect, updateTemplate);
-lowerThirdRouter.delete("/templates/:templateId", protect, deleteTemplate);
+lowerThirdRouter.get("/templates", protect, requireProductAccess, listTemplates);
+lowerThirdRouter.post("/templates", protect, requireProductAccess, createTemplate);
+lowerThirdRouter.put("/templates/:templateId", protect, requireProductAccess, updateTemplate);
+lowerThirdRouter.delete("/templates/:templateId", protect, requireProductAccess, deleteTemplate);

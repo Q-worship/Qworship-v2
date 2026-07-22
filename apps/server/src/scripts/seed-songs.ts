@@ -1,43 +1,50 @@
 // @ts-nocheck
 import mongoose from "mongoose";
-import { User } from "../modules/users/user.model";
-import { Organization } from "../modules/users/organization.model";
+import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
+import { User } from "../modules/auth/auth.model.js";
+import { Organization } from "../modules/organization/organization.model.js";
 import { Song } from "../modules/songs/song.model";
+
+dotenv.config();
 
 async function seed() {
   try {
-    const uri =
-      "mongodb+srv://kayyadams360_db_user:V4e9BhRfLKHL12h4@qworship.bki11v4.mongodb.net/";
-    console.log(`Connecting to DB: ${uri}`);
+    const uri = process.env.MONGODB_URI;
+    if (!uri) throw new Error("MONGODB_URI is required");
+    console.log("Connecting to configured MongoDB database");
     await mongoose.connect(uri);
 
     // 1. Find or create User
     let user = await User.findOne({ email: "admin@example.com" });
     if (!user) {
+      const seedPassword = process.env.SEED_ADMIN_PASSWORD;
+      if (!seedPassword || seedPassword.length < 12) throw new Error("SEED_ADMIN_PASSWORD (minimum 12 characters) is required when creating the seed admin");
       console.log("Creating mock admin user...");
       user = await User.create({
         username: "admin_seed",
         email: "admin@example.com",
-        passwordHash: "hashed_password_mock",
+        password: await bcrypt.hash(seedPassword, 12),
         role: "superadmin",
         accountType: "free",
         isActive: true,
+        emailVerified: true,
+        onboardingStatus: "completed",
+        trialStatus: "converted",
+        subscriptionStatus: "active",
       });
     }
 
     // 2. Find or create Organization
-    let org = await Organization.findOne({ owner: user._id });
+    let org = await Organization.findOne({ ownerId: user._id });
     if (!org) {
       console.log("Creating mock organization...");
       org = await Organization.create({
         name: "Demo Church",
         subscriptionType: "free",
         subscriptionStatus: "active",
-        owner: user._id,
+        ownerId: user._id,
       });
-      // Link back to user
-      user.organizations.push(org._id as any);
-      await user.save();
     }
 
     // 3. Clear existing songs for clean slate (optional but good for testing)

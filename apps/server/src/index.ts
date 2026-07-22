@@ -5,6 +5,7 @@ import { connectDB } from "./core/db.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { subscriptionRouter } from "./modules/auth/subscription.routes.js";
 import { organizationRouter } from "./modules/organization/organization.routes.js";
+import { onboardingRouter } from "./modules/onboarding/onboarding.routes.js";
 import { helpRouter } from "./modules/help/help.routes.js";
 import { createServer } from "http";
 import { setupAudioSocket } from "./modules/bible/audio.socket.js";
@@ -68,6 +69,7 @@ import { BibleService } from "./modules/bible/bible.service.js";
 import adminRouter from "./modules/admin/admin.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
 import { lowerThirdRouter } from "./modules/lower-third/lower-third.routes.js";
+import { chatRouter, webhookRouter } from "./modules/chat/chat.routes.js";
 
 // Main Routes
 app.use("/api/auth", authRouter);
@@ -76,6 +78,7 @@ app.use("/api", subscriptionRouter);
 app.use("/api/songs", songsRouter);
 app.use("/api/presentations", presentationRouter);
 app.use("/api", organizationRouter);
+app.use("/api", onboardingRouter);
 app.use("/api", serviceSectionsRouter);
 app.use("/api", mediaRouter);
 app.use("/api/help", helpRouter);
@@ -83,6 +86,8 @@ app.use("/api/bible", bibleRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api", notificationRouter);
 app.use("/api/lower-third", lowerThirdRouter);
+app.use("/api/chat", chatRouter);
+app.use("/webhooks", webhookRouter);
 
 // Database & Server Initialization
 const PORT = process.env.PORT || 5000;

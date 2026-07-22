@@ -99,9 +99,8 @@ async function seedTranslation(version: 'amp' | 'msg', filePath: string) {
 }
 
 async function main() {
-  const MONGO_URI =
-    process.env.MONGO_URI ||
-    'mongodb+srv://kayyadams360_db_user:V4e9BhRfLKHL12h4@qworship.bki11v4.mongodb.net/';
+  const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (!MONGO_URI) throw new Error('MONGODB_URI is required');
 
   console.log(`\n🔌 Connecting to MongoDB...`);
   await mongoose.connect(MONGO_URI);

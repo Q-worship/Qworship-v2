@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { protect, authorizeAdmin } from '../auth/auth.middleware.js';
+import { protect, authorizeAdmin, requireProductAccess } from '../auth/auth.middleware.js';
 import {
   uploadMedia,
   listUserMedia,
@@ -48,9 +48,9 @@ const memoryUpload = multer({
 export const mediaRouter = Router();
 
 // User Media Routes -> /api/user-media-assets
-mediaRouter.post('/user-media-assets/upload', protect, memoryUpload.array('files'), uploadMedia); // The frontend uses 'files' for FormData
-mediaRouter.get('/user-media-stats', protect, getUserMediaStats);
-mediaRouter.get('/user-media-assets', protect, listUserMedia);
+mediaRouter.post('/user-media-assets/upload', protect, requireProductAccess, memoryUpload.array('files'), uploadMedia); // The frontend uses 'files' for FormData
+mediaRouter.get('/user-media-stats', protect, requireProductAccess, getUserMediaStats);
+mediaRouter.get('/user-media-assets', protect, requireProductAccess, listUserMedia);
 // Handle legacy raw R2 urls organically that were pushed to slides before being caught
 mediaRouter.get('/user-media-assets/resolve-r2', async (req, res) => {
   try {
@@ -75,9 +75,9 @@ mediaRouter.get('/user-media-assets/resolve-r2', async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 });
-mediaRouter.get('/user-media-assets/:id/file', getMediaFile);
-mediaRouter.get('/user-media-assets/:id/thumbnail', getMediaThumbnail);
-mediaRouter.delete('/user-media-assets/:id', deleteMedia);
+mediaRouter.get('/user-media-assets/:id/file', protect, requireProductAccess, getMediaFile);
+mediaRouter.get('/user-media-assets/:id/thumbnail', protect, requireProductAccess, getMediaThumbnail);
+mediaRouter.delete('/user-media-assets/:id', protect, requireProductAccess, deleteMedia);
 
 // Cloud Media Routes -> /api/cloud-media
 mediaRouter.post('/cloud-media', protect, authorizeAdmin, memoryUpload.array('files'), uploadCloudMedia);

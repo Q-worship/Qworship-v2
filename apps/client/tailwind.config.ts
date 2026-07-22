@@ -20,6 +20,7 @@ export default {
     },
     extend: {
       colors: {
+        // --- Existing dashboard HSL tokens ---
         codelytemplatewebflowionero: "var(--codelytemplatewebflowionero)",
         codelytemplatewebflowiowoodsmoke: "var(--codelytemplatewebflowiowoodsmoke)",
         border: "hsl(var(--border))",
@@ -55,11 +56,35 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // --- Marketing design tokens (from apps/marketing tailwind.config.ts) ---
+        'on-primary': '#ffffff',
+        surface: '#121414',
+        'surface-dim': '#121414',
+        'surface-bright': '#37393a',
+        'surface-container-lowest': '#0c0f0f',
+        'surface-container-low': '#1a1c1c',
+        'surface-container': '#1e2020',
+        'surface-container-high': '#282a2b',
+        'surface-container-highest': '#333535',
+        'on-background': '#e2e2e2',
+        'on-surface': '#e2e2e2',
+        'on-surface-variant': '#d3c0d6',
+        outline: '#9c8ba0',
+        'outline-variant': '#504254',
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        // Marketing radii
+        xl: '0.75rem',
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+      },
+      fontFamily: {
+        // Marketing typography
+        headline: ['"Plus Jakarta Sans"', 'sans-serif'],
+        body: ['Inter', 'sans-serif'],
       },
       keyframes: {
         "accordion-down": {

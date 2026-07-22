@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 interface AuthState {
   isAuthenticated: boolean;
-  user: null | { id: string; username: string; role: string; email: string; firstName?: string; lastName?: string; };
+  user: null | { id: string; username?: string; role?: string; email: string; firstName?: string; lastName?: string; onboardingStatus?: string; trialStatus?: string; trialEndDate?: string; subscriptionStatus?: string; };
   setAuth: (user: AuthState['user']) => void;
   logout: () => void;
 }
@@ -29,7 +29,13 @@ export const useAuthStore = create<AuthState>((set) => {
     },
     logout: () => {
       localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
       sessionStorage.removeItem('qworship_user_id');
+      sessionStorage.removeItem('qworship_user_data');
+      sessionStorage.removeItem('verifyEmail');
+      sessionStorage.removeItem('qworship_current_presentation_id');
+      sessionStorage.removeItem('qworship_current_presentation_name');
+      sessionStorage.removeItem('qworship_presentation_to_load');
       localStorage.removeItem('qworship_user');
       set({ isAuthenticated: false, user: null });
     },

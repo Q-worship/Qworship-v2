@@ -27,9 +27,11 @@ import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
+import { LivePresentationProvider, useLivePresentationContext } from './LivePresentationContext';
+import { AssetsPage } from '@/features/dashboard/pages/AssetsPage';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { AssetsPage } from "@/features/web/pages/AssetsPage";
 import {
   useBibleProjectionStore,
   requestSyncFromOtherWindows,

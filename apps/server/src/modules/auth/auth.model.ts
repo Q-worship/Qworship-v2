@@ -20,6 +20,12 @@ export interface IUser extends Document {
   trialStartDate?: Date;
   trialEndDate?: Date;
   subscriptionStatus?: string;
+  emailVerifiedAt?: Date;
+  onboardingStatus: 'pending' | 'organization' | 'preferences' | 'completed';
+  onboardingCompletedAt?: Date;
+  selectedFeatures: string[];
+  trialStatus: 'not_started' | 'active' | 'expired' | 'converted' | 'cancelled';
+  trialActivatedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,10 +47,16 @@ const UserSchema = new Schema<IUser>(
     emailVerified: { type: Boolean, default: false },
     profilePicture: { type: String },
     role: { type: String, enum: ['user', 'admin', 'superadmin', 'pastor', 'worship_leader', 'member'], default: 'user' },
-    planType: { type: String, default: 'trial' },
-    trialStartDate: { type: Date, default: Date.now },
-    trialEndDate: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
-    subscriptionStatus: { type: String, default: 'trial' },
+    emailVerifiedAt: { type: Date },
+    onboardingStatus: { type: String, enum: ['pending', 'organization', 'preferences', 'completed'], default: 'pending' },
+    onboardingCompletedAt: { type: Date },
+    selectedFeatures: { type: [String], default: [] },
+    planType: { type: String, default: 'cloud_pro' },
+    trialStartDate: { type: Date },
+    trialEndDate: { type: Date },
+    trialStatus: { type: String, enum: ['not_started', 'active', 'expired', 'converted', 'cancelled'], default: 'not_started' },
+    trialActivatedAt: { type: Date },
+    subscriptionStatus: { type: String, default: 'inactive' },
   },
   { timestamps: true }
 );

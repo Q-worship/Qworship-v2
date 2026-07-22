@@ -11,30 +11,36 @@ import { useSongRAMCache } from "@/features/dashboard/hooks/useSongRAMCache";
 import { SyncLoadingOverlay } from "@/features/dashboard/components/SyncLoadingOverlay";
 
 import { Home } from "@/features/web/pages/Home";
-const About = lazy(() => import("@/features/web/pages/About"));
+const About = lazy(() => import("@/features/web/pages/About").then(m => ({ default: m.About })));
 const Pricing = lazy(() => import("@/features/web/pages/Pricing").then(m => ({ default: m.Pricing })));
-const Contact = lazy(() => import("@/features/web/pages/Contact"));
-const EndUserLicense = lazy(() => import("@/features/web/pages/EndUserLicense"));
-const Features = lazy(() => import("@/features/web/pages/Features"));
-const PrivacyPolicy = lazy(() => import("@/features/web/pages/PrivacyPolicy"));
-const RefundPolicy = lazy(() => import("@/features/web/pages/RefundPolicy"));
-const DocsPage = lazy(() => import("@/features/web/pages/DocsPage").then(m => ({ default: m.DocsPage })));
-const DownloadPage = lazy(() => import("@/features/web/pages/DownloadPage").then(m => ({ default: m.DownloadPage })));
-import SignInPage from "@/features/auth/pages/SignInPage";
+const Features = lazy(() => import("@/features/web/pages/Features").then(m => ({ default: m.Features })));
+const FAQs = lazy(() => import("@/features/web/pages/FAQs").then(m => ({ default: m.FAQs })));
+const Downloads = lazy(() => import("@/features/web/pages/Downloads").then(m => ({ default: m.Downloads })));
+const Resources = lazy(() => import("@/features/web/pages/Resources").then(m => ({ default: m.Resources })));
+const JobDetailPage = lazy(() => import("@/features/web/pages/JobDetailPage").then(m => ({ default: m.JobDetailPage })));
+const GuideDetailPage = lazy(() => import("@/features/web/pages/GuideDetailPage").then(m => ({ default: m.GuideDetailPage })));
+const Guides = lazy(() => import("@/features/web/pages/Guides").then(m => ({ default: m.Guides })));
+import { Login } from "@/features/web/pages/Login";
+import { SignUp } from "@/features/web/pages/SignUp";
+import { Verify } from "@/features/web/pages/Verify";
+import { ForgotPassword } from "@/features/web/pages/ForgotPassword";
+import { ResetPassword } from "@/features/web/pages/ResetPassword";
+const Onboarding = lazy(() => import("@/features/web/pages/Onboarding").then(m => ({ default: m.Onboarding })));
+const TrialExpiredPage = lazy(() => import("@/features/auth/pages/TrialExpiredPage"));
+const ProjectSelectionView = lazy(() => import("@/components/onboarding/ProjectSelectionView").then(m => ({ default: m.ProjectSelectionView })));
+import { ChatbotWidget } from "@/components/chat/ChatbotWidget";
+import { Layout } from "@/components/layout/Layout";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
 import DesktopAuthRemote from "@/features/auth/pages/DesktopAuthRemote";
 const LivePresentationV2 = lazy(() => import("@/features/dashboard/live/LivePresentationV2").then(m => ({ default: m.LivePresentationV2 })));
-const OrganizationSetup = lazy(() => import("@/features/onboarding/pages/OrganizationSetup"));
-const PlanSelection = lazy(() => import("@/features/onboarding/pages/PlanSelection"));
-const ProjectSelection = lazy(() => import("@/features/onboarding/pages/ProjectSelection").then(m => ({ default: m.ProjectSelection })));
 const QworshipHomeV2Wrapper = lazy(() => import("@/features/dashboard/DashboardLayoutV2").then(m => ({ default: m.QworshipHomeV2Wrapper })));
 
 import { AppLayout } from "./Layout";
 import { useAuthStore } from "@/features/auth/auth.store";
+import { getCurrentUser, setAuthToken } from "@/lib/authApi";
 const BibleWorkspace = lazy(() => import("@/features/bible-reader/components/BibleWorkspace").then(m => ({ default: m.BibleWorkspace })));
-const AssetsPage = lazy(() => import("@/features/dashboard/pages/AssetsPage"));
+const AssetsPage = lazy(() => import("@/features/dashboard/pages/AssetsPage").then(m => ({ default: m.AssetsPage })));
 const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSupportPage"));
-const GuidesPage = lazy(() => import("@/features/web/pages/GuidesPage"));
 const SuperAdminSidebar = lazy(() => import("@/features/super-admin/components/SuperAdminSidebar"));
 import { LowerThirdEditorPage, LowerThirdSettingsPage } from "@/features/lowerThird";
 import { MainPresentationSettingsPage } from "@/features/mainPresentation";
@@ -62,6 +68,24 @@ const PresentationsMock = () => (
 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+  const setAuth = useAuthStore((state) => state.setAuth);
+  const logout = useAuthStore((state) => state.logout);
+  const [isVerifyingSession, setIsVerifyingSession] = React.useState(isAuthenticated);
+
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      setIsVerifyingSession(false);
+      return;
+    }
+    getCurrentUser()
+      .then((response) => setAuth(response.user))
+      .catch(() => {
+        setAuthToken(null);
+        logout();
+      })
+      .finally(() => setIsVerifyingSession(false));
+  }, []);
   
   // Hydrate the IndexedDB background caches once authenticated
   const { isSyncing: isBibleSyncing } = useBibleSync();
@@ -100,7 +124,10 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isAuthenticated, isSyncing]);
 
+  if (isVerifyingSession) return <div className="flex h-screen items-center justify-center bg-[#0d071d]">Checking your session…</div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
+  if (user?.onboardingStatus !== 'completed') return <Redirect to="/onboarding" />;
+  if (user?.trialStatus === 'expired') return <Redirect to="/account" />;
   
   return (
     <>
@@ -118,6 +145,11 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   if (user?.role !== 'admin' && user?.role !== 'superadmin') return <Redirect to="/dashboard" />;
   
   return <>{children}</>;
+};
+
+const ProjectGuard = ({ children }: { children: React.ReactNode }) => {
+  const selectedProjectId = sessionStorage.getItem('qworship_current_presentation_id');
+  return selectedProjectId ? <>{children}</> : <Redirect to="/project-selection" />;
 };
 
 // Thin wrapper so we can call useLocation() inside a component (hooks can't
@@ -138,18 +170,29 @@ export const AppRouter = () => {
         <Toaster />
         <Suspense fallback={<div className="flex h-screen items-center justify-center bg-[#0d071d]"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>}>
           <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/about" component={About} />
-          <Route path="/pricing" component={Pricing} />
-          <Route path="/features" component={Features} />
-          <Route path="/contact" component={Contact} />
-          <Route path="/docs" component={DocsPage} />
-          <Route path="/privacy-policy" component={PrivacyPolicy} />
-          <Route path="/refund-policy" component={RefundPolicy} />
-          <Route path="/eula" component={EndUserLicense} />
-          <Route path="/download" component={DownloadPage} />
-          <Route path="/login" component={SignInPage} />
-          <Route path="/signup" component={SignInPage} />
+          {/* New Auth and Onboarding Flow */}
+          <Route path="/login" component={Login} />
+          <Route path="/signup" component={SignUp} />
+          <Route path="/verify" component={Verify} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/onboarding" component={Onboarding} />
+          <Route path="/account" component={TrialExpiredPage} />
+          <Route path="/project-selection">
+            <AuthGuard><ProjectSelectionView /></AuthGuard>
+          </Route>
+
+          {/* New Marketing Pages in Layout */}
+          <Route path="/">{(params) => <Layout><Home /></Layout>}</Route>
+          <Route path="/features">{(params) => <Layout><Features /></Layout>}</Route>
+          <Route path="/about/careers/:jobId">{(params) => <Layout><JobDetailPage params={params} /></Layout>}</Route>
+          <Route path="/about">{(params) => <Layout><About /></Layout>}</Route>
+          <Route path="/pricing">{(params) => <Layout><Pricing /></Layout>}</Route>
+          <Route path="/resources">{(params) => <Layout><Resources /></Layout>}</Route>
+          <Route path="/guides/:guideId">{(params) => <Layout><GuideDetailPage params={params} /></Layout>}</Route>
+          <Route path="/guides">{(params) => <Layout><Guides /></Layout>}</Route>
+          <Route path="/faqs">{(params) => <Layout><FAQs /></Layout>}</Route>
+          <Route path="/downloads">{(params) => <Layout><Downloads /></Layout>}</Route>
           <Route path="/desktop-auth" component={DesktopAuthRemote} />
           <Route path="/admin/login" component={AdminSignInPage} />
 
@@ -172,16 +215,12 @@ export const AppRouter = () => {
               <AppLayout>
                 <Suspense fallback={<div className="flex h-screen items-center justify-center bg-[#1a0f2e]"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>}>
                   <Switch>
-                  <Route path="/organization-setup" component={OrganizationSetup} />
-                  <Route path="/plan-selection" component={PlanSelection} />
-                  <Route path="/project-selection" component={ProjectSelection} />
-                  <Route path="/dashboard" component={QworshipHomeV2Wrapper} />
+                  <Route path="/dashboard"><ProjectGuard><QworshipHomeV2Wrapper /></ProjectGuard></Route>
                   <Route path="/bible" component={BibleWorkspace} />
                   <Route path="/songs" component={SongsMock} />
                   <Route path="/presentations" component={PresentationsMock} />
                   <Route path="/dashboard-assets" component={AssetsPage} />
                   <Route path="/dashboard-help" component={HelpSupportPage} />
-                  <Route path="/guides" component={GuidesPage} />
                   <Route path="/lower-third-settings" component={LowerThirdSettingsRoute} />
                   <Route path="/lower-third-editor/:templateId" component={LowerThirdEditorPage} />
                   <Route path="/main-presentation-settings" component={MainPresentationSettingsRoute} />

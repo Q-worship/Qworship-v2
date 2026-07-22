@@ -4,13 +4,13 @@ import {
   initializeSections,
   createServiceItem,
 } from "./service-sections.controller.js";
-import { protect } from "../auth/auth.middleware.js";
+import { protect, requireProductAccess } from "../auth/auth.middleware.js";
 
 export const serviceSectionsRouter = Router();
 
 // Section endpoints
-serviceSectionsRouter.get("/service-sections", protect, getSections);
-serviceSectionsRouter.post("/service-sections/initialize", protect, initializeSections);
+serviceSectionsRouter.get("/service-sections", protect, requireProductAccess, getSections);
+serviceSectionsRouter.post("/service-sections/initialize", protect, requireProductAccess, initializeSections);
 
 // Item endpoints (grouped here since they interact intimately)
-serviceSectionsRouter.post("/service-items", protect, createServiceItem);
+serviceSectionsRouter.post("/service-items", protect, requireProductAccess, createServiceItem);

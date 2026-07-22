@@ -33,18 +33,20 @@ export const createPresentation = async (req: Request, res: Response) => {
   try {
     const { name, presentationDate, description } = req.body;
     const userId = (req as any).user.id;
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 120) {
+      return res.status(400).json({ success: false, error: 'A project name of 1–120 characters is required' });
+    }
 
     // Try to find user's organization to link it
     let org = await Organization.findOne({ ownerId: userId });
     
-    // If no org found, use a fallback (or fail, but fallback is better for dev)
-    const orgId = org ? org._id : userId; // using userId as fallback objectId
+    if (!org) return res.status(400).json({ success: false, error: 'Complete organization onboarding before creating a project' });
 
     const newPresentation = await Presentation.create({
-      name,
+      name: name.trim(),
       date: presentationDate ? new Date(presentationDate) : new Date(),
       sections: [],
-      organizationId: orgId,
+      organizationId: org._id,
       createdBy: userId,
     });
 
@@ -125,13 +127,14 @@ export const bulkCreatePresentations = async (req: Request, res: Response) => {
 export const getPresentationById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const presentation = await Presentation.findById(id);
+    const presentation = await Presentation.findOne({ _id: id, createdBy: (req as any).user.id });
 
     if (!presentation) {
       return res.status(404).json({ error: 'Presentation not found' });
     }
 
     res.json({
+      success: true,
       presentation: {
         id: presentation._id.toString(),
         name: presentation.name,
@@ -156,7 +159,7 @@ export const updatePresentation = async (req: Request, res: Response) => {
     const { name, serviceData } = req.body;
     
     // Find and update the presentation
-    const presentation = await Presentation.findById(id);
+    const presentation = await Presentation.findOne({ _id: id, createdBy: (req as any).user.id });
     if (!presentation) {
       return res.status(404).json({ error: 'Presentation not found' });
     }
@@ -175,7 +178,7 @@ export const updatePresentation = async (req: Request, res: Response) => {
        updatePayload.serviceData = typeof serviceData === 'string' ? JSON.parse(serviceData) : serviceData;
     }
 
-    const updatedPresentation = await Presentation.findByIdAndUpdate(id, updatePayload, { new: true });
+    const updatedPresentation = await Presentation.findOneAndUpdate({ _id: id, createdBy: (req as any).user.id }, updatePayload, { new: true });
 
     res.json({
       success: true,
@@ -194,7 +197,7 @@ export const updatePresentation = async (req: Request, res: Response) => {
 export const deletePresentation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = await Presentation.findByIdAndDelete(id);
+    const deleted = await Presentation.findOneAndDelete({ _id: id, createdBy: (req as any).user.id });
     if (!deleted) {
       return res.status(404).json({ error: 'Presentation not found' });
     }

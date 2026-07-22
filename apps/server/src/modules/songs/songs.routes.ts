@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { protect } from '../auth/auth.middleware.js';
+import { protect, requireProductAccess } from '../auth/auth.middleware.js';
 import * as songsController from './songs.controller.js';
 
 export const songsRouter = Router();
+songsRouter.use(protect, requireProductAccess);
 
 // Configure multer for legacy song file import buffers
 const songUpload = multer({
@@ -17,15 +18,15 @@ const songUpload = multer({
 });
 
 // Retrieve library
-songsRouter.get('/', protect, songsController.getSongs);
-songsRouter.get('/:id', protect, songsController.getSongById);
+songsRouter.get('/', songsController.getSongs);
+songsRouter.get('/:id', songsController.getSongById);
 
 // Creation and modification
-songsRouter.post('/', protect, songsController.createSong);
-songsRouter.put('/:id', protect, songsController.updateSong);
-songsRouter.delete('/:id', protect, songsController.deleteSong);
+songsRouter.post('/', songsController.createSong);
+songsRouter.put('/:id', songsController.updateSong);
+songsRouter.delete('/:id', songsController.deleteSong);
 
 // Utilities
 songsRouter.post('/projection', songsController.getSongForProjection);
-songsRouter.post('/search', protect, songsController.searchSongs);
-songsRouter.post('/import', protect, songUpload.single('file'), songsController.importSong);
+songsRouter.post('/search', songsController.searchSongs);
+songsRouter.post('/import', songUpload.single('file'), songsController.importSong);

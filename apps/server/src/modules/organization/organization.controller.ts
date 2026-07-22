@@ -4,7 +4,7 @@ import { User } from '../auth/auth.model.js';
 
 export const getOrganization = async (req: Request, res: Response) => {
   try {
-    const organization = await Organization.findById(req.params.id);
+    const organization = await Organization.findOne({ _id: req.params.id, ownerId: (req as any).user._id });
     if (!organization) {
       return res.status(404).json({ success: false, message: 'Organization not found' });
     }
@@ -18,9 +18,10 @@ export const getOrganization = async (req: Request, res: Response) => {
 export const updateOrganization = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const allowed = ['name', 'address', 'city', 'state', 'zipCode', 'country', 'phone', 'website', 'denomination', 'size'];
+    const updateData = Object.fromEntries(allowed.filter(key => req.body[key] !== undefined).map(key => [key, req.body[key]]));
     
-    const organization = await Organization.findByIdAndUpdate(id, updateData, { new: true });
+    const organization = await Organization.findOneAndUpdate({ _id: id, ownerId: (req as any).user._id }, updateData, { new: true, runValidators: true });
     
     if (!organization) {
       return res.status(404).json({ success: false, message: 'Organization not found' });
@@ -37,11 +38,12 @@ export const createOrganization = async (req: Request, res: Response) => {
   try {
     const { 
       name, address, city, state, zipCode, country, 
-      phone, website, denomination, size, userId 
+      phone, website, denomination, size
     } = req.body;
 
-    if (!name || !userId) {
-      return res.status(400).json({ success: false, message: 'Name and userId are required' });
+    const userId = (req as any).user._id;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Name is required' });
     }
 
     // 1. Create Organization
@@ -73,10 +75,11 @@ export const createOrganization = async (req: Request, res: Response) => {
 
 export const selectPlan = async (req: Request, res: Response) => {
   try {
-    const { planType, userId, billingPeriod, isExtension } = req.body;
+    const { planType } = req.body;
+    const userId = (req as any).user._id;
 
-    if (!planType || !userId) {
-      return res.status(400).json({ success: false, error: 'planType and userId are required' });
+    if (!planType) {
+      return res.status(400).json({ success: false, error: 'planType is required' });
     }
 
     // Convert planType to accountType format

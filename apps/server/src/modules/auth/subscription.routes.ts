@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect } from '../auth/auth.middleware.js';
+import { protect, authorizeAdmin } from '../auth/auth.middleware.js';
 import { User } from '../auth/auth.model.js';
 import { notifyPlanExpired, notifyPlanSubscription } from '../notifications/notification.service.js';
 
@@ -26,7 +26,7 @@ subscriptionRouter.post('/subscription/cancel', protect, async (req: any, res: a
 });
 
 // Extend Trial 30 days
-subscriptionRouter.post('/subscription/extend-trial', protect, async (req: any, res: any) => {
+subscriptionRouter.post('/subscription/extend-trial', protect, authorizeAdmin, async (req: any, res: any) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId);
