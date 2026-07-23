@@ -1,8 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
+import { CalendarIcon } from 'lucide-react'
 import { getStoredAuthUser } from '@/lib/authApi'
 import { apiRequest } from '@/lib/queryClient'
 import { images } from '@/lib/theme'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 interface ProjectSummary {
   id: string
@@ -13,6 +16,17 @@ interface ProjectSummary {
   slideCount?: number
   serviceData?: unknown
 }
+
+function getNextSunday(): Date {
+  const today = new Date()
+  const daysUntilSunday = (7 - today.getDay()) % 7
+  const nextSunday = new Date(today)
+  nextSunday.setDate(today.getDate() + (daysUntilSunday === 0 ? 7 : daysUntilSunday))
+  return nextSunday
+}
+
+const formatServiceDate = (date: Date) =>
+  date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
 export function ProjectSelectionView() {
   const [, navigate] = useLocation()
@@ -25,6 +39,11 @@ export function ProjectSelectionView() {
   const [error, setError] = useState('')
   const user = getStoredAuthUser()
   const firstName = user?.firstName ?? 'there'
+
+  // Service date — defaults to the next coming Sunday, matching the
+  // pattern already used elsewhere in the dashboard's date pickers.
+  const [selectedDate, setSelectedDate] = useState<Date>(getNextSunday)
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -44,7 +63,10 @@ export function ProjectSelectionView() {
   const enterProject = (project: ProjectSummary) => {
     sessionStorage.setItem('qworship_current_presentation_id', project.id)
     sessionStorage.setItem('qworship_current_presentation_name', project.name)
-    sessionStorage.setItem('qworship_presentation_to_load', JSON.stringify({ id: project.id, name: project.name }))
+    sessionStorage.setItem(
+      'qworship_presentation_to_load',
+      JSON.stringify({ id: project.id, name: project.name, presentationDate: project.presentationDate }),
+    )
     navigate('/dashboard')
   }
 
@@ -55,7 +77,10 @@ export function ProjectSelectionView() {
     setIsCreating(true)
     setError('')
     try {
-      const response = await apiRequest('POST', '/api/presentations', { name, presentationDate: new Date().toISOString() })
+      const response = await apiRequest('POST', '/api/presentations', {
+        name,
+        presentationDate: selectedDate.toISOString().split('T')[0],
+      })
       const data = await response.json()
       enterProject(data.presentation)
     } catch (reason) {
@@ -72,7 +97,12 @@ export function ProjectSelectionView() {
       <header className="project-selection__header">
         <div className="project-selection__header-left">
           <img src={images.logo} alt="Q-Worship" className="project-selection__logo" />
-          <div><h1 className="project-selection__greeting">Welcome, {firstName}</h1><p className="project-selection__subtext">Choose a project to continue or create a new one</p></div>
+          <div>
+            <h1 className="project-selection__greeting">
+              {projects.length === 0 ? `Welcome, ${firstName}` : `Welcome back, ${firstName}`}
+            </h1>
+            <p className="project-selection__subtext">Choose a project to continue or create a new one</p>
+          </div>
         </div>
         <time className="project-selection__date" dateTime={new Date().toISOString()}>{todayLabel}</time>
       </header>
@@ -85,7 +115,37 @@ export function ProjectSelectionView() {
               <form onSubmit={createProject} className="project-selection__create-form">
                 <label htmlFor="new-project-name" className="project-selection__card-subtitle">Project name</label>
                 <input id="new-project-name" autoFocus required maxLength={120} className="project-selection__search" placeholder="e.g. Sunday Morning Service" value={newProjectName} onChange={event => setNewProjectName(event.target.value)} />
-                <div className="project-selection__create-actions"><button type="button" className="project-selection__create-btn project-selection__create-btn--secondary" onClick={() => setShowCreateForm(false)}>Cancel</button><button type="submit" className="project-selection__create-btn" disabled={isCreating}>{isCreating ? 'Creating…' : 'Create and open'}</button></div>
+
+                <label className="project-selection__card-subtitle">Service date</label>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="project-selection__date-button">
+                      <span>{formatServiceDate(selectedDate)}</span>
+                      <CalendarIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 project-selection__calendar-popover" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      defaultMonth={selectedDate}
+                      onSelect={(date) => {
+                        if (!date) return
+                        setSelectedDate(date)
+                        setIsCalendarOpen(false)
+                      }}
+                      modifiers={{ sunday: (date) => date.getDay() === 0 }}
+                      modifiersClassNames={{ sunday: 'text-[#8356F3] font-semibold' }}
+                      classNames={{
+                        day_selected:
+                          'bg-[#8356F3] text-white hover:bg-[#8356F3] hover:text-white focus:bg-[#8356F3] focus:text-white',
+                        day_today: 'border border-[#8356F3]/60',
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <div className="project-selection__create-actions"><button type="button" className="project-selection__create-btn project-selection__create-btn--secondary" onClick={() => { setShowCreateForm(false); setIsCalendarOpen(false) }}>Cancel</button><button type="submit" className="project-selection__create-btn" disabled={isCreating}>{isCreating ? 'Creating…' : 'Create and open'}</button></div>
               </form>
             ) : <button type="button" className="project-selection__create-btn" onClick={() => setShowCreateForm(true)}>+ Create New Presentation</button>}
           </section>

@@ -3536,6 +3536,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     );
     setModalSelectedDate(newDate);
     setSelectedDate(newDate); // Also update the main sidebar date
+    setNewPresentationDate(newDate.toISOString().split("T")[0]); // Also update the date actually saved on create
     setCurrentMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1)); // Also update the main calendar month
     setIsModalCalendarOpen(false);
   };
@@ -3735,14 +3736,14 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     });
   };
 
-  // Initialize current date for new presentation modal
+  // Initialize current date for new presentation modal — defaults to the
+  // pre-selected (next Sunday) date shown by the modal's calendar, so the
+  // date that's highlighted purple always matches what gets saved.
   useEffect(() => {
     if (isNewPresentationModalOpen && !newPresentationDate) {
-      const today = new Date();
-      const formattedDate = today.toISOString().split("T")[0];
-      setNewPresentationDate(formattedDate);
+      setNewPresentationDate(modalSelectedDate.toISOString().split("T")[0]);
     }
-  }, [isNewPresentationModalOpen, newPresentationDate]);
+  }, [isNewPresentationModalOpen, newPresentationDate, modalSelectedDate]);
 
   // Handle saving current presentation
   const handleSavePresentation = (isManualSave = false) => {
@@ -4279,6 +4280,17 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // Clear the pending data to prevent reloading
         sessionStorage.removeItem("qworship_presentation_to_load");
 
+        // Sync the calendar/date UI to this project's saved date so it
+        // shows correctly highlighted (purple) wherever it's displayed.
+        if (presentation.presentationDate) {
+          const savedDate = new Date(presentation.presentationDate);
+          if (!Number.isNaN(savedDate.getTime())) {
+            setSelectedDate(savedDate);
+            setModalSelectedDate(savedDate);
+            setNewPresentationDate(presentation.presentationDate);
+          }
+        }
+
         // Load the presentation using the existing comprehensive loading system
         loadProjectMutation.mutate(presentation.id);
       } catch (error) {
@@ -4342,6 +4354,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     currentPresentationName,
     setIsImportModalOpen,
     activeServiceItem,
+    setSelectedDate,
+    setModalSelectedDate,
+    setNewPresentationDate,
   });
 
   // Handle deleting a project - now shows confirmation modal

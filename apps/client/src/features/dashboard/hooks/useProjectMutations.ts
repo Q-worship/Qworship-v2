@@ -45,6 +45,9 @@ export const useProjectMutations = ({
   currentPresentationName,
   setIsImportModalOpen,
   activeServiceItem,
+  setSelectedDate,
+  setModalSelectedDate,
+  setNewPresentationDate,
 }: any) => {
 
 // Load complete project bundle - IMPLEMENTATION per spec
@@ -373,6 +376,17 @@ export const useProjectMutations = ({
     // 2. Set the opened project as current context
     setCurrentPresentationName(project.name);
     setCurrentPresentationId(project.id);
+
+    // 2b. Sync the calendar/date UI to this project's saved date so it
+    // shows correctly highlighted (purple) wherever it's displayed.
+    if (project.presentationDate) {
+      const savedDate = new Date(project.presentationDate);
+      if (!Number.isNaN(savedDate.getTime())) {
+        setSelectedDate?.(savedDate);
+        setModalSelectedDate?.(savedDate);
+        setNewPresentationDate?.(project.presentationDate);
+      }
+    }
 
     // 3. Sync with session storage for persistence
     sessionStorage.setItem(

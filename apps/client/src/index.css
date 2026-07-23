@@ -9822,10 +9822,14 @@ body.mobile-nav-open {
 .project-selection__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: stretch;
   gap: 1.5rem;
 }
 
 .project-selection__card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding: 1.5rem;
   border-radius: 1rem;
   border: 1px solid var(--onboarding-panel-border);
@@ -9939,6 +9943,31 @@ body.mobile-nav-open {
 
 .project-selection__search::placeholder {
   color: rgba(255, 255, 255, 0.35);
+}
+
+.project-selection__date-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  background: rgba(10, 5, 24, 0.9);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.project-selection__date-button:hover {
+  border-color: rgba(131, 86, 243, 0.5);
+}
+
+.project-selection__calendar-popover {
+  background: #1a0f2e;
+  border: 1px solid rgba(131, 86, 243, 0.3);
+  color: #fff;
 }
 
 .project-selection__list {
