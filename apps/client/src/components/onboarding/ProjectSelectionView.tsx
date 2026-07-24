@@ -28,6 +28,26 @@ function getNextSunday(): Date {
 const formatServiceDate = (date: Date) =>
   date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
+// `toISOString()` converts to UTC first, which can shift a local calendar
+// date to the previous (or next) day depending on the user's timezone
+// offset. Build the "YYYY-MM-DD" key from local date parts instead.
+function toLocalDateKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// A bare "YYYY-MM-DD" string is parsed by `new Date()` as UTC midnight,
+// which can then format as the previous/next day in the user's local
+// timezone. Parse the parts directly as a local date instead.
+function parseLocalDateKey(value: string): Date {
+  // Accepts either a bare "YYYY-MM-DD" key or a full ISO timestamp — only
+  // the leading date portion is used either way.
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 export function ProjectSelectionView() {
   const [, navigate] = useLocation()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -79,7 +99,7 @@ export function ProjectSelectionView() {
     try {
       const response = await apiRequest('POST', '/api/presentations', {
         name,
-        presentationDate: selectedDate.toISOString().split('T')[0],
+        presentationDate: toLocalDateKey(selectedDate),
       })
       const data = await response.json()
       enterProject(data.presentation)
@@ -90,7 +110,14 @@ export function ProjectSelectionView() {
   }
 
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'
+  const formatDate = (value?: string) => {
+    if (!value) return 'No date'
+    // Bare "YYYY-MM-DD" values (like presentationDate) need local parsing
+    // to avoid shifting a day in either direction; full timestamps (like
+    // updatedAt) already carry a time/offset so `new Date()` is safe.
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? parseLocalDateKey(value) : new Date(value)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
 
   return (
     <div className="project-selection">

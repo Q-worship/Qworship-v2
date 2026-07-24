@@ -3371,6 +3371,24 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     );
   };
 
+  // `toISOString()` converts to UTC first, which can shift a local
+  // calendar date to the previous (or next) day depending on the user's
+  // timezone offset. Build/parse the "YYYY-MM-DD" key from local date
+  // parts instead so the saved date always matches what was clicked.
+  const toLocalDateKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseLocalDateKey = (value: string) => {
+    // Accepts either a bare "YYYY-MM-DD" key or a full ISO timestamp —
+    // only the leading date portion is used either way.
+    const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const navigateMonth = (direction: "prev" | "next") => {
     const newMonth = new Date(currentMonth);
     if (direction === "prev") {
@@ -3536,7 +3554,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     );
     setModalSelectedDate(newDate);
     setSelectedDate(newDate); // Also update the main sidebar date
-    setNewPresentationDate(newDate.toISOString().split("T")[0]); // Also update the date actually saved on create
+    setNewPresentationDate(toLocalDateKey(newDate)); // Also update the date actually saved on create
     setCurrentMonth(new Date(newDate.getFullYear(), newDate.getMonth(), 1)); // Also update the main calendar month
     setIsModalCalendarOpen(false);
   };
@@ -3731,7 +3749,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     const now = new Date();
     createPresentationMutation.mutate({
       name: newPresentationName.trim(),
-      presentationDate: newPresentationDate || now.toISOString().split("T")[0],
+      presentationDate: newPresentationDate || toLocalDateKey(now),
       description: `New presentation created on ${now.toLocaleDateString()}`,
     });
   };
@@ -3741,7 +3759,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   // date that's highlighted purple always matches what gets saved.
   useEffect(() => {
     if (isNewPresentationModalOpen && !newPresentationDate) {
-      setNewPresentationDate(modalSelectedDate.toISOString().split("T")[0]);
+      setNewPresentationDate(toLocalDateKey(modalSelectedDate));
     }
   }, [isNewPresentationModalOpen, newPresentationDate, modalSelectedDate]);
 
@@ -4281,13 +4299,17 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         sessionStorage.removeItem("qworship_presentation_to_load");
 
         // Sync the calendar/date UI to this project's saved date so it
-        // shows correctly highlighted (purple) wherever it's displayed.
+        // shows correctly highlighted (purple) wherever it's displayed,
+        // and so the calendar dropdown opens on that date's month instead
+        // of whatever month it was last left on.
         if (presentation.presentationDate) {
-          const savedDate = new Date(presentation.presentationDate);
+          const savedDate = parseLocalDateKey(presentation.presentationDate);
           if (!Number.isNaN(savedDate.getTime())) {
             setSelectedDate(savedDate);
             setModalSelectedDate(savedDate);
-            setNewPresentationDate(presentation.presentationDate);
+            setNewPresentationDate(toLocalDateKey(savedDate));
+            setCurrentMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
+            setModalCurrentMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
           }
         }
 
@@ -4357,6 +4379,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     setSelectedDate,
     setModalSelectedDate,
     setNewPresentationDate,
+    setCurrentMonth,
+    setModalCurrentMonth,
   });
 
   // Handle deleting a project - now shows confirmation modal

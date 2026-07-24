@@ -1,6 +1,22 @@
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
+// A bare "YYYY-MM-DD" value (or the date portion of a full ISO timestamp)
+// parsed via `new Date()` is treated as UTC midnight, which can then
+// display as the previous/next day depending on the user's local
+// timezone offset. Parse the date parts directly as local instead.
+function parseLocalDateKey(value: string): Date {
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toLocalDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export const useProjectMutations = ({
   toast,
   refetchPresentations,
@@ -48,6 +64,8 @@ export const useProjectMutations = ({
   setSelectedDate,
   setModalSelectedDate,
   setNewPresentationDate,
+  setCurrentMonth,
+  setModalCurrentMonth,
 }: any) => {
 
 // Load complete project bundle - IMPLEMENTATION per spec
@@ -378,13 +396,17 @@ export const useProjectMutations = ({
     setCurrentPresentationId(project.id);
 
     // 2b. Sync the calendar/date UI to this project's saved date so it
-    // shows correctly highlighted (purple) wherever it's displayed.
+    // shows correctly highlighted (purple) wherever it's displayed, and
+    // so the calendar dropdown opens on that date's month instead of
+    // whatever month it was last left on.
     if (project.presentationDate) {
-      const savedDate = new Date(project.presentationDate);
+      const savedDate = parseLocalDateKey(project.presentationDate);
       if (!Number.isNaN(savedDate.getTime())) {
         setSelectedDate?.(savedDate);
         setModalSelectedDate?.(savedDate);
-        setNewPresentationDate?.(project.presentationDate);
+        setNewPresentationDate?.(toLocalDateKey(savedDate));
+        setCurrentMonth?.(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
+        setModalCurrentMonth?.(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
       }
     }
 
