@@ -8,18 +8,56 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 
-// Initialize the S3 client lazily so dotenv parsing has finished
-export const getS3Client = () => new S3Client({
-  region: "auto",
-  endpoint: process.env.R2_ENDPOINT || "https://20ad54fda9da751e1acd1f37e635b0eb.r2.cloudflarestorage.com",
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || "8f195b30167dea5893d6ecac74df0b91",
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "bdca68ecb148ccc533314b9fe073713340564d919d74cb1682e3f2399c3b2489",
-  },
-  forcePathStyle: true,
-});
+const requireR2Env = (name: string): string => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required R2 environment variable: ${name}`);
+  }
+  return value;
+};
 
-export const getBucketName = () => process.env.R2_BUCKET_NAME || "qworship";
+const getR2Endpoint = (): string => {
+  const endpoint = requireR2Env("R2_ENDPOINT").replace(/\/+$/, "");
+
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error("R2_ENDPOINT must be a valid URL");
+  }
+
+  if (
+    parsed.protocol !== "https:" ||
+    !parsed.hostname.endsWith(".r2.cloudflarestorage.com")
+  ) {
+    throw new Error(
+      "R2_ENDPOINT must be the S3 API endpoint: https://<ACCOUNT_ID>[.<JURISDICTION>].r2.cloudflarestorage.com",
+    );
+  }
+
+  return endpoint;
+};
+
+// Initialize the S3 client lazily so dotenv parsing has finished.
+// Never fall back to credentials in source code: a missing deployment variable
+// must fail explicitly instead of silently authenticating as the wrong token.
+export const getS3Client = () =>
+  new S3Client({
+    region: "auto",
+    endpoint: getR2Endpoint(),
+    // Keep browser presigned PUT requests simple and predictable. Newer AWS SDK
+    // versions otherwise add optional CRC32 checksum parameters/headers that must
+    // also be allowed by the bucket's CORS policy.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
+    credentials: {
+      accessKeyId: requireR2Env("R2_ACCESS_KEY_ID"),
+      secretAccessKey: requireR2Env("R2_SECRET_ACCESS_KEY"),
+    },
+    forcePathStyle: true,
+  });
+
+export const getBucketName = () => requireR2Env("R2_BUCKET_NAME");
 
 export class ObjectNotFoundError extends Error {
   constructor() {
@@ -155,26 +193,23 @@ export class ObjectStorageService {
       return true;
     } catch (error: any) {
       if (
+        error.name === "NoSuchKey" ||
         error.name === "NotFound" ||
         error.$metadata?.httpStatusCode === 404
       ) {
         return false;
       }
-      return false;
+      throw error;
     }
   }
 
   // Delete file from object storage
   async deleteFile(key: string): Promise<void> {
-    try {
-      const command = new DeleteObjectCommand({
-        Bucket: getBucketName(),
-        Key: key,
-      });
-      await getS3Client().send(command);
-    } catch (error) {
-      console.error(`Error deleting file from storage: ${key}`, error);
-    }
+    const command = new DeleteObjectCommand({
+      Bucket: getBucketName(),
+      Key: key,
+    });
+    await getS3Client().send(command);
   }
 
   // Get a signed URL for reading (GET)

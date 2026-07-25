@@ -271,9 +271,14 @@ export const ResourceCentreAdmin: React.FC = () => {
         }, 2000);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast({ title: "Download file uploaded successfully" });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/download-files'] });
+      setDesktopReleaseForm((prev) =>
+        variables.platform === "windows"
+          ? { ...prev, windowsVersion: "", windowsFile: null }
+          : { ...prev, macVersion: "", macFile: null }
+      );
     },
     onMutate: async (payload) => {
       setUploadingPlatform(payload.platform);
@@ -772,9 +777,18 @@ export const ResourceCentreAdmin: React.FC = () => {
                 </Badge>
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <p>Current: {windowsBuild?.version || "None"}</p>
-                <p>File: {windowsBuild?.originalName || "N/A"}</p>
-                <p>Size: {formatFileSizeMb(windowsBuild?.fileSize)}</p>
+                <p>
+                  {desktopReleaseForm.windowsFile ? "Selected version" : "Current version"}:{" "}
+                  {desktopReleaseForm.windowsFile
+                    ? desktopReleaseForm.windowsVersion.trim() || "Enter a version below"
+                    : windowsBuild?.version || "None"}
+                </p>
+                <p>
+                  File: {desktopReleaseForm.windowsFile?.name || windowsBuild?.originalName || "N/A"}
+                </p>
+                <p>
+                  Size: {formatFileSizeMb(desktopReleaseForm.windowsFile?.size ?? windowsBuild?.fileSize)}
+                </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Version *</Label>
@@ -875,9 +889,18 @@ export const ResourceCentreAdmin: React.FC = () => {
                 </Badge>
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <p>Current: {macBuild?.version || "None"}</p>
-                <p>File: {macBuild?.originalName || "N/A"}</p>
-                <p>Size: {formatFileSizeMb(macBuild?.fileSize)}</p>
+                <p>
+                  {desktopReleaseForm.macFile ? "Selected version" : "Current version"}:{" "}
+                  {desktopReleaseForm.macFile
+                    ? desktopReleaseForm.macVersion.trim() || "Enter a version below"
+                    : macBuild?.version || "None"}
+                </p>
+                <p>
+                  File: {desktopReleaseForm.macFile?.name || macBuild?.originalName || "N/A"}
+                </p>
+                <p>
+                  Size: {formatFileSizeMb(desktopReleaseForm.macFile?.size ?? macBuild?.fileSize)}
+                </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Version *</Label>
