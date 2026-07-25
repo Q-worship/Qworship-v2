@@ -1,9 +1,9 @@
 class RawAudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // OPTIMIZATION: Reduce buffer size from 4096 to 1024.
-    // At 48kHz, 1024 samples = ~21ms. This sends audio to the server much faster.
-    this.bufferSize = 1024;
+    // The AudioContext runs at 16kHz. 640 samples is a 40ms chunk: frequent
+    // enough for fast interim transcription without excessive WebSocket frames.
+    this.bufferSize = 640;
     this.buffer = new Float32Array(this.bufferSize);
     this.bufferIndex = 0;
   }

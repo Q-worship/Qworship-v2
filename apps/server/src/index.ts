@@ -45,7 +45,9 @@ app.use(
     ],
   }),
 ); // Connect to Vite App
-app.use(express.json());
+// Bible translation imports can be several megabytes. These endpoints remain
+// admin-protected; the bounded limit still prevents unrestrained request bodies.
+app.use(express.json({ limit: "25mb" }));
 
 // Request Telemetry Pipeline
 app.use((req, res, next) => {

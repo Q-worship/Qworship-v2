@@ -361,9 +361,14 @@ export class FastBibleParser {
         const chapter = parseInt(this.normalizeNumbers(extracted.chapter));
         if (isNaN(chapter) || chapter < 1 || chapter > 150) continue;
 
+        // A book/chapter detection is useful predictive state, but it is not a
+        // projectable reference. Never manufacture verse 1 when the speaker
+        // has not explicitly supplied a verse.
+        if (!extracted.verse) continue;
+
         const verseStart = extracted.verse
           ? parseInt(this.normalizeNumbers(extracted.verse))
-          : 1;
+          : Number.NaN;
         const verseEnd = extracted.verseEnd
           ? parseInt(this.normalizeNumbers(extracted.verseEnd))
           : undefined;

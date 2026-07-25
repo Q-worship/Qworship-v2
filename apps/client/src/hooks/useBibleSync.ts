@@ -11,7 +11,10 @@ export const useBibleSync = () => {
       try {
         const state = await db.syncState.get(version);
 
-        if (state && state.status === "synced") {
+        const revisionResponse = await apiClient.get('/bible/revisions');
+        const remoteRevision = Number(revisionResponse.data?.revisions?.[version] || 1);
+
+        if (state && state.status === "synced" && state.revision === remoteRevision) {
           const verseCount = await db.verses.where("version").equals(version).count();
           
           // Verify we didn't just save a corrupted sync state or lose our IndexedDB
@@ -51,6 +54,7 @@ export const useBibleSync = () => {
                 status: "synced",
                 syncedAt: Date.now(),
                 totalVerses: verses.length
+                ,revision: Number(response.data.revision || remoteRevision)
              });
           });
           

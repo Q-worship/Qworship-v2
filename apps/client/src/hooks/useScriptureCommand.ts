@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiClient } from "@/lib/api";
 
 interface ScriptureCommandProps {
   onBibleMatch: (result: any) => void;
@@ -60,16 +61,12 @@ export const useScriptureCommand = ({
         onFinalTranscript?.(text);
 
         // 3. Process Command
-        const commandRes = await fetch("/api/bible/voice-command", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const commandRes = await apiClient.post("/bible/voice-command", {
             text,
             ...context,
-          }),
         });
 
-        const commandData = await commandRes.json();
+        const commandData = commandRes.data;
 
         if (!commandData.success) {
           console.warn("Command failed or not recognized:", commandData.error);

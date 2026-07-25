@@ -21,6 +21,7 @@ interface RAMCacheStore {
   // QC66: Lazy seed a single chapter into the RAM cache after a cloud API fetch.
   // This ensures subsequent accesses to the same chapter are instant (0ms).
   setChapterInRam: (version: string, book: string, chapter: number, verses: MemoryVerse[]) => void;
+  clearVersion: (version: string) => void;
 }
 
 export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
@@ -90,6 +91,14 @@ export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
       if (!dict[version][book]) dict[version][book] = {};
       dict[version][book][chapter] = [...verses].sort((a, b) => a.number - b.number);
       return { dictionary: dict };
+    });
+  },
+
+  clearVersion: (version: string) => {
+    set(state => {
+      const dictionary = { ...state.dictionary };
+      delete dictionary[version];
+      return { dictionary };
     });
   },
 }));

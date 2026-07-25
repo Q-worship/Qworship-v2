@@ -48,7 +48,7 @@ const VERSE_CACHE_MAX = 100;
 const VERSE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 function getVerseCacheKey(ref: BibleReference): string {
-  return `${ref.book}|${ref.chapter}|${ref.verseStart}|${ref.verseEnd || ref.verseStart}`;
+  return `${(ref.version || "kjv").toLowerCase()}|${ref.book}|${ref.chapter}|${ref.verseStart}|${ref.verseEnd || ref.verseStart}`;
 }
 
 // ============================================================================
@@ -160,6 +160,39 @@ export class BibleService {
   private static bibleStore: BibleMemoryStore = {};
   private static isInitialized = false;
 
+  static invalidateCache() {
+    verseCache.clear();
+  }
+
+  static upsertMemoryVerse(
+    version: string,
+    book: string,
+    chapter: number,
+    verse: number,
+    text: string,
+  ) {
+    const key = version.toLowerCase();
+    this.bibleStore[key] ||= {};
+    this.bibleStore[key][book] ||= {};
+    const chapterVerses = (this.bibleStore[key][book][chapter] ||= []);
+    const existing = chapterVerses.find((item) => item.verse === verse);
+    if (existing) {
+      existing.text = text;
+    } else {
+      chapterVerses.push({ book, chapter, verse, text, version: key });
+      chapterVerses.sort((a, b) => a.verse - b.verse);
+    }
+    this.invalidateCache();
+  }
+
+  static removeMemoryVerse(version: string, book: string, chapter: number, verse: number) {
+    const chapterVerses = this.bibleStore[version.toLowerCase()]?.[book]?.[chapter];
+    if (!chapterVerses) return;
+    this.bibleStore[version.toLowerCase()][book][chapter] =
+      chapterVerses.filter(item => item.verse !== verse);
+    this.invalidateCache();
+  }
+
   /**
    * Initializes the in-memory store from static JSON files.
    * This removes the need for MongoDB round-trips for Bible lookups.
@@ -196,6 +229,22 @@ export class BibleService {
         }
       }
     }
+
+    // MongoDB is authoritative. Overlay every populated DB translation onto
+    // the bundled baseline so admin repairs are effective after every restart.
+    const databaseVerses = await BibleVerse.find(
+      {},
+      { bookName: 1, chapter: 1, verse: 1, kjv: 1, nkjv: 1, amp: 1, msg: 1, esv: 1, niv: 1 },
+    ).lean();
+    for (const row of databaseVerses as any[]) {
+      for (const version of versions) {
+        const text = row[version];
+        if (typeof text === "string" && text.trim()) {
+          this.upsertMemoryVerse(version, row.bookName, row.chapter, row.verse, text.trim());
+        }
+      }
+    }
+    console.log(`[BibleService] Applied ${databaseVerses.length} authoritative database verse records`);
 
     this.isInitialized = true;
     const duration = performance.now() - startTime;
@@ -239,7 +288,7 @@ export class BibleService {
     const verseEnd = ref.verseEnd || ref.verseStart;
     const filtered = chapterVerses.filter(v => v.verse >= ref.verseStart && v.verse <= verseEnd);
     
-    if (filtered.length === 0) return null;
+    if (filtered.length === 0 || filtered.some(v => !v.text?.trim())) return null;
 
     return {
       book: ref.book,

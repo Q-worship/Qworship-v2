@@ -32,6 +32,28 @@ export interface HFBProjectedVerse {
   version: string;
 }
 
+export async function resolveCachedHFBVerse(
+  book: string,
+  chapter: number,
+  verse: number,
+  version: string,
+): Promise<{ number: number; text: string; source: "ram" | "indexeddb" } | null> {
+  const versionKey = version.toLowerCase();
+  const ramVerse = useBibleRAMCache.getState()
+    .getChapter(versionKey, book, chapter)
+    ?.find(item => item.number === verse);
+  if (ramVerse?.text?.trim()) return { ...ramVerse, source: "ram" };
+
+  const localVerse = await db.verses
+    .where("[version+book+chapter+verse]")
+    .equals([versionKey, book, chapter, verse])
+    .first();
+  if (localVerse?.text?.trim()) {
+    return { number: localVerse.verse, text: localVerse.text, source: "indexeddb" };
+  }
+  return null;
+}
+
 interface HFBStore {
   // Version config
   hfbVersion: string;
@@ -68,8 +90,11 @@ interface HFBStore {
   setHfbCurrentProjected: (projected: HFBProjectedVerse | null) => void;
   
   // Connection state
-  hfbConnectionStatus: "idle" | "connecting" | "connected" | "disconnected";
-  setHfbConnectionStatus: (status: "idle" | "connecting" | "connected" | "disconnected") => void;
+  hfbConnectionStatus: "idle" | "connecting" | "ready" | "reconnecting" | "disconnected";
+  setHfbConnectionStatus: (status: "idle" | "connecting" | "ready" | "reconnecting" | "disconnected") => void;
+  hfbLastLatencyMs: number | null;
+  hfbLastLatencySource: string | null;
+  setHfbLatency: (milliseconds: number, source: string) => void;
 
   // Async actions
   fetchHFBChapter: (book: string, chapter: number, version: string, highlightVerse?: number) => Promise<void>;
@@ -120,6 +145,12 @@ export const useHFBStore = create<HFBStore>((set) => ({
 
   hfbConnectionStatus: "idle",
   setHfbConnectionStatus: (status) => set({ hfbConnectionStatus: status }),
+  hfbLastLatencyMs: null,
+  hfbLastLatencySource: null,
+  setHfbLatency: (milliseconds, source) => set({
+    hfbLastLatencyMs: Math.max(0, Math.round(milliseconds)),
+    hfbLastLatencySource: source,
+  }),
 
   fetchHFBChapter: async (book, chapter, version, highlightVerse) => {
     set({ hfbBookName: book, hfbChapter: chapter, hfbChapterLoading: true, hfbChapterVerses: [] });
@@ -189,7 +220,7 @@ export const useHFBStore = create<HFBStore>((set) => ({
       if (data?.success && data?.result) {
         const verses = (data.result.verses as any[]).map((v: any) => ({
           number: v.verse,
-          text: v[vKey] || v.kjv || "",
+          text: v[vKey] || "",
         }));
 
         // --- LAZY SEEDING: Cache to IndexedDB for next time ---
@@ -233,5 +264,7 @@ export const useHFBStore = create<HFBStore>((set) => ({
     hfbTranscriptLines: [],
     hfbDetectedVerses: [],
     hfbCurrentProjected: null,
+    hfbLastLatencyMs: null,
+    hfbLastLatencySource: null,
   })
 }));

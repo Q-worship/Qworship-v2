@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SearchIcon, InfoIcon, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, ChevronDown, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { apiClient } from "@/lib/api";
 
 interface OnScreenBibleEditorProps {
   content: any;
@@ -48,10 +49,9 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
     setIsSearching(true);
 
     try {
-      const response = await fetch(`/api/bible/search?reference=${encodeURIComponent(searchInput.trim())}&version=${activeVersion.toLowerCase()}`);
+      const response = await apiClient.get(`/bible/search?reference=${encodeURIComponent(searchInput.trim())}&version=${activeVersion.toLowerCase()}`);
       
-      if (response.ok) {
-        const data = await response.json();
+      const data = response.data;
         
         if (data?.success && data?.passage) {
           const result = data.passage;
@@ -85,9 +85,6 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
           });
         } else {
           throw new Error('Scripture not found');
-        }
-      } else {
-        throw new Error('API error');
       }
     } catch (error) {
       toast({

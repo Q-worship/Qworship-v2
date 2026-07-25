@@ -134,12 +134,18 @@ export function setupAudioSocket(server: Server) {
     let lastExecutionTime = 0;
     let currentPartialText = "";
     let currentContext: any = null;
+    let strictMode = false;
+    let interimCandidate = { key: "", count: 0, firstSeenAt: 0, lastSeenAt: 0 };
 
     // Fix 5: Extended dedup window — 5000ms (was 800ms).
     // Covers non-stop speakers who quote a reference mid-sentence and keep
     // talking for several seconds before speech_final fires.
     const DEDUP_WINDOW_MS = 5000;
     const CONFIDENCE_THRESHOLD = 0.75;
+    const INTERIM_MEDIUM_CONFIDENCE = 0.65;
+    const INTERIM_HIGH_CONFIDENCE = 0.85;
+    const hasStrictCommandCue = (text: string) =>
+      /\b(?:bible|show|project|display|open|turn\s+to|go\s+to|read(?:\s+from)?)\b/i.test(text);
 
     // Predictive accumulator — tracks in-progress reference assembly
     let partialState: PartialReferenceState = {
@@ -161,6 +167,7 @@ export function setupAudioSocket(server: Server) {
         lastPartialText: "",
         bookDetectedAt: 0,
       };
+      interimCandidate = { key: "", count: 0, firstSeenAt: 0, lastSeenAt: 0 };
     };
 
     // ── Deepgram service ───────────────────────────────────────────────────
@@ -192,6 +199,7 @@ export function setupAudioSocket(server: Server) {
       lastExecutedReference = refKey;
       lastExecutionTime = now;
 
+      const executionStartedAt = Date.now();
       const conf = cmd._confidence != null ? ` [conf: ${cmd._confidence.toFixed(2)}]` : "";
       console.log(`[AudioSocket][${T()}] EXECUTE [${source}]${conf}: ${cmd.name}`, cmd.arguments);
 
@@ -207,7 +215,17 @@ export function setupAudioSocket(server: Server) {
 
         if (result) {
           console.log(`[AudioSocket][${T()}] BIBLE_MATCH SENT: ${result.book} ${result.chapter}:${result.verses?.[0]?.verse}`);
-          ws.send(JSON.stringify({ type: "bible_match", result, commandType: "lookup" }));
+          ws.send(JSON.stringify({
+            type: "bible_match",
+            result,
+            commandType: "lookup",
+            telemetry: {
+              source,
+              commandStartedAt: executionStartedAt,
+              serverResolvedAt: Date.now(),
+              serverLookupMs: Date.now() - executionStartedAt,
+            },
+          }));
           currentContext = {
             book: result.book,
             chapter: result.chapter,
@@ -262,9 +280,19 @@ export function setupAudioSocket(server: Server) {
      */
     const processPartial = async (text: string, confidence: number) => {
       // Always send live transcript to UI
-      ws.send(JSON.stringify({ type: "transcript_partial", text }));
+      ws.send(JSON.stringify({
+        type: "transcript_partial",
+        text,
+        confidence,
+        serverReceivedAt: Date.now(),
+      }));
 
-      if (confidence < CONFIDENCE_THRESHOLD) return;
+      if (confidence < INTERIM_MEDIUM_CONFIDENCE) {
+        console.log(
+          `[AudioSocket] Ignoring low-confidence interim (${confidence?.toFixed(2)})`,
+        );
+        return;
+      }
 
       // ── Step 1: Try full reference parse first ─────────────────────────
       const fullCmd = FastBibleParser.parse(text);
@@ -283,6 +311,31 @@ export function setupAudioSocket(server: Server) {
             partialState.chapter = stage.chapter;
             if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
           }
+          return;
+        }
+        if (strictMode && !hasStrictCommandCue(text)) {
+          console.log(
+            `[AudioSocket] Strict mode: explicit command cue not yet present`,
+          );
+          return;
+        }
+        const candidateKey = buildDedupKey(fullCmd);
+        const candidateNow = Date.now();
+        const sameCandidate = interimCandidate.key === candidateKey &&
+          candidateNow - interimCandidate.lastSeenAt < 1500;
+        interimCandidate = {
+          key: candidateKey,
+          count: sameCandidate ? interimCandidate.count + 1 : 1,
+          firstSeenAt: sameCandidate ? interimCandidate.firstSeenAt : candidateNow,
+          lastSeenAt: candidateNow,
+        };
+        const requiredResults =
+          confidence >= INTERIM_HIGH_CONFIDENCE ? 1 : 2;
+        if (interimCandidate.count < requiredResults) {
+          console.log(
+            `[AudioSocket] Holding interim ${candidateKey}: ` +
+            `${interimCandidate.count}/${requiredResults} at confidence ${confidence?.toFixed(2)}`,
+          );
           return;
         }
         // Full reference found with explicit verse — execute immediately and reset state
@@ -328,6 +381,13 @@ export function setupAudioSocket(server: Server) {
           partialState.chapter = stage.chapter;
           partialState.verse = null;
           if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
+          ws.send(JSON.stringify({
+            type: "reference_stage",
+            stage: "book_chapter",
+            book: stage.book,
+            chapter: stage.chapter,
+            serverDetectedAt: Date.now(),
+          }));
         }
       }
     };
@@ -349,22 +409,6 @@ export function setupAudioSocket(server: Server) {
       // Try full parse on the accumulated text
       const cmd = FastBibleParser.parse(textToFlush);
       if (cmd) await executeCommand(cmd, label);
-
-      // If we had a partial state with book+chapter but no verse, project chapter:1 as fallback
-      else if (partialState.book && partialState.chapter) {
-        console.log(`[AudioSocket] ${label} — partial state flush: ${partialState.book} ${partialState.chapter}`);
-        await executeCommand({
-          name: "project_bible_reference",
-          arguments: {
-            book: partialState.book,
-            chapter: partialState.chapter,
-            verse_start: 1,
-            verse_end: null,
-            version: "kjv",
-          },
-          _confidence: 0.65,
-        }, `${label}:PartialState`);
-      }
 
       resetPartialState();
     };
@@ -393,18 +437,22 @@ export function setupAudioSocket(server: Server) {
     // ── Error handling ─────────────────────────────────────────────────────
     transcriptionService.on("error", (err) => {
       console.error("[Deepgram] Error:", err);
+      ws.send(JSON.stringify({ type: "connection_status", status: "disconnected" }));
       ws.send(JSON.stringify({ type: "error", message: "Transcription Service Error" }));
     });
 
     // ── Incoming messages from desktop client ─────────────────────────────
     let firstAudioAt = 0;
-    ws.on("message", async (data: Buffer | string) => {
-      if (typeof data === "string") {
+    let audioChunkCount = 0;
+    let audioByteCount = 0;
+    ws.on("message", async (data: Buffer, isBinary: boolean) => {
+      if (!isBinary) {
         try {
-          const msg = JSON.parse(data);
+          const msg = JSON.parse(data.toString());
 
           if (msg.type === "set_strict_mode") {
-            transcriptionService.setStrictMode(!!msg.strictMode);
+            strictMode = !!msg.strictMode;
+            transcriptionService.setStrictMode(strictMode);
             console.log(`[AudioSocket] Strict mode: ${msg.strictMode}`);
           }
 
@@ -426,7 +474,30 @@ export function setupAudioSocket(server: Server) {
         } catch (_) {}
         return;
       }
-      if (!firstAudioAt) { firstAudioAt = Date.now(); console.log(`[AudioSocket][${T()}] FIRST AUDIO CHUNK received`); }
+      if (!firstAudioAt) {
+        firstAudioAt = Date.now();
+        console.log(`[AudioSocket][${T()}] FIRST AUDIO CHUNK received`);
+        ws.send(JSON.stringify({ type: "audio_status", status: "receiving" }));
+      }
+      audioChunkCount += 1;
+      audioByteCount += data.length;
+      if (audioChunkCount === 1 || audioChunkCount % 25 === 0) {
+        let sumSquares = 0;
+        let peak = 0;
+        const sampleCount = Math.floor(data.length / 2);
+        for (let offset = 0; offset + 1 < data.length; offset += 2) {
+          const sample = data.readInt16LE(offset);
+          sumSquares += sample * sample;
+          peak = Math.max(peak, Math.abs(sample));
+        }
+        console.log("[AudioSocket] PCM diagnostics", {
+          chunk: audioChunkCount,
+          chunkBytes: data.length,
+          totalBytes: audioByteCount,
+          rms: Math.round(Math.sqrt(sumSquares / Math.max(1, sampleCount))),
+          peak,
+        });
+      }
       transcriptionService.sendAudio(data);
     });
 

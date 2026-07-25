@@ -32,6 +32,41 @@ BibleVerseSchema.index({ bookName: 1, chapter: 1, verse: 1 }, { unique: true });
 
 export const BibleVerse = mongoose.model<IBibleVerse>('BibleVerse', BibleVerseSchema);
 
+const BibleTranslationSchema = new Schema({
+  code: { type: String, required: true, unique: true },
+  displayName: { type: String, required: true },
+  revision: { type: Number, default: 1 },
+  source: String,
+  license: String,
+  lastImportedAt: Date,
+}, { timestamps: true });
+
+export const BibleTranslation = mongoose.model('BibleTranslation', BibleTranslationSchema);
+
+const BibleImportJobSchema = new Schema({
+  version: { type: String, required: true },
+  mode: { type: String, enum: ['fill-missing', 'overwrite'], required: true },
+  sourceName: String,
+  provenance: String,
+  license: String,
+  received: Number,
+  written: Number,
+  status: { type: String, enum: ['completed', 'rolled-back', 'failed'], default: 'completed' },
+}, { timestamps: true });
+
+export const BibleImportJob = mongoose.model('BibleImportJob', BibleImportJobSchema);
+
+const BibleImportChangeSchema = new Schema({
+  jobId: { type: Schema.Types.ObjectId, ref: 'BibleImportJob', required: true, index: true },
+  bookName: { type: String, required: true },
+  chapter: { type: Number, required: true },
+  verse: { type: Number, required: true },
+  previousText: { type: String, default: null },
+  newText: { type: String, required: true },
+});
+
+export const BibleImportChange = mongoose.model('BibleImportChange', BibleImportChangeSchema);
+
 export interface ISpeechSession extends Document {
   userId?: number;
   sessionId: string;

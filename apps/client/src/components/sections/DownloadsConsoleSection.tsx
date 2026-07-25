@@ -1,53 +1,55 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { downloadsPageCopy } from '@/lib/theme'
 import { apiRequest, buildUrl } from '@/lib/queryClient'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { PlatformLogo } from '@/components/ui/PlatformLogos'
+import { buildUrl } from '@/lib/queryClient'
 
-interface DesktopBuild {
-  id: string
+interface DesktopRelease {
   version?: string
   minOs?: string
   fileSize?: number
-  updatedAt?: string
+  createdAt?: string
 }
 
-interface DesktopDownloadsResponse {
-  windows: DesktopBuild | null
-  mac: DesktopBuild | null
+interface DesktopDownloads {
+  windows: DesktopRelease | null
+  mac: DesktopRelease | null
 }
 
-const formatFileSize = (bytes?: number) =>
-  bytes && bytes > 0 ? `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB` : null
+const formatBytes = (bytes?: number) => {
+  if (!bytes) return null
+  const units = ['B', 'KB', 'MB', 'GB']
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** index).toFixed(index > 1 ? 1 : 0)} ${units[index]}`
+}
 
 export function DownloadsConsoleSection() {
   const { product, platforms } = downloadsPageCopy
+  const [releases, setReleases] = useState<DesktopDownloads>({ windows: null, mac: null })
+  const [isLoading, setIsLoading] = useState(true)
 
-  const { data: desktopDownloads } = useQuery<DesktopDownloadsResponse>({
-    queryKey: ['/api/help/desktop-downloads'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/help/desktop-downloads')
-      return await response.json()
-    },
-  })
-
-  const builds: Record<string, DesktopBuild | null> = {
-    windows: desktopDownloads?.windows ?? null,
-    mac: desktopDownloads?.mac ?? null,
-  }
-
-  // Prefer the live published Windows build's version/date over the
-  // static fallback copy, so this doesn't go stale once an admin
-  // publishes a new build from the Resource Centre.
-  const primaryBuild = builds.windows ?? builds.mac
-  const versionLabel = primaryBuild?.version ? `Version ${primaryBuild.version}` : product.version
-  const dateLabel = primaryBuild?.updatedAt
-    ? new Date(primaryBuild.updatedAt).toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(buildUrl('/api/help/desktop-downloads'), { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('Unable to load desktop releases')
+        return response.json()
       })
-    : product.date
+      .then(setReleases)
+      .catch(error => {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('[Downloads] Failed to load desktop releases:', error)
+        }
+      })
+      .finally(() => setIsLoading(false))
+    return () => controller.abort()
+  }, [])
+
+  const availableReleases = [releases.windows, releases.mac].filter(Boolean) as DesktopRelease[]
+  const latestRelease = availableReleases.sort((a, b) =>
+    new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  )[0]
 
   return (
     <section className="downloads-console-section section-gap reveal">
@@ -58,41 +60,35 @@ export function DownloadsConsoleSection() {
             <p className="downloads-product-subtitle font-headline font-bold">{product.subtitle}</p>
 
             <div className="downloads-product-meta">
-              <p>{versionLabel}</p>
+              <p>{latestRelease?.version ? `Version ${latestRelease.version}` : product.version}</p>
               <p>{product.highlights}</p>
-              <p>{dateLabel}</p>
+              <p>{latestRelease?.createdAt ? new Date(latestRelease.createdAt).toLocaleDateString(undefined, {
+                year: 'numeric', month: 'long', day: 'numeric'
+              }) : product.date}</p>
             </div>
 
             <div className="downloads-platform-actions">
               {platforms.map((platform) => {
-                const build = builds[platform.id]
-                const fileSize = formatFileSize(build?.fileSize)
-
+                const release = releases[platform.id as keyof DesktopDownloads]
+                const label = isLoading
+                  ? `${platform.label} — loading`
+                  : release
+                    ? `${platform.label}${release.version ? ` v${release.version}` : ''}`
+                    : `${platform.label} — coming soon`
                 return (
                   <a
                     key={platform.id}
-                    href={
-                      build
-                        ? buildUrl(`/api/help/desktop-downloads/${platform.id}/download?source=downloads-page`)
-                        : undefined
-                    }
-                    className={`downloads-platform-btn${build ? '' : ' downloads-platform-btn--disabled'}`}
-                    aria-disabled={!build}
-                    onClick={(event) => {
-                      if (!build) event.preventDefault()
-                    }}
+                    className={`downloads-platform-btn${release ? '' : ' is-disabled'}`}
+                    href={release
+                      ? buildUrl(`/api/help/desktop-downloads/${platform.id}/download?source=website-download-page`)
+                      : undefined}
+                    aria-disabled={!release}
+                    onClick={event => { if (!release) event.preventDefault() }}
+                    title={release
+                      ? [release.minOs && `Minimum OS: ${release.minOs}`, formatBytes(release.fileSize)].filter(Boolean).join(' · ')
+                      : `No published ${platform.label} release yet`}
                   >
-                    <span>
-                      {platform.label}
-                      {build ? (
-                        <span className="downloads-platform-btn-meta">
-                          {build.version ? `v${build.version}` : null}
-                          {fileSize ? ` · ${fileSize}` : null}
-                        </span>
-                      ) : (
-                        <span className="downloads-platform-btn-meta">Coming soon</span>
-                      )}
-                    </span>
+                    <span>{label}</span>
                     {platform.icon && (
                       <PlatformLogo platform={platform.icon} className="downloads-platform-icon" />
                     )}

@@ -4,6 +4,17 @@ import { db } from '../../../lib/db';
 import { useBibleRAMCache } from './useBibleRAMCache';
 import { apiClient } from '../../../lib/api';
 
+let revisionCheck: Promise<Record<string, number>> | null = null;
+const getBibleRevisions = () => {
+  if (!revisionCheck) {
+    revisionCheck = apiClient.get('/bible/revisions')
+      .then(response => response.data?.revisions || {})
+      .catch(() => ({}))
+      .finally(() => { window.setTimeout(() => { revisionCheck = null; }, 5 * 60 * 1000); });
+  }
+  return revisionCheck;
+};
+
 export interface BibleVerse { number: number; text: string }
 export interface BiblePassage {
   book: string; chapter: number;
@@ -17,8 +28,10 @@ interface UseInlineBibleBrowserProps {
 export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserProps) {
   const [isBibleMode, setIsBibleMode] = useState(false);
   const [bibleBookIndex, setBibleBookIndex] = useState(0);
-  const [bibleChapterNum, setBibleChapterNum] = useState(1);
-  const [bibleVerseIndex, setBibleVerseIndex] = useState(0);
+  // 0 means no chapter has been explicitly selected yet.
+  const [bibleChapterNum, setBibleChapterNum] = useState(0);
+  // -1 means the operator is still navigating and has not committed a verse.
+  const [bibleVerseIndex, setBibleVerseIndex] = useState(-1);
   const [selBibleVersion, setSelBibleVersion] = useState<typeof BIBLE_VERSIONS_LCC[number]>('KJV');
   const [biblePassage, setBiblePassage] = useState<BiblePassage | null>(null);
   const [bibleIsLoading, setBibleIsLoading] = useState(false);
@@ -40,6 +53,22 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
       const bookData = BIBLE_BOOKS_LCC.find(b => b.name === bookName);
       const verseEnd = bookData?.verses[chapter - 1] ?? 150;
       const vKey = version.toLowerCase() as any;
+
+      // Invalidate offline/RAM data when an administrator publishes a newer
+      // translation revision. The API fallback below then hydrates fresh text.
+      const revisions = await getBibleRevisions();
+      const remoteRevision = Number(revisions[vKey] || 1);
+      const syncState = await db.syncState.get(vKey);
+      const revisionStorageKey = `qworship-bible-revision-${vKey}`;
+      const cachedRevision = Number(window.localStorage.getItem(revisionStorageKey) || 0);
+      const hasCachedVerses = await db.verses.where('version').equals(vKey).limit(1).count();
+      if ((cachedRevision && cachedRevision !== remoteRevision) || (!cachedRevision && hasCachedVerses > 0) ||
+          (syncState?.revision && syncState.revision !== remoteRevision)) {
+        await db.verses.where('version').equals(vKey).delete();
+        await db.syncState.delete(vKey);
+        useBibleRAMCache.getState().clearVersion(vKey);
+      }
+      window.localStorage.setItem(revisionStorageKey, String(remoteRevision));
 
       // 0. Try RAM Cache Fetching (0.00ms latency)
       const memStartTime = performance.now();
@@ -96,7 +125,7 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
       if (data?.success && data?.result) {
         const verses: BibleVerse[] = (data.result.verses || []).map((v: any) => ({
           number: v.verse,
-          text: v[vKey] || v.kjv || '',
+          text: v[vKey] || '',
         }));
         const p: BiblePassage = {
           book: bookName, chapter, verses,
@@ -136,37 +165,34 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
     setBibleVerseIndex(idx);
   }, [onProjectVerse]);
 
-  const handleBookSelect = useCallback(async (idx: number) => {
+  const handleBookSelect = useCallback((idx: number) => {
     setBibleBookIndex(idx);
-    setBibleChapterNum(1);
-    setBibleVerseIndex(0);
+    setBibleChapterNum(0);
+    setBibleVerseIndex(-1);
     setBiblePassage(null);
-    const p = await fetchBibleChapter(BIBLE_BOOKS_LCC[idx].name, 1, selBibleVersion);
-    if (p && p.verses.length > 0) projectVerse(p, 0);
     // Scroll chapter column to top
     if (bibleChapterListRef.current) bibleChapterListRef.current.scrollTop = 0;
     if (bibleVerseListRef.current) bibleVerseListRef.current.scrollTop = 0;
-  }, [selBibleVersion, fetchBibleChapter, projectVerse]);
+  }, []);
 
   const handleChapterSelect = useCallback(async (ch: number) => {
     setBibleChapterNum(ch);
-    setBibleVerseIndex(0);
+    setBibleVerseIndex(-1);
     setBiblePassage(null);
-    const p = await fetchBibleChapter(BIBLE_BOOKS_LCC[bibleBookIndex].name, ch, selBibleVersion);
-    if (p && p.verses.length > 0) projectVerse(p, 0);
+    await fetchBibleChapter(BIBLE_BOOKS_LCC[bibleBookIndex].name, ch, selBibleVersion);
     if (bibleVerseListRef.current) bibleVerseListRef.current.scrollTop = 0;
-  }, [bibleBookIndex, selBibleVersion, fetchBibleChapter, projectVerse]);
+  }, [bibleBookIndex, selBibleVersion, fetchBibleChapter]);
 
   const handleVersionChange = useCallback(async (v: typeof BIBLE_VERSIONS_LCC[number]) => {
     setSelBibleVersion(v);
+    setBibleVerseIndex(-1);
     setBiblePassage(null);
-    const p = await fetchBibleChapter(
-      BIBLE_BOOKS_LCC[bibleBookIndex].name, bibleChapterNum, v
-    );
-    if (p && p.verses.length > 0) {
-      projectVerse(p, bibleVerseIndex < p.verses.length ? bibleVerseIndex : 0);
+    if (bibleChapterNum > 0) {
+      await fetchBibleChapter(
+        BIBLE_BOOKS_LCC[bibleBookIndex].name, bibleChapterNum, v
+      );
     }
-  }, [bibleBookIndex, bibleChapterNum, bibleVerseIndex, fetchBibleChapter, projectVerse]);
+  }, [bibleBookIndex, bibleChapterNum, fetchBibleChapter]);
 
   const handleVerseClick = useCallback((idx: number) => {
     setBibleVerseIndex(idx);
@@ -223,16 +249,13 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
     } finally {
       setBibleIsLoading(false);
     }
-  }, [bibleSearch, selBibleVersion, projectVerse]);
+  }, [bibleSearch, selBibleVersion, fetchBibleChapter, projectVerse]);
 
-  // Auto-load Genesis 1 when bible mode first opens
+  // Opening Bible mode is navigation-only. Book, chapter, and verse all remain
+  // operator choices and no live state is changed here.
   const openBibleMode = useCallback(async () => {
     setIsBibleMode(true);
-    if (!biblePassage) {
-      const p = await fetchBibleChapter('Genesis', 1, selBibleVersion);
-      if (p && p.verses.length > 0) projectVerse(p, 0);
-    }
-  }, [biblePassage, selBibleVersion, fetchBibleChapter, projectVerse]);
+  }, []);
 
   return {
     BIBLE_BOOKS: BIBLE_BOOKS_LCC,

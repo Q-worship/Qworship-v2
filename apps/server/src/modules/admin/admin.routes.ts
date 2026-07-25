@@ -14,6 +14,12 @@ import {
   seedBibleTranslation,
   getBibleCoverage,
   migrateBibleBookNames,
+  previewBibleImport,
+  commitBibleImport,
+  getManagedBibleVerses,
+  updateManagedBibleVerse,
+  getBibleImportHistory,
+  rollbackBibleImport,
 } from "./admin.controller.js";
 import { protect, authorizeAdmin } from "../auth/auth.middleware.js";
 import {
@@ -51,6 +57,12 @@ router.post("/media/collections", createMediaCollection);
 router.get("/bible-coverage", getBibleCoverage);
 router.post("/seed-bible", seedBibleTranslation);
 router.post("/migrate-bible-books", migrateBibleBookNames);
+router.get("/bible/verses", getManagedBibleVerses);
+router.patch("/bible/verses", updateManagedBibleVerse);
+router.post("/bible/import/preview", previewBibleImport);
+router.post("/bible/import/commit", commitBibleImport);
+router.get("/bible/import/history", getBibleImportHistory);
+router.post("/bible/import/:id/rollback", rollbackBibleImport);
 
 // Downloadable files managed by super admins
 router.get("/download-files", getAdminDownloadableFiles);

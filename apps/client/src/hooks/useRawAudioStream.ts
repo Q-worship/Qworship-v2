@@ -9,11 +9,14 @@ export const useRawAudioStream = () => {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const silentGainRef = useRef<GainNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const recordingActiveRef = useRef(false);
 
   const startRecording = useCallback(
     async (onAudioData: (pcmBuffer: Int16Array) => void) => {
       try {
+        console.info("[HFB Audio][1/5] Requesting microphone permission");
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             channelCount: 1,
@@ -23,6 +26,14 @@ export const useRawAudioStream = () => {
           },
         });
         streamRef.current = stream;
+        const audioTrack = stream.getAudioTracks()[0];
+        console.info("[HFB Audio][1/5] Microphone acquired", {
+          label: audioTrack?.label || "(browser hid device label)",
+          enabled: audioTrack?.enabled,
+          muted: audioTrack?.muted,
+          readyState: audioTrack?.readyState,
+          settings: audioTrack?.getSettings?.(),
+        });
 
         const audioContext = new (
           window.AudioContext || (window as any).webkitAudioContext
@@ -30,6 +41,20 @@ export const useRawAudioStream = () => {
           sampleRate: 16000,
         });
         audioContextRef.current = audioContext;
+        // Safari can create an AudioContext in the suspended state even when
+        // getUserMedia succeeded. A suspended context produces no worklet
+        // frames, while the UI still appears connected.
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+        if (audioContext.state !== "running") {
+          throw new Error(`Audio input could not start (${audioContext.state})`);
+        }
+        console.info("[HFB Audio][2/5] AudioContext running", {
+          requestedSampleRate: 16000,
+          actualSampleRate: audioContext.sampleRate,
+          state: audioContext.state,
+        });
 
         const source = audioContext.createMediaStreamSource(stream);
         sourceRef.current = source;
@@ -42,7 +67,7 @@ export const useRawAudioStream = () => {
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const updateVolume = () => {
-          if (!analyserRef.current || !isRecording) return;
+          if (!analyserRef.current || !recordingActiveRef.current) return;
           analyserRef.current.getByteFrequencyData(dataArray);
 
           let sum = 0;
@@ -57,31 +82,60 @@ export const useRawAudioStream = () => {
 
           animationFrameRef.current = requestAnimationFrame(updateVolume);
         };
-        updateVolume(); // Start the loop
-
         // --- Raw Audio Processor Setup ---
         await audioContext.audioWorklet.addModule("/raw-audio-processor.js");
         const workletNode = new AudioWorkletNode(audioContext, "raw-audio-processor");
         workletNodeRef.current = workletNode;
 
+        let chunkCount = 0;
         workletNode.port.onmessage = (e) => {
-          onAudioData(e.data); // Receives Int16Array from worklet
+          const pcm = e.data as Int16Array;
+          chunkCount += 1;
+          if (chunkCount === 1 || chunkCount % 25 === 0) {
+            let sumSquares = 0;
+            let peak = 0;
+            for (let i = 0; i < pcm.length; i++) {
+              const sample = pcm[i];
+              sumSquares += sample * sample;
+              peak = Math.max(peak, Math.abs(sample));
+            }
+            console.info("[HFB Audio][3/5] Worklet PCM", {
+              chunk: chunkCount,
+              samples: pcm.length,
+              bytes: pcm.byteLength,
+              rms: Math.round(Math.sqrt(sumSquares / Math.max(1, pcm.length))),
+              peak,
+            });
+          }
+          onAudioData(pcm);
         };
 
         source.connect(workletNode);
-        workletNode.connect(audioContext.destination); // Required by some browsers to keep the node alive
+        // Some browsers stop processing an unconnected worklet. Keep it in the
+        // render graph through a muted gain node without feeding mic audio back
+        // through the speakers.
+        const silentGain = audioContext.createGain();
+        silentGain.gain.value = 0;
+        silentGainRef.current = silentGain;
+        workletNode.connect(silentGain);
+        silentGain.connect(audioContext.destination);
 
+        recordingActiveRef.current = true;
         setIsRecording(true);
+        updateVolume();
       } catch (err) {
-        console.error("Failed to start raw audio stream:", err);
+        console.error("[HFB Audio] Failed to start raw audio stream:", err);
+        recordingActiveRef.current = false;
         setIsRecording(false);
         throw err;
       }
     },
-    [isRecording],
+    [],
   );
 
   const stopRecording = useCallback(() => {
+    console.info("[HFB Audio] Stopping microphone stream");
+    recordingActiveRef.current = false;
     setIsRecording(false);
     setVolume(0);
 
@@ -94,6 +148,11 @@ export const useRawAudioStream = () => {
       workletNodeRef.current.disconnect();
       workletNodeRef.current.port.onmessage = null;
       workletNodeRef.current = null;
+    }
+
+    if (silentGainRef.current) {
+      silentGainRef.current.disconnect();
+      silentGainRef.current = null;
     }
 
     if (analyserRef.current) {
@@ -117,5 +176,7 @@ export const useRawAudioStream = () => {
     }
   }, []);
 
-  return { isRecording, volume, startRecording, stopRecording };
+  return {
+    isRecording, volume, startRecording, stopRecording,
+  };
 };

@@ -14,6 +14,7 @@ export interface SyncState {
   syncedAt: number;
   status: "downloading" | "synced" | "error";
   totalVerses?: number;
+  revision?: number;
 }
 
 const db = new Dexie("QworshipLocalDB") as Dexie & {

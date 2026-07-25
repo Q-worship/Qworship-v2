@@ -2,12 +2,23 @@ import { useState, useRef, useCallback, useEffect } from "react";
 
 interface RealtimeSocketProps {
   onBibleMatch: (result: any) => void;
-  onPartialTranscript?: (text: string) => void;
+  onPartialTranscript?: (text: string, metadata?: {
+    confidence?: number;
+    serverReceivedAt?: number;
+    clientReceivedAt: number;
+  }) => void;
   onFinalTranscript?: (text: string) => void;
   onSleepCommand?: () => void;
   onWakeCommand?: () => void;
   onVersionChange?: (version: string) => void;
   onConnectionStatus?: (status: "idle" | "connecting" | "connected" | "disconnected") => void;
+  onReferenceStage?: (data: {
+    book: string;
+    chapter: number;
+    serverDetectedAt?: number;
+  }) => void;
+  onError?: (message: string) => void;
+  onAudioStatus?: (status: "receiving") => void;
   onNavigation?: (
     commandType: string,
     direction: "next" | "previous" | undefined,
@@ -24,14 +35,28 @@ export const useRealtimeSocket = ({
   onWakeCommand,
   onVersionChange,
   onConnectionStatus,
+  onReferenceStage,
+  onError,
+  onAudioStatus,
   onNavigation,
 }: RealtimeSocketProps) => {
   const socketRef = useRef<WebSocket | null>(null);
+  const pendingAudioRef = useRef<Int16Array[]>([]);
+  const sentAudioChunksRef = useRef(0);
   const [isConnected, setIsConnected] = useState(false);
 
   // Store callbacks in refs to avoid causing re-renders/re-creation of connect()
-  const callbacks = useRef({
+  const callbacks = useRef<RealtimeSocketProps>({
+    onBibleMatch,
+    onPartialTranscript,
+    onFinalTranscript,
+    onSleepCommand,
+    onWakeCommand,
+    onVersionChange,
     onConnectionStatus,
+    onReferenceStage,
+    onError,
+    onAudioStatus,
     onNavigation,
   });
 
@@ -45,6 +70,9 @@ export const useRealtimeSocket = ({
       onWakeCommand,
       onVersionChange,
       onConnectionStatus,
+      onReferenceStage,
+      onError,
+      onAudioStatus,
       onNavigation,
     };
   });
@@ -61,11 +89,17 @@ export const useRealtimeSocket = ({
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
     const wsUrl = `${baseUrl}/api/bible/audio-stream`;
 
+    console.info("[HFB Socket] Connecting", { wsUrl });
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("[RealtimeSocket] Connected to server bridging OpenAI");
+      console.info("[HFB Socket][4/5] Browser WebSocket open", {
+        wsUrl,
+        queuedChunks: pendingAudioRef.current.length,
+      });
       setIsConnected(true);
+      for (const chunk of pendingAudioRef.current) ws.send(chunk);
+      pendingAudioRef.current = [];
     };
 
     ws.onmessage = (event) => {
@@ -75,9 +109,20 @@ export const useRealtimeSocket = ({
 
         switch (data.type) {
           case "transcript_partial":
-            cb.onPartialTranscript?.(data.text);
+            console.info("[HFB Socket][5/5] Partial transcript received", {
+              text: data.text,
+              confidence: data.confidence,
+            });
+            cb.onPartialTranscript?.(data.text, {
+              confidence: data.confidence,
+              serverReceivedAt: data.serverReceivedAt,
+              clientReceivedAt: Date.now(),
+            });
             break;
           case "transcript_final":
+            console.info("[HFB Socket][5/5] Final transcript received", {
+              text: data.text,
+            });
             cb.onFinalTranscript?.(data.text);
             break;
           case "bible_match":
@@ -93,7 +138,12 @@ export const useRealtimeSocket = ({
             cb.onVersionChange?.(data.requestedVersion);
             break;
           case "connection_status":
+            console.info("[HFB Socket] Deepgram status", data.status);
             cb.onConnectionStatus?.(data.status);
+            break;
+          case "audio_status":
+            console.info("[HFB Socket][4/5] Server confirmed PCM receipt", data);
+            cb.onAudioStatus?.(data.status);
             break;
           case "navigation":
             cb.onNavigation?.(
@@ -103,8 +153,12 @@ export const useRealtimeSocket = ({
               data.offset,
             );
             break;
+          case "reference_stage":
+            cb.onReferenceStage?.(data);
+            break;
           case "error":
             console.error("[RealtimeSocket] Server error:", data.message);
+            cb.onError?.(data.message || "Voice service error");
             break;
         }
       } catch (err) {
@@ -120,6 +174,7 @@ export const useRealtimeSocket = ({
 
     ws.onerror = (err) => {
       console.error("[RealtimeSocket] WebSocket Error:", err);
+      callbacks.current.onError?.("Unable to connect to voice service");
     };
 
     socketRef.current = ws;
@@ -144,6 +199,24 @@ export const useRealtimeSocket = ({
   const sendPCMData = useCallback((pcmBuffer: Int16Array) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(pcmBuffer);
+      sentAudioChunksRef.current += 1;
+      if (sentAudioChunksRef.current === 1 || sentAudioChunksRef.current % 25 === 0) {
+        console.info("[HFB Socket][4/5] PCM sent to server", {
+          chunk: sentAudioChunksRef.current,
+          samples: pcmBuffer.length,
+          bytes: pcmBuffer.byteLength,
+          bufferedAmount: socketRef.current.bufferedAmount,
+        });
+      }
+    } else if (socketRef.current?.readyState === WebSocket.CONNECTING) {
+      // Preserve at most one second of 40ms chunks so the first spoken words
+      // are not lost while the warm connection finishes opening.
+      pendingAudioRef.current.push(pcmBuffer.slice());
+      if (pendingAudioRef.current.length > 25) pendingAudioRef.current.shift();
+    } else {
+      console.warn("[HFB Socket] PCM dropped because socket is not open", {
+        readyState: socketRef.current?.readyState ?? "no socket",
+      });
     }
   }, []);
 

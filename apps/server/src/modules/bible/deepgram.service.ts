@@ -19,19 +19,11 @@ import WebSocket from "ws";
  *   - vad_events=true       → enable SpeechStarted events
  *   NOTE: no_delay is NOT a valid parameter — removed (caused HTTP 400)
  *   NOTE: utterance_end_ms is NOT accepted on this account tier — removed (caused HTTP 400)
- * Fix 3 — Embed API key fallback (reliability):
- *   Remove the throw — use built-in Qworship key if env var not set.
- *   All users share the Qworship account key; no per-user configuration needed.
- *
  * Fix 4 — KeepAlive to prevent 10-second Deepgram timeout during silence:
  *   Send a KeepAlive JSON message every 8 seconds while connected.
  *   Without this, Deepgram closes the connection with code 1011 after 10s
  *   of silence (e.g. during a long prayer or reading).
  */
-
-// Built-in Qworship Deepgram key — all users share the Qworship account.
-// An environment variable override is still supported for development.
-const BUILTIN_DEEPGRAM_KEY = "fc5d0c26fa79d5749593ba0a8a745eaa2470cb9a";
 
 // KeepAlive interval — must be less than Deepgram's 10-second timeout
 const KEEPALIVE_INTERVAL_MS = 8000;
@@ -41,17 +33,24 @@ export class DeepgramTranscriptionService extends EventEmitter {
   private isConnecting = false;
   private apiKey: string;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  private pendingAudio: Buffer[] = [];
+  private shouldReconnect = true;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private finalizedTranscriptParts: string[] = [];
+  private sentAudioChunks = 0;
+  private sentAudioBytes = 0;
+  private deepgramMessageCount = 0;
 
   constructor() {
     super();
-    // Fix 3: Use built-in key as fallback — never throw
-    this.apiKey = process.env.DEEPGRAM_API_KEY || BUILTIN_DEEPGRAM_KEY;
+    this.apiKey = process.env.DEEPGRAM_API_KEY || "";
     if (!this.apiKey) {
-      console.error("[Deepgram] No API key available — transcription will fail");
+      console.error("[Deepgram] DEEPGRAM_API_KEY is not configured");
     }
   }
 
   async connect() {
+    this.shouldReconnect = true;
     if (
       this.isConnecting ||
       (this.socket && this.socket.readyState === WebSocket.OPEN)
@@ -62,6 +61,11 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
     this.isConnecting = true;
     this.emit("connecting");
+    if (!this.apiKey) {
+      this.isConnecting = false;
+      this.emit("error", new Error("DEEPGRAM_API_KEY is not configured"));
+      return;
+    }
     console.log(`[Deepgram] Connecting with Nova-3 (QC61 upgrade, Stage 4 low-latency params)...`);
 
     // Build the Deepgram WebSocket URL with all low-latency parameters
@@ -73,12 +77,9 @@ export class DeepgramTranscriptionService extends EventEmitter {
     deepgramUrl.searchParams.append("language", "en-US");
     // smart_format REMOVED — adds ~100ms post-processing delay on every partial
     deepgramUrl.searchParams.append("interim_results", "true");
-    // Fix 2: endpointing=100 (was 300) — 100ms silence triggers speech_final
-    // This saves ~200ms on every utterance. The vad_commit from the desktop's
-    // Silero VAD provides an additional early-flush safety net for mid-sentence refs.
-    deepgramUrl.searchParams.append("endpointing", "100");
-    deepgramUrl.searchParams.append("punctuate", "true");
-    deepgramUrl.searchParams.append("dictation", "true");
+    // Give Nova-3 enough context around natural preaching pauses. Interim
+    // parsing supplies speed, while 250ms endpointing protects final accuracy.
+    deepgramUrl.searchParams.append("endpointing", "250");
     deepgramUrl.searchParams.append("numerals", "true");
     deepgramUrl.searchParams.append("encoding", "linear16");
     deepgramUrl.searchParams.append("sample_rate", "16000");
@@ -148,10 +149,45 @@ export class DeepgramTranscriptionService extends EventEmitter {
       "let me see", "let us read", "turn to", "go to",
     ];
 
-    for (const term of BIBLE_KEYTERMS) {
-      deepgramUrl.searchParams.append("keyterms", term);
+    const CANONICAL_BIBLE_BOOKS = [
+      "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua",
+      "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings",
+      "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job",
+      "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon", "Isaiah",
+      "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel",
+      "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah",
+      "Haggai", "Zechariah", "Malachi", "Matthew", "Mark", "Luke", "John",
+      "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians",
+      "Ephesians", "Philippians", "Colossians", "1 Thessalonians",
+      "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon",
+      "Hebrews", "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John",
+      "Jude", "Revelation",
+    ];
+    const SPOKEN_NUMBERED_BOOKS = [
+      "First Samuel", "Second Samuel", "First Kings", "Second Kings",
+      "First Chronicles", "Second Chronicles", "First Corinthians",
+      "Second Corinthians", "First Thessalonians", "Second Thessalonians",
+      "First Timothy", "Second Timothy", "First Peter", "Second Peter",
+      "First John", "Second John", "Third John",
+    ];
+    const TRANSLATION_TERMS = [
+      "King James", "New King James", "New International",
+      "English Standard", "Amplified", "The Message",
+      "KJV", "NKJV", "NIV", "ESV", "AMP",
+    ];
+    const ESSENTIAL_COMMANDS = [
+      "chapter", "verse", "next verse", "previous verse", "switch to", "go to",
+    ];
+    const prioritizedKeyterms = [
+      ...CANONICAL_BIBLE_BOOKS,
+      ...SPOKEN_NUMBERED_BOOKS,
+      ...TRANSLATION_TERMS,
+      ...ESSENTIAL_COMMANDS,
+    ].slice(0, 100);
+    for (const term of prioritizedKeyterms) {
+      deepgramUrl.searchParams.append("keyterm", term);
     }
-    console.log(`[Deepgram] QC62: ${BIBLE_KEYTERMS.length} keyterms loaded (Tier 1 Bible books + Tier 2 navigation)`);
+    console.log(`[Deepgram] QC62: ${prioritizedKeyterms.length} keyterms loaded (Bible books + navigation)`);
 
     try {
       this.socket = new WebSocket(deepgramUrl.toString(), {
@@ -166,11 +202,28 @@ export class DeepgramTranscriptionService extends EventEmitter {
         console.log("[Deepgram] Connection established (Nova-3, QC61, Stage 4 low-latency mode)");
         // Fix 4: Start KeepAlive pings to prevent 10-second timeout during silence
         this._startKeepAlive();
+        for (const chunk of this.pendingAudio) this.socket?.send(chunk);
+        this.pendingAudio = [];
       });
 
       this.socket.on("message", (data: WebSocket.Data) => {
         try {
           const response = JSON.parse(data.toString());
+          this.deepgramMessageCount += 1;
+          if (
+            this.deepgramMessageCount === 1 ||
+            response.type !== "Results" ||
+            response.channel?.alternatives?.[0]?.transcript
+          ) {
+            console.log("[Deepgram] Incoming event", {
+              count: this.deepgramMessageCount,
+              type: response.type,
+              isFinal: response.is_final,
+              speechFinal: response.speech_final,
+              transcript: response.channel?.alternatives?.[0]?.transcript || "",
+              confidence: response.channel?.alternatives?.[0]?.confidence,
+            });
+          }
 
           if (response.type === "Results") {
             const transcript = response.channel?.alternatives?.[0]?.transcript;
@@ -180,18 +233,24 @@ export class DeepgramTranscriptionService extends EventEmitter {
             const speechFinal: boolean = response.speech_final === true;
 
             if (transcript && transcript.trim()) {
-              // Fix 1: Use speech_final as the primary end-of-speech trigger.
-              // speech_final fires ~150ms after silence (fast VAD).
-              // is_final fires ~300–500ms after silence (slow endpointing).
-              // Using speech_final saves 300–500ms on every single utterance.
-              // is_final is kept as a fallback for edge cases.
-              if (speechFinal || isFinal) {
+              // is_final finalizes only the current audio segment; it does not
+              // necessarily mean the speaker has finished. Accumulate finalized
+              // segments and wait for speech_final before declaring the complete
+              // utterance, otherwise references split across segments lose words.
+              if (isFinal) this.finalizedTranscriptParts.push(transcript.trim());
+              const accumulated = [
+                ...this.finalizedTranscriptParts,
+                ...(isFinal ? [] : [transcript.trim()]),
+              ].join(" ").trim();
+
+              if (speechFinal) {
                 console.log(
                   `[Deepgram] Final (speech_final=${speechFinal}, is_final=${isFinal}): "${transcript.slice(0, 80)}"`
                 );
-                this.emit("final", transcript, confidence);
+                this.emit("final", accumulated || transcript, confidence);
+                this.finalizedTranscriptParts = [];
               } else {
-                this.emit("partial_raw", transcript, confidence);
+                this.emit("partial_raw", accumulated || transcript, confidence);
               }
             }
           }
@@ -201,6 +260,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
           if (response.type === "UtteranceEnd") {
             console.log("[Deepgram] UtteranceEnd received (safety net)");
             this.emit("utterance_end");
+            this.finalizedTranscriptParts = [];
           }
 
           // SpeechStarted / SpeechFinished — informational VAD events
@@ -247,6 +307,13 @@ export class DeepgramTranscriptionService extends EventEmitter {
         this._stopKeepAlive();
         this.emit("disconnected");
         this.cleanup();
+        if (this.shouldReconnect) {
+          this.emit("connecting");
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            void this.connect();
+          }, 500);
+        }
       });
 
       await this.waitForOpen();
@@ -313,7 +380,21 @@ export class DeepgramTranscriptionService extends EventEmitter {
   sendAudio(buffer: Buffer) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(buffer);
-    } else if (!this.isConnecting) {
+      this.sentAudioChunks += 1;
+      this.sentAudioBytes += buffer.length;
+      if (this.sentAudioChunks === 1 || this.sentAudioChunks % 25 === 0) {
+        console.log("[Deepgram] PCM forwarded", {
+          chunk: this.sentAudioChunks,
+          chunkBytes: buffer.length,
+          totalBytes: this.sentAudioBytes,
+          socketBufferedBytes: this.socket.bufferedAmount,
+        });
+      }
+    } else {
+      this.pendingAudio.push(Buffer.from(buffer));
+      if (this.pendingAudio.length > 25) this.pendingAudio.shift();
+    }
+    if (!this.isConnecting && this.socket?.readyState !== WebSocket.OPEN) {
       console.log("[Deepgram] Socket not ready, attempting reconnect...");
       this.connect().catch((err) => {
         console.error("[Deepgram] Reconnect failed:", err);
@@ -330,6 +411,11 @@ export class DeepgramTranscriptionService extends EventEmitter {
   }
 
   stop() {
+    this.shouldReconnect = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this._stopKeepAlive();
     if (this.socket) {
       console.log("[Deepgram] Closing connection...");
@@ -352,5 +438,6 @@ export class DeepgramTranscriptionService extends EventEmitter {
       this.socket = null;
     }
     this.isConnecting = false;
+    this.finalizedTranscriptParts = [];
   }
 }

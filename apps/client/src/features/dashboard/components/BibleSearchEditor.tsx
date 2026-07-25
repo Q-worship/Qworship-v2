@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { apiClient } from "@/lib/api";
 
 interface BibleSearchEditorProps {
   isVisible: boolean;
@@ -62,12 +63,8 @@ export const BibleSearchEditor: React.FC<BibleSearchEditorProps> = ({
   const searchBible = async (reference: string, version: string) => {
     setIsSearching(true);
     try {
-      const response = await fetch(`/api/bible/search?reference=${encodeURIComponent(reference)}&version=${version}`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to search Bible');
-      }
-      const data = await response.json();
+      const response = await apiClient.get(`/bible/search?reference=${encodeURIComponent(reference)}&version=${version.toLowerCase()}`);
+      const data = response.data;
       if (data?.passage) {
         setSelectedPassage(data.passage);
         

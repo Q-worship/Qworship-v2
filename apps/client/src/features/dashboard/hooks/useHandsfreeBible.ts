@@ -10,7 +10,9 @@ import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 import { useRealtimeSocket } from "@/hooks/useRealtimeSocket";
 import { useRawAudioStream } from "@/hooks/useRawAudioStream";
 import { useToast } from "@/hooks/use-toast";
-import { useHFBStore } from "./useHFBStore";
+import { resolveCachedHFBVerse, useHFBStore } from "./useHFBStore";
+import { apiClient } from "@/lib/api";
+import { parseHFBReference } from "../lib/hfbFastReferenceParser";
 
 interface UseHandsfreeBibleProps {
   liveWindow: Window | null;
@@ -22,6 +24,9 @@ export const useHandsfreeBible = ({
   handsfreeBibleButtonRef,
 }: UseHandsfreeBibleProps) => {
   const { toast } = useToast();
+  const setHfbConnectionStatus = useHFBStore(
+    (state) => state.setHfbConnectionStatus,
+  );
   // Store actions
   const { setMode: setDisplayMode } = useDisplayModeStore();
   const {
@@ -44,6 +49,8 @@ export const useHandsfreeBible = ({
   const [hasBeenDragged, setHasBeenDragged] = useState(false);
   const [isWidgetVisible, setIsWidgetVisible] = useState(false);
   const [isListeningMode, setIsListeningMode] = useState(false);
+  const [isVoiceConnecting, setIsVoiceConnecting] = useState(false);
+  const [isAudioStreaming, setIsAudioStreaming] = useState(false);
   const [isSleepMode, setIsSleepMode] = useState(false);
 
   // Multi-version verse data for widget display
@@ -74,6 +81,13 @@ export const useHandsfreeBible = ({
   // can pass the NEW version to executeNavigation immediately, before the React
   // state setter (setSelectedBibleVersion) has had a chance to flush.
   const selectedBibleVersionRef = useRef<string>("KJV");
+  const lastProjectedRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
+  const pendingInterimRef = useRef<{ key: string; count: number; at: number; firstSeenAt: number }>({
+    key: "", count: 0, at: 0, firstSeenAt: 0,
+  });
+  const voiceReadyRef = useRef(false);
+  const connectionAttemptRef = useRef(0);
+  const preReadyAudioChunksRef = useRef(0);
 
   useEffect(() => {
     liveWindowRef.current = liveWindow;
@@ -112,7 +126,18 @@ export const useHandsfreeBible = ({
       selectedBibleVersionRef.current
     ).toUpperCase();
     const versionKey = effectiveVersion.toLowerCase();
-    const text = verseData?.[versionKey] || verseData?.kjv || "";
+    const text = verseData?.[versionKey] || "";
+    const projectionKey = `${versionKey}|${book}|${chapter}|${verseNum}`;
+    const now = performance.now();
+    if (projectionKey === lastProjectedRef.current.key &&
+        now - lastProjectedRef.current.at < 5000) {
+      return;
+    }
+    if (!text.trim()) {
+      console.warn(`[HFB] ${effectiveVersion} text is unavailable for ${book} ${chapter}:${verseNum}`);
+      return;
+    }
+    lastProjectedRef.current = { key: projectionKey, at: now };
 
     const currentVerseContext = { book, chapter, verse: verseNum };
     currentVerseContextRef.current = currentVerseContext;
@@ -138,8 +163,9 @@ export const useHandsfreeBible = ({
     setZustandBibleVersion(effectiveVersion);
 
     // Integrate with HFB layout store
+    const detectedId = Date.now();
     useHFBStore.getState().addHfbDetectedVerse({
-      id: Date.now(),
+      id: detectedId,
       reference: `${book} ${chapter}:${verseNum}`,
       verseText: text,
       version: effectiveVersion,
@@ -151,7 +177,7 @@ export const useHandsfreeBible = ({
     
     // Set all other detected verses to inactive
     useHFBStore.getState().setHfbDetectedVerses(prev => 
-      prev.map(d => ({ ...d, isActive: d.id === Date.now() })) // This handles new addition logic
+      prev.map(d => ({ ...d, isActive: d.id === detectedId }))
     );
     useHFBStore.getState().setHfbCurrentProjected({ reference: `${book} ${chapter}:${verseNum}`, text, version: effectiveVersion });
     
@@ -179,6 +205,79 @@ export const useHandsfreeBible = ({
         window.location.origin,
       );
     }
+
+    const telemetry = data.telemetry || {};
+    const projectedAt = Date.now();
+    const latency = {
+      source: telemetry.source || "server",
+      serverLookupMs: telemetry.serverLookupMs,
+      serverToClientMs: telemetry.serverResolvedAt
+        ? projectedAt - telemetry.serverResolvedAt
+        : undefined,
+      clientProjectionMs: telemetry.clientStartedAt
+        ? projectedAt - telemetry.clientStartedAt
+        : undefined,
+      projectedAt,
+      reference: `${book} ${chapter}:${verseNum}`,
+    };
+    console.info("[HFB Latency]", latency);
+    const measuredLatency = latency.clientProjectionMs ?? latency.serverToClientMs;
+    if (typeof measuredLatency === "number") {
+      useHFBStore.getState().setHfbLatency(measuredLatency, latency.source);
+    }
+    window.dispatchEvent(new CustomEvent("qworship:hfb-latency", { detail: latency }));
+  };
+
+  const processInterimLocally = async (
+    text: string,
+    metadata?: { confidence?: number; serverReceivedAt?: number; clientReceivedAt: number },
+  ) => {
+    const parseStarted = performance.now();
+    const parsed = parseHFBReference(text);
+    if (!parsed) return;
+    const version = selectedBibleVersionRef.current.toUpperCase();
+    const key = `${version}|${parsed.book}|${parsed.chapter}|${parsed.verse}`;
+    const now = performance.now();
+    const previous = pendingInterimRef.current;
+    const sameCandidate = previous.key === key && now - previous.at < 1500;
+    const count = sameCandidate ? previous.count + 1 : 1;
+    const firstSeenAt = sameCandidate ? previous.firstSeenAt || previous.at : now;
+    pendingInterimRef.current = { key, count, at: now, firstSeenAt };
+
+    const strictMode = useHFBStore.getState().hfbStrictMode;
+    const confidence = metadata?.confidence ?? 0;
+    const hasStrictCue =
+      /\b(?:bible|show|project|display|open|turn\s+to|go\s+to|read(?:\s+from)?)\b/i.test(text);
+    if (strictMode && !hasStrictCue) return;
+
+    // Clear, complete references project on their first high-confidence
+    // interim. Medium-confidence references need one matching confirmation.
+    // Low-confidence hypotheses never control the live presentation.
+    const requiredResults = confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+    if (
+      count < requiredResults ||
+      (lastProjectedRef.current.key === key && now - lastProjectedRef.current.at < 5000)
+    ) return;
+
+    const cached = await resolveCachedHFBVerse(
+      parsed.book, parsed.chapter, parsed.verse, version,
+    );
+    if (!cached) return; // Server RAM result remains the reliable fallback.
+
+    const versionKey = version.toLowerCase();
+    handleBibleMatch({
+      commandType: "lookup",
+      result: {
+        book: parsed.book,
+        chapter: parsed.chapter,
+        verses: [{ verse: parsed.verse, [versionKey]: cached.text }],
+      },
+      telemetry: {
+        source: `client-${cached.source}`,
+        clientStartedAt: metadata?.clientReceivedAt || Date.now(),
+        parserMs: performance.now() - parseStarted,
+      },
+    }, version);
   };
 
   const executeNavigation = async (
@@ -232,12 +331,7 @@ export const useHandsfreeBible = ({
       currentContext,
     );
     try {
-      const response = await fetch("/api/bible/voice-command", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const response = await apiClient.post("/bible/voice-command", {
           text: commandText,
           currentBook: currentContext.book,
           currentChapter: currentContext.chapter,
@@ -250,12 +344,11 @@ export const useHandsfreeBible = ({
           direction,
           targetVerse,
           offset,
-        }),
       });
 
       console.log("[HandsfreeBible] Fetch status:", response.status);
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status >= 200 && response.status < 300) {
+        const data = response.data;
         console.log("[HandsfreeBible] Navigation API response:", data);
         if (data.success && data.result) {
           // QC64 fix: Pass overrideVersion so handleBibleMatch uses the correct
@@ -283,7 +376,9 @@ export const useHandsfreeBible = ({
     }
   };
 
-  const { isRecording, volume, startRecording, stopRecording } =
+  const {
+    isRecording, volume, startRecording, stopRecording,
+  } =
     useRawAudioStream();
 
   // Inactivity Timer
@@ -313,10 +408,11 @@ export const useHandsfreeBible = ({
       resetInactivityTimer();
       handleBibleMatch(data);
     },
-    onPartialTranscript: (text) => {
+    onPartialTranscript: (text, metadata) => {
       resetInactivityTimer();
       setMicrophoneStatus("Processing");
       useHFBStore.getState().setHfbCurrentPartial(text);
+      void processInterimLocally(text, metadata);
     },
     onFinalTranscript: (text) => {
       resetInactivityTimer();
@@ -366,16 +462,48 @@ export const useHandsfreeBible = ({
       resetInactivityTimer();
       executeNavigation(commandType, direction, targetVerse, offset);
     },
+    onReferenceStage: ({ book, chapter }) => {
+      // Predictively hydrate the chapter while the speaker is still saying the
+      // verse number. This makes the eventual lookup a synchronous RAM hit.
+      void useHFBStore.getState().fetchHFBChapter(
+        book, chapter, selectedBibleVersionRef.current,
+      );
+    },
+    onError: (message) => {
+      connectionAttemptRef.current += 1;
+      voiceReadyRef.current = false;
+      setIsVoiceConnecting(false);
+      setIsListeningMode(false);
+      setIsAudioStreaming(false);
+      stopRecording();
+      setHfbConnectionStatus("disconnected");
+      setMicrophoneStatus("Voice connection failed");
+      setDetectedCommands(message);
+      toast({
+        title: "Voice connection failed",
+        description: message,
+        variant: "destructive",
+      });
+    },
     onConnectionStatus: (status) => {
-      setHfbConnectionStatus(status);
       if (status === "connecting") {
-        setMicrophoneStatus("Connecting...");
+        voiceReadyRef.current = false;
+        setHfbConnectionStatus(isListeningMode ? "reconnecting" : "connecting");
+        setMicrophoneStatus(isListeningMode ? "Reconnecting voice..." : "Connecting voice...");
       } else if (status === "connected") {
-        setMicrophoneStatus("Listening");
+        voiceReadyRef.current = true;
+        setHfbConnectionStatus("ready");
+        setMicrophoneStatus(isListeningMode ? "Listening" : "Voice ready");
       } else if (status === "disconnected") {
-        setMicrophoneStatus("Disconnected");
+        voiceReadyRef.current = false;
+        setHfbConnectionStatus(isListeningMode ? "reconnecting" : "disconnected");
+        setMicrophoneStatus(isListeningMode ? "Reconnecting voice..." : "Disconnected");
       }
-    }
+    },
+    onAudioStatus: () => {
+      setIsAudioStreaming(true);
+      setMicrophoneStatus("Listening");
+    },
   });
 
   const hfbStrictMode = useHFBStore((state) => state.hfbStrictMode);
@@ -524,6 +652,7 @@ export const useHandsfreeBible = ({
       clearInactivityTimer();
       disconnect();
       setIsListeningMode(false);
+      setIsAudioStreaming(false);
       setIsSleepMode(true);
     }
 
@@ -539,27 +668,63 @@ export const useHandsfreeBible = ({
   };
 
   const toggleMicrophone = async () => {
-    if (isListeningMode) {
+    if (isListeningMode || isVoiceConnecting) {
+      connectionAttemptRef.current += 1;
       setIsListeningMode(false);
+      setIsVoiceConnecting(false);
       setIsSleepMode(false);
+      setIsAudioStreaming(false);
       stopRecording();
       clearInactivityTimer();
       setMicrophoneStatus("Idle");
       setDetectedCommands("Stopped listening");
     } else {
-      setIsListeningMode(true);
+      const attemptId = ++connectionAttemptRef.current;
       setIsSleepMode(false);
-
+      setIsVoiceConnecting(true);
+      setMicrophoneStatus("Requesting microphone...");
+      setDetectedCommands("Preparing microphone and voice service…");
+      setHfbConnectionStatus("connecting");
       if (!isConnected) connect();
 
       try {
+        // Acquire/resume browser audio directly from the user gesture. Audio is
+        // intentionally discarded until Deepgram confirms that it is ready.
         await startRecording((pcmBuffer) => {
-          sendPCMData(pcmBuffer);
+          if (voiceReadyRef.current) {
+            sendPCMData(pcmBuffer);
+          } else {
+            preReadyAudioChunksRef.current += 1;
+            if (preReadyAudioChunksRef.current === 1) {
+              console.info(
+                "[HFB Audio] PCM is flowing but waiting for Deepgram ready before sending",
+              );
+            }
+          }
         });
-        setMicrophoneStatus("Listening");
-        setDetectedCommands("Listening...");
+        if (connectionAttemptRef.current !== attemptId) {
+          stopRecording();
+          return;
+        }
+        setMicrophoneStatus("Connecting voice...");
+        const readyDeadline = Date.now() + 10000;
+        while (!voiceReadyRef.current && Date.now() < readyDeadline &&
+               connectionAttemptRef.current === attemptId) {
+          await new Promise(resolve => window.setTimeout(resolve, 50));
+        }
+        if (connectionAttemptRef.current !== attemptId) return;
+        if (!voiceReadyRef.current) {
+          stopRecording();
+          throw new Error("Voice connection timed out");
+        }
+        setIsVoiceConnecting(false);
+        setIsListeningMode(true);
+        setMicrophoneStatus("Checking microphone audio...");
+        setDetectedCommands("Voice connected — checking microphone audio…");
+        setHfbConnectionStatus("ready");
         resetInactivityTimer();
       } catch (err) {
+        setIsVoiceConnecting(false);
         setIsListeningMode(false);
         setMicrophoneStatus("Error");
         setDetectedCommands("Failed to access microphone");
@@ -578,6 +743,8 @@ export const useHandsfreeBible = ({
     widgetPosition,
     isDragging,
     isListeningMode,
+    isVoiceConnecting,
+    isAudioStreaming,
     isSleepMode,
     microphoneStatus,
     detectedCommands,

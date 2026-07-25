@@ -118,6 +118,7 @@ import {
   Phone,
   Star,
   Book,
+  BookOpen,
   Music,
   Code,
   MoreHorizontal,
@@ -152,6 +153,7 @@ import UserProfileView from "@/features/dashboard/profile/UserProfileView";
 import { SupportCentreAdmin } from "@/features/dashboard/components/SupportCentreAdmin";
 import { ResourceCentreAdmin } from "@/features/dashboard/components/ResourceCentreAdmin";
 import SuperAdminMediaAssets from "@/features/super-admin/pages/SuperAdminMediaAssets";
+import { BibleManagement } from "@/features/super-admin/pages/BibleManagement";
 
 interface TrialAnalytics {
   totalUsers: number;
@@ -1306,6 +1308,12 @@ export default function SuperAdminSidebar() {
           icon: Book,
           description: "Manage Help & Support content",
         },
+        {
+          id: "bible-management",
+          label: "Bible Management",
+          icon: BookOpen,
+          description: "Audit, repair, and import Bible translations",
+        },
       ],
     },
   ];
@@ -1463,6 +1471,8 @@ export default function SuperAdminSidebar() {
         return (
           <ResourceCentreAdmin />
         );
+      case "bible-management":
+        return <BibleManagement />;
 
       default:
         // Fallback for unhandled sections

@@ -185,11 +185,11 @@ export const AppRouter = () => {
           {/* New Marketing Pages in Layout */}
           <Route path="/">{(params) => <Layout><Home /></Layout>}</Route>
           <Route path="/features">{(params) => <Layout><Features /></Layout>}</Route>
-          <Route path="/about/careers/:jobId">{(params) => <Layout><JobDetailPage params={params} /></Layout>}</Route>
+          <Route path="/about/careers/:jobId"><Layout><JobDetailPage /></Layout></Route>
           <Route path="/about">{(params) => <Layout><About /></Layout>}</Route>
           <Route path="/pricing">{(params) => <Layout><Pricing /></Layout>}</Route>
           <Route path="/resources">{(params) => <Layout><Resources /></Layout>}</Route>
-          <Route path="/guides/:guideId">{(params) => <Layout><GuideDetailPage params={params} /></Layout>}</Route>
+          <Route path="/guides/:guideId"><Layout><GuideDetailPage /></Layout></Route>
           <Route path="/guides">{(params) => <Layout><Guides /></Layout>}</Route>
           <Route path="/faqs">{(params) => <Layout><FAQs /></Layout>}</Route>
           <Route path="/downloads">{(params) => <Layout><Downloads /></Layout>}</Route>
@@ -219,7 +219,7 @@ export const AppRouter = () => {
                   <Route path="/bible" component={BibleWorkspace} />
                   <Route path="/songs" component={SongsMock} />
                   <Route path="/presentations" component={PresentationsMock} />
-                  <Route path="/dashboard-assets" component={AssetsPage} />
+                  <Route path="/dashboard-assets"><AssetsPage /></Route>
                   <Route path="/dashboard-help" component={HelpSupportPage} />
                   <Route path="/lower-third-settings" component={LowerThirdSettingsRoute} />
                   <Route path="/lower-third-editor/:templateId" component={LowerThirdEditorPage} />

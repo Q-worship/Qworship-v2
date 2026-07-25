@@ -1,13 +1,7 @@
 import { Request, Response } from 'express';
 import { BibleService } from './bible.service.js';
 import type { BibleReference } from './bible.service.js';
-import { BibleVerse } from './bible.model.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { BibleVerse, BibleTranslation } from './bible.model.js';
 
 export const searchBible = async (req: Request, res: Response) => {
   try {
@@ -53,8 +47,15 @@ export const searchBible = async (req: Request, res: Response) => {
       const mappedVerses = result.verses.map(v => ({
          number: v.verse,
          // The DB stores versions as lowercase keys: v.kjv, v.nkjv, etc.
-         text: (v as any)[requestedVersion] || v.kjv || ''
+         text: (v as any)[requestedVersion] || ''
       }));
+      if (mappedVerses.some(verse => !verse.text.trim())) {
+        return res.status(422).json({
+          success: false,
+          code: 'TRANSLATION_TEXT_MISSING',
+          message: `${requestedVersion.toUpperCase()} text is missing for part of ${result.formattedReference}`,
+        });
+      }
 
       const passage = {
          reference: result.formattedReference,
@@ -244,6 +245,14 @@ export const structuredSearchBible = async (req: Request, res: Response) => {
     const result = await BibleService.searchBible(reference);
 
     if (result && result.verses.length > 0) {
+      const requestedVersion = String(reference.version || 'kjv').toLowerCase();
+      if (result.verses.some((verse: any) => !String(verse[requestedVersion] || '').trim())) {
+        return res.status(422).json({
+          success: false,
+          code: 'TRANSLATION_TEXT_MISSING',
+          message: `${requestedVersion.toUpperCase()} text is missing for this reference`,
+        });
+      }
       return res.json({ success: true, result });
     } else {
       return res.status(404).json({ success: false, message: 'Bible reference not found' });
@@ -263,23 +272,12 @@ export const exportBibleVersion = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Invalid version specified' });
     }
 
-    // Try to read from static JSON file first (High Performance)
-    const dataDir = path.join(__dirname, 'data');
-    const filePath = path.join(dataDir, `${version}.json`);
-
-    if (fs.existsSync(filePath)) {
-      const rawData = fs.readFileSync(filePath, 'utf-8');
-      const payload = JSON.parse(rawData);
-      console.log(`[Bible Export] Served ${version.toUpperCase()} from local JSON (${payload.length} verses)`);
-      return res.json({ success: true, version, total: payload.length, verses: payload });
-    }
-
-    // Fallback: Fetch from MongoDB (if JSON isn't generated yet)
-    console.log(`[Bible Export] JSON not found for ${version}, falling back to MongoDB...`);
+    // MongoDB is the authoritative source so admin corrections are immediately
+    // reflected in offline exports instead of being shadowed by bundled JSON.
     const verses = await BibleVerse.find(
-      {},
+      { [version]: { $exists: true, $nin: ['', null] } },
       { bookName: 1, chapter: 1, verse: 1, [version]: 1, _id: 0 }
-    ).lean();
+    ).sort({ bookName: 1, chapter: 1, verse: 1 }).lean();
 
     const payload = verses.map((v: any) => ({
       book: v.bookName,
@@ -289,9 +287,24 @@ export const exportBibleVersion = async (req: Request, res: Response) => {
       version: version
     }));
 
-    return res.json({ success: true, version, total: payload.length, verses: payload });
+    const translation = await BibleTranslation.findOne({ code: version }, { revision: 1 }).lean();
+    return res.json({
+      success: true,
+      version,
+      revision: (translation as any)?.revision || 1,
+      total: payload.length,
+      verses: payload,
+    });
   } catch (error) {
     console.error('Bible Export Error:', error);
     return res.status(500).json({ success: false, message: 'Failed to export bible translation' });
   }
+};
+
+export const getBibleRevisions = async (_req: Request, res: Response) => {
+  const translations = await BibleTranslation.find({}, { code: 1, revision: 1, _id: 0 }).lean();
+  const revisions: Record<string, number> = {};
+  for (const version of ['kjv', 'nkjv', 'amp', 'msg', 'esv', 'niv']) revisions[version] = 1;
+  translations.forEach((item: any) => { revisions[item.code] = item.revision || 1; });
+  return res.json({ success: true, revisions });
 };

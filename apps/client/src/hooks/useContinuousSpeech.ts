@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { apiClient } from "@/lib/api";
 
 // For TypeScript generic window access
 declare global {
@@ -40,16 +41,12 @@ export const useContinuousSpeech = ({
 
   const processCommand = async (text: string) => {
     try {
-      const commandRes = await fetch("/api/bible/voice-command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const commandRes = await apiClient.post("/bible/voice-command", {
           text,
           ...contextRef.current,
-        }),
       });
 
-      const commandData = await commandRes.json();
+      const commandData = commandRes.data;
 
       if (!commandData.success) {
         console.warn("Command failed or not recognized:", commandData.error);

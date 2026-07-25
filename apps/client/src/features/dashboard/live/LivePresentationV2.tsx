@@ -27,9 +27,9 @@ import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
-import { LivePresentationProvider, useLivePresentationContext } from './LivePresentationContext';
+// import { LivePresentationProvider, useLivePresentationContext } from './LivePresentationContext';
 import { AssetsPage } from '@/features/dashboard/pages/AssetsPage';
-import { AnimatePresence, motion } from 'framer-motion';
+// import { AnimatePresence, motion } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import {
@@ -279,7 +279,7 @@ export const LivePresentationV2 = (): JSX.Element => {
         )}
 
         <LiveSlideLayer {...props} />
-        
+
 
         <LiveOverlayLayer {...props} />
       </div>
@@ -482,26 +482,23 @@ export const LivePresentationV2 = (): JSX.Element => {
                         );
                       }
                     }}
-                    className={`p-3 rounded-lg border cursor-pointer transition-all hover:border-purple-400 ${
-                      isCurrentSlide
+                    className={`p-3 rounded-lg border cursor-pointer transition-all hover:border-purple-400 ${isCurrentSlide
                         ? "border-purple-500 bg-purple-600/20 shadow-lg"
                         : "border-gray-600 bg-gray-800/30 hover:bg-gray-700/50"
-                    }`}>
+                      }`}>
                     {/* Slide Header */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
                         <span
-                          className={`text-xs font-bold px-2 py-1 rounded ${
-                            isCurrentSlide
+                          className={`text-xs font-bold px-2 py-1 rounded ${isCurrentSlide
                               ? "bg-purple-500 text-white"
                               : "bg-gray-600 text-gray-300"
-                          }`}>
+                            }`}>
                           {slideNumber}
                         </span>
                         {slide.type && (
                           <span
-                            className={`text-xs px-2 py-1 rounded font-medium ${
-                              slide.type === "VERSE"
+                            className={`text-xs px-2 py-1 rounded font-medium ${slide.type === "VERSE"
                                 ? "bg-blue-600/30 text-blue-300"
                                 : slide.type === "CHORUS"
                                   ? "bg-green-600/30 text-green-300"
@@ -510,7 +507,7 @@ export const LivePresentationV2 = (): JSX.Element => {
                                     : slide.type === "BIBLE"
                                       ? "bg-purple-600/30 text-purple-300"
                                       : "bg-gray-600/30 text-gray-300"
-                            }`}>
+                              }`}>
                             {slide.type}
                           </span>
                         )}
@@ -582,29 +579,26 @@ export const LivePresentationV2 = (): JSX.Element => {
             <div className="flex space-x-2">
               <button
                 onClick={() => setBackgroundType("color")}
-                className={`px-3 py-2 text-xs rounded-lg transition-all font-medium ${
-                  backgroundType === "color"
+                className={`px-3 py-2 text-xs rounded-lg transition-all font-medium ${backgroundType === "color"
                     ? "bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/30"
                     : "bg-purple-800/30 text-purple-300 hover:bg-purple-700/40 border border-purple-600/30 hover:border-purple-500/50"
-                }`}>
+                  }`}>
                 Color
               </button>
               <button
                 onClick={() => setBackgroundType("image")}
-                className={`px-3 py-2 text-xs rounded-lg transition-all font-medium ${
-                  backgroundType === "image"
+                className={`px-3 py-2 text-xs rounded-lg transition-all font-medium ${backgroundType === "image"
                     ? "bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/30"
                     : "bg-purple-800/30 text-purple-300 hover:bg-purple-700/40 border border-purple-600/30 hover:border-purple-500/50"
-                }`}>
+                  }`}>
                 Image
               </button>
               <button
                 onClick={() => setBackgroundType("video")}
-                className={`px-3 py-2 text-xs rounded-lg transition-all font-medium ${
-                  backgroundType === "video"
+                className={`px-3 py-2 text-xs rounded-lg transition-all font-medium ${backgroundType === "video"
                     ? "bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-500/30"
                     : "bg-purple-800/30 text-purple-300 hover:bg-purple-700/40 border border-purple-600/30 hover:border-purple-500/50"
-                }`}>
+                  }`}>
                 Video
               </button>
             </div>
@@ -944,11 +938,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        slidesTransparent
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${slidesTransparent
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {slidesTransparent && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1014,11 +1007,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                         className="sr-only"
                       />
                       <div
-                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                          contentFixedArea
+                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${contentFixedArea
                             ? "bg-purple-600 border-purple-600"
                             : "border-purple-400/50 group-hover:border-purple-300"
-                        }`}>
+                          }`}>
                         {contentFixedArea && (
                           <svg
                             className="w-4 h-4 text-white"
@@ -1086,11 +1078,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        autoAdvanceSlides
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${autoAdvanceSlides
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {autoAdvanceSlides && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1227,11 +1218,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        showTimestamp
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${showTimestamp
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {showTimestamp && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1286,11 +1276,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        showSlideCounter
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${showSlideCounter
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {showSlideCounter && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1347,11 +1336,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        showServiceTitle
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${showServiceTitle
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {showServiceTitle && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1432,11 +1420,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        showCopyrightInfo
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${showCopyrightInfo
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {showCopyrightInfo && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1492,11 +1479,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        showAuthorInfo
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${showAuthorInfo
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {showAuthorInfo && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
@@ -1533,11 +1519,10 @@ export const LivePresentationV2 = (): JSX.Element => {
                       className="sr-only"
                     />
                     <div
-                      className={`relative w-6 h-6 rounded border-2 transition-all ${
-                        showSocialHandles
+                      className={`relative w-6 h-6 rounded border-2 transition-all ${showSocialHandles
                           ? "bg-purple-600 border-purple-600"
                           : "bg-transparent border-gray-400 hover:border-purple-400"
-                      }`}>
+                        }`}>
                       {showSocialHandles && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <svg
