@@ -5455,11 +5455,26 @@ body.mobile-nav-open {
   color: #fff;
   font-size: 1rem;
   font-weight: 600;
+  text-decoration: none;
   transition: background 0.2s;
 }
 
 .downloads-platform-btn:hover {
   background: #363650;
+}
+
+.downloads-platform-btn--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.downloads-platform-btn-meta {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .downloads-platform-icon {
