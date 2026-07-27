@@ -77,9 +77,9 @@ export class DeepgramTranscriptionService extends EventEmitter {
     deepgramUrl.searchParams.append("language", "en-US");
     // smart_format REMOVED — adds ~100ms post-processing delay on every partial
     deepgramUrl.searchParams.append("interim_results", "true");
-    // Give Nova-3 enough context around natural preaching pauses. Interim
-    // parsing supplies speed, while 250ms endpointing protects final accuracy.
-    deepgramUrl.searchParams.append("endpointing", "250");
+    // Interim parsing handles complete references before finalization. A short
+    // endpoint keeps final transcript/navigation fallback below one second.
+    deepgramUrl.searchParams.append("endpointing", "100");
     deepgramUrl.searchParams.append("numerals", "true");
     deepgramUrl.searchParams.append("encoding", "linear16");
     deepgramUrl.searchParams.append("sample_rate", "16000");

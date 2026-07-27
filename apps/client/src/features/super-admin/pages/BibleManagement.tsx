@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Database, FileJson, Save, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Database, FileJson, Save, Search, Upload } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { BIBLE_BOOKS_LCC } from "@/features/dashboard/data/bibleBooks";
 import { Button } from "@/components/ui/button";
@@ -117,6 +117,22 @@ export function BibleManagement() {
     }
   };
 
+  const loadImportFile = async (file?: File) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setImportText(text);
+      setSourceName(current => current || file.name);
+      setPreview(null);
+    } catch {
+      toast({
+        title: "File could not be read",
+        description: "Choose a UTF-8 JSON or text file.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const commitImport = async () => {
     if (!preview?.verses.length) return;
     if (importMode === "overwrite" &&
@@ -228,6 +244,19 @@ export function BibleManagement() {
           <Label htmlFor="bible-import">Source text</Label>
           <Textarea id="bible-import" className="mt-2 min-h-48 font-mono text-xs" value={importText} onChange={event => { setImportText(event.target.value); setPreview(null); }} />
         </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted">
+          <Upload className="h-4 w-4" />
+          Load JSON or text file
+          <input
+            type="file"
+            accept=".json,.txt,application/json,text/plain"
+            className="sr-only"
+            onChange={event => {
+              void loadImportFile(event.target.files?.[0]);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
         <div className="grid gap-3 md:grid-cols-3">
           <Input value={sourceName} onChange={event => setSourceName(event.target.value)} placeholder="Source file or publisher" />
           <Input value={provenance} onChange={event => setProvenance(event.target.value)} placeholder="Provenance / supplied by" />

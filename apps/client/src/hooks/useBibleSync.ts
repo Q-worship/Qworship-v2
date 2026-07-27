@@ -1,6 +1,75 @@
 import { useState, useCallback, useEffect } from "react";
 import { db } from "../lib/db";
 import { apiClient } from "../lib/api";
+import { useBibleRAMCache } from "../features/dashboard/hooks/useBibleRAMCache";
+
+const versionHydrations = new Map<string, Promise<void>>();
+
+export const ensureBibleVersionCached = (rawVersion: string): Promise<void> => {
+  const version = rawVersion.toLowerCase();
+  const existing = versionHydrations.get(version);
+  if (existing) return existing;
+
+  const hydration = (async () => {
+    const state = await db.syncState.get(version);
+    const revisionResponse = await apiClient.get('/bible/revisions');
+    const remoteRevision = Number(revisionResponse.data?.revisions?.[version] || 1);
+    const localCount = await db.verses.where("version").equals(version).count();
+
+    if (
+      state?.status === "synced" &&
+      state.revision === remoteRevision &&
+      localCount > 0 &&
+      (!state.totalVerses || state.totalVerses === localCount)
+    ) {
+      if (!useBibleRAMCache.getState().dictionary[version]) {
+        const localVerses = await db.verses.where("version").equals(version).toArray();
+        useBibleRAMCache.getState().setVersionInRam(version, localVerses);
+      }
+      return;
+    }
+
+    await db.syncState.put({
+      version,
+      status: "downloading",
+      syncedAt: Date.now(),
+      revision: state?.revision,
+    });
+    const response = await apiClient.get(`/bible/export/${version}`);
+    if (!response.data?.success || !Array.isArray(response.data?.verses)) {
+      throw new Error("Invalid Bible export payload");
+    }
+    const verses = response.data.verses;
+    await db.transaction('rw', db.verses, db.syncState, async () => {
+      await db.verses.where('version').equals(version).delete();
+      await db.verses.bulkAdd(verses);
+      await db.syncState.put({
+        version,
+        status: "synced",
+        syncedAt: Date.now(),
+        totalVerses: verses.length,
+        revision: Number(response.data.revision || remoteRevision),
+      });
+    });
+    useBibleRAMCache.getState().setVersionInRam(version, verses);
+    console.info(`[Offline Bible] ${version.toUpperCase()} is ready in IndexedDB and RAM`);
+  })()
+    .catch(async (error) => {
+      console.error(`[Offline Bible] Failed to hydrate ${version}:`, error);
+      await db.syncState.put({
+        version,
+        status: "error",
+        syncedAt: Date.now(),
+      });
+      throw error;
+    })
+    .finally(() => {
+      versionHydrations.delete(version);
+    });
+
+  versionHydrations.set(version, hydration);
+  return hydration;
+};
 
 export const useBibleSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -9,67 +78,12 @@ export const useBibleSync = () => {
   const checkAndHydrateTargetVersion = useCallback(
     async (version: string, updateSyncState: boolean = true) => {
       try {
-        const state = await db.syncState.get(version);
-
-        const revisionResponse = await apiClient.get('/bible/revisions');
-        const remoteRevision = Number(revisionResponse.data?.revisions?.[version] || 1);
-
-        if (state && state.status === "synced" && state.revision === remoteRevision) {
-          const verseCount = await db.verses.where("version").equals(version).count();
-          
-          // Verify we didn't just save a corrupted sync state or lose our IndexedDB
-          // Ensure verses actually exist, and if we know the expected total, match it.
-          // Fallback to > 0 check for legacy databases that don't have totalVerses
-          if (verseCount > 0 && (!state.totalVerses || verseCount === state.totalVerses)) {
-            return; // Already perfectly synced and data exists
-          }
-        }
-
         if (updateSyncState) setIsSyncing(true);
         setError(null);
-
-        // Record downloading state
-        await db.syncState.put({
-          version,
-          status: "downloading",
-          syncedAt: Date.now(),
-        });
-
-        // Fetch from API
-        const response = await apiClient.get(`/bible/export/${version}`);
-
-        if (response.data?.success && response.data?.verses) {
-          const verses = response.data.verses;
-
-          await db.transaction('rw', db.verses, db.syncState, async () => {
-             // Clear existing verses for this version just in case of corruption
-             await db.verses.where('version').equals(version).delete();
-             
-             // Bulk add all verses
-             await db.verses.bulkAdd(verses);
-             
-             // Mark as synced
-             await db.syncState.put({
-                version,
-                status: "synced",
-                syncedAt: Date.now(),
-                totalVerses: verses.length
-                ,revision: Number(response.data.revision || remoteRevision)
-             });
-          });
-          
-          console.log(`[Offline Bible] Synced ${version} successfully: ${verses.length} verses.`);
-        } else {
-          throw new Error("Invalid payload from backend");
-        }
+        await ensureBibleVersionCached(version);
       } catch (err: any) {
         console.error(`[Offline Bible] Failed to sync ${version}:`, err);
         setError(err?.message || "Failed to sync offline bible");
-        await db.syncState.put({
-          version,
-          status: "error",
-          syncedAt: Date.now(),
-        });
       } finally {
         if (updateSyncState) setIsSyncing(false);
       }

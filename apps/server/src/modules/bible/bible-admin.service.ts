@@ -1,4 +1,27 @@
 import { normalizeBookName } from "./handsfreeBible/index.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let canonicalCoordinates: Set<string> | null = null;
+const getCanonicalCoordinates = () => {
+  if (canonicalCoordinates) return canonicalCoordinates;
+  canonicalCoordinates = new Set<string>();
+  try {
+    const baseline = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "data", "kjv.json"), "utf8"),
+    );
+    for (const item of baseline) {
+      canonicalCoordinates.add(`${item.book}|${item.chapter}|${item.verse}`);
+    }
+  } catch (error) {
+    console.error("[Bible Admin] Could not load canonical verse coordinates", error);
+  }
+  return canonicalCoordinates;
+};
 
 export const BIBLE_VERSION_KEYS = ["kjv", "nkjv", "amp", "msg", "esv", "niv"] as const;
 export type ManagedBibleVersion = typeof BIBLE_VERSION_KEYS[number];
@@ -25,6 +48,9 @@ const parseObject = (value: any, line?: number): ParsedBibleVerse | null => {
   const text = String(value?.text ?? "").trim();
   if (!normalized || !Number.isInteger(chapter) || chapter < 1 ||
       !Number.isInteger(verse) || verse < 1 || !text) {
+    return null;
+  }
+  if (!getCanonicalCoordinates().has(`${normalized.name}|${chapter}|${verse}`)) {
     return null;
   }
   return { book: normalized.name, chapter, verse, text, line };
@@ -85,4 +111,3 @@ export function parseBibleInput(input: string): {
   });
   return { verses: unique, issues, duplicates };
 }
-

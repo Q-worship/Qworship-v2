@@ -42,6 +42,7 @@ export const useRealtimeSocket = ({
 }: RealtimeSocketProps) => {
   const socketRef = useRef<WebSocket | null>(null);
   const pendingAudioRef = useRef<Int16Array[]>([]);
+  const pendingControlRef = useRef<string[]>([]);
   const sentAudioChunksRef = useRef(0);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -98,6 +99,8 @@ export const useRealtimeSocket = ({
         queuedChunks: pendingAudioRef.current.length,
       });
       setIsConnected(true);
+      for (const message of pendingControlRef.current) ws.send(message);
+      pendingControlRef.current = [];
       for (const chunk of pendingAudioRef.current) ws.send(chunk);
       pendingAudioRef.current = [];
     };
@@ -193,6 +196,9 @@ export const useRealtimeSocket = ({
         }
       }, 500);
     }
+    pendingAudioRef.current = [];
+    pendingControlRef.current = [];
+    sentAudioChunksRef.current = 0;
     setIsConnected(false);
   }, []);
 
@@ -209,10 +215,10 @@ export const useRealtimeSocket = ({
         });
       }
     } else if (socketRef.current?.readyState === WebSocket.CONNECTING) {
-      // Preserve at most one second of 40ms chunks so the first spoken words
+      // Preserve at most one second of 20ms chunks so the first spoken words
       // are not lost while the warm connection finishes opening.
       pendingAudioRef.current.push(pcmBuffer.slice());
-      if (pendingAudioRef.current.length > 25) pendingAudioRef.current.shift();
+      if (pendingAudioRef.current.length > 50) pendingAudioRef.current.shift();
     } else {
       console.warn("[HFB Socket] PCM dropped because socket is not open", {
         readyState: socketRef.current?.readyState ?? "no socket",
@@ -226,11 +232,38 @@ export const useRealtimeSocket = ({
     }
   }, []);
 
+  const setBibleVersion = useCallback((version: string) => {
+    const message = JSON.stringify({
+      type: "set_bible_version",
+      version: version.toLowerCase(),
+    });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(message);
+    } else {
+      pendingControlRef.current.push(message);
+    }
+  }, []);
+
+  const beginSessionTrace = useCallback((clientClickAt: number) => {
+    const message = JSON.stringify({
+      type: "hfb_trace_start",
+      traceId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+      clientClickAt,
+    });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(message);
+    } else {
+      pendingControlRef.current.push(message);
+    }
+  }, []);
+
   return {
     isConnected,
     connect,
     disconnect,
     sendPCMData,
     setStrictMode,
+    setBibleVersion,
+    beginSessionTrace,
   };
 };

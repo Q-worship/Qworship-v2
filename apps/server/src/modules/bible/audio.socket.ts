@@ -135,6 +135,9 @@ export function setupAudioSocket(server: Server) {
     let currentPartialText = "";
     let currentContext: any = null;
     let strictMode = false;
+    let activeVersion = "kjv";
+    let traceId: string | null = null;
+    let clientClickAt: number | null = null;
     let interimCandidate = { key: "", count: 0, firstSeenAt: 0, lastSeenAt: 0 };
 
     // Fix 5: Extended dedup window — 5000ms (was 800ms).
@@ -210,7 +213,7 @@ export function setupAudioSocket(server: Server) {
           chapter,
           verseStart: verse_start,
           verseEnd: verse_end,
-          version: version?.toLowerCase() || "kjv",
+          version: version?.toLowerCase() || activeVersion,
         });
 
         if (result) {
@@ -221,6 +224,8 @@ export function setupAudioSocket(server: Server) {
             commandType: "lookup",
             telemetry: {
               source,
+              traceId,
+              clientClickAt,
               commandStartedAt: executionStartedAt,
               serverResolvedAt: Date.now(),
               serverLookupMs: Date.now() - executionStartedAt,
@@ -261,9 +266,10 @@ export function setupAudioSocket(server: Server) {
         }));
 
       } else if (cmd.name === "switch_bible_version") {
+        activeVersion = cmd.arguments.version.toLowerCase();
         ws.send(JSON.stringify({
           type: "version_change",
-          requestedVersion: cmd.arguments.version.toLowerCase(),
+          requestedVersion: activeVersion,
         }));
       }
     };
@@ -395,7 +401,13 @@ export function setupAudioSocket(server: Server) {
     // ── Tier 1: Partial (streaming, mid-sentence) ──────────────────────────
     transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
       currentPartialText = text;
-      console.log(`[AudioSocket][${T()}] PARTIAL [conf:${confidence?.toFixed(2)}]: "${text.slice(0,80)}"`);
+      console.log(
+        `[AudioSocket][${T()}] PARTIAL [conf:${confidence?.toFixed(2)}]: "${text.slice(0,80)}"`,
+        {
+          traceId,
+          clickToPartialMs: clientClickAt ? Date.now() - clientClickAt : undefined,
+        },
+      );
       await processPartial(text, confidence);
     });
 
@@ -456,6 +468,28 @@ export function setupAudioSocket(server: Server) {
             console.log(`[AudioSocket] Strict mode: ${msg.strictMode}`);
           }
 
+          if (msg.type === "set_bible_version") {
+            const requestedVersion = String(msg.version || "").toLowerCase();
+            if (["kjv", "nkjv", "niv", "esv", "amp", "msg"].includes(requestedVersion)) {
+              activeVersion = requestedVersion;
+              console.log(`[AudioSocket] Active Bible version: ${activeVersion.toUpperCase()}`);
+            }
+          }
+
+          if (msg.type === "hfb_trace_start") {
+            traceId = String(msg.traceId || "");
+            clientClickAt = Number(msg.clientClickAt) || null;
+            firstAudioAt = 0;
+            audioChunkCount = 0;
+            audioByteCount = 0;
+            console.log("[HFB Trace] Session started", {
+              traceId,
+              clientToServerControlMs: clientClickAt
+                ? Date.now() - clientClickAt
+                : undefined,
+            });
+          }
+
           // ── vad_commit: Silero VAD on the desktop detected end-of-speech ──
           // The desktop's Silero VAD fires ~192ms after silence — much faster
           // than Deepgram's endpointing signal (~100–300ms after silence).
@@ -476,7 +510,12 @@ export function setupAudioSocket(server: Server) {
       }
       if (!firstAudioAt) {
         firstAudioAt = Date.now();
-        console.log(`[AudioSocket][${T()}] FIRST AUDIO CHUNK received`);
+        console.log(`[AudioSocket][${T()}] FIRST AUDIO CHUNK received`, {
+          traceId,
+          clickToServerAudioMs: clientClickAt
+            ? firstAudioAt - clientClickAt
+            : undefined,
+        });
         ws.send(JSON.stringify({ type: "audio_status", status: "receiving" }));
       }
       audioChunkCount += 1;

@@ -21,6 +21,9 @@ interface RAMCacheStore {
   // QC66: Lazy seed a single chapter into the RAM cache after a cloud API fetch.
   // This ensures subsequent accesses to the same chapter are instant (0ms).
   setChapterInRam: (version: string, book: string, chapter: number, verses: MemoryVerse[]) => void;
+  setVersionInRam: (version: string, verses: Array<{
+    book: string; chapter: number; verse: number; text: string;
+  }>) => void;
   clearVersion: (version: string) => void;
 }
 
@@ -92,6 +95,32 @@ export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
       dict[version][book][chapter] = [...verses].sort((a, b) => a.number - b.number);
       return { dictionary: dict };
     });
+  },
+
+  setVersionInRam: (version, verses) => {
+    const versionDictionary: Record<string, Record<number, MemoryVerse[]>> = {};
+    for (const item of verses) {
+      if (!versionDictionary[item.book]) versionDictionary[item.book] = {};
+      if (!versionDictionary[item.book][item.chapter]) {
+        versionDictionary[item.book][item.chapter] = [];
+      }
+      versionDictionary[item.book][item.chapter].push({
+        number: item.verse,
+        text: item.text,
+      });
+    }
+    for (const book of Object.keys(versionDictionary)) {
+      for (const chapter of Object.keys(versionDictionary[book])) {
+        versionDictionary[book][Number(chapter)].sort((a, b) => a.number - b.number);
+      }
+    }
+    set((state) => ({
+      dictionary: {
+        ...state.dictionary,
+        [version]: versionDictionary,
+      },
+      isBooted: true,
+    }));
   },
 
   clearVersion: (version: string) => {

@@ -255,6 +255,35 @@ export const seedBibleTranslation = async (req: Request, res: Response) => {
 const isManagedVersion = (value: unknown): value is ManagedBibleVersion =>
   BIBLE_VERSION_KEYS.includes(String(value).toLowerCase() as ManagedBibleVersion);
 
+const loadExistingBibleText = async (
+  version: ManagedBibleVersion,
+  verses: ParsedBibleVerse[],
+) => {
+  const result = new Map<string, string | null>();
+  const batchSize = 500;
+  for (let index = 0; index < verses.length; index += batchSize) {
+    const batch = verses.slice(index, index + batchSize);
+    const rows = await BibleVerse.find(
+      {
+        $or: batch.map(item => ({
+          bookName: item.book,
+          chapter: item.chapter,
+          verse: item.verse,
+        })),
+      },
+      { bookName: 1, chapter: 1, verse: 1, [version]: 1 },
+    ).lean();
+    for (const item of rows as any[]) {
+      const text = typeof item[version] === "string" ? item[version].trim() : "";
+      result.set(
+        `${item.bookName}|${item.chapter}|${item.verse}`,
+        text || null,
+      );
+    }
+  }
+  return result;
+};
+
 export const previewBibleImport = async (req: Request, res: Response) => {
   const { version, text } = req.body;
   if (!isManagedVersion(version)) {
@@ -265,17 +294,9 @@ export const previewBibleImport = async (req: Request, res: Response) => {
   }
 
   const parsed = parseBibleInput(text);
-  const references = parsed.verses.map(item => ({
-    bookName: item.book, chapter: item.chapter, verse: item.verse,
-  }));
-  const existing = references.length
-    ? await BibleVerse.find({}, { bookName: 1, chapter: 1, verse: 1, [version]: 1 }).lean()
-    : [];
-  const existingMap = new Map(existing.map((item: any) => [
-    `${item.bookName}|${item.chapter}|${item.verse}`, Boolean(item[version]?.trim()),
-  ]));
+  const existingText = await loadExistingBibleText(version, parsed.verses);
   const alreadyPopulated = parsed.verses.filter(item =>
-    existingMap.get(`${item.book}|${item.chapter}|${item.verse}`),
+    Boolean(existingText.get(`${item.book}|${item.chapter}|${item.verse}`)),
   ).length;
 
   return res.json({
@@ -344,16 +365,7 @@ export const commitBibleImport = async (req: Request, res: Response) => {
       });
     }
     const validated = parsedCommit.verses;
-    const references = validated.map(item => ({
-      bookName: item.book, chapter: item.chapter, verse: item.verse,
-    }));
-    const existing = references.length
-      ? await BibleVerse.find({}, { bookName: 1, chapter: 1, verse: 1, [version]: 1 }).lean()
-      : [];
-    const existingMap = new Map(existing.map((item: any) => [
-      `${item.bookName}|${item.chapter}|${item.verse}`,
-      typeof item[version] === "string" && item[version].trim() ? item[version] : null,
-    ]));
+    const existingMap = await loadExistingBibleText(version, validated);
     const effective = validated.filter(item =>
       mode === "overwrite" || !existingMap.get(`${item.book}|${item.chapter}|${item.verse}`),
     );

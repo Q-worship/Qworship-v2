@@ -1,11 +1,15 @@
 class RawAudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // The AudioContext runs at 16kHz. 640 samples is a 40ms chunk: frequent
-    // enough for fast interim transcription without excessive WebSocket frames.
-    this.bufferSize = 640;
+    this.targetSampleRate = 16000;
+    // 320 samples at 16kHz = 20ms, Deepgram's lowest recommended streaming
+    // chunk size. This minimizes capture buffering without excessive frames.
+    this.bufferSize = 320;
     this.buffer = new Float32Array(this.bufferSize);
     this.bufferIndex = 0;
+    this.resamplePhase = 0;
+    this.resampleSum = 0;
+    this.resampleCount = 0;
   }
 
   process(inputs, outputs, parameters) {
@@ -15,20 +19,36 @@ class RawAudioProcessor extends AudioWorkletProcessor {
     const channelData = input[0];
     
     for (let i = 0; i < channelData.length; i++) {
-      this.buffer[this.bufferIndex++] = channelData[i];
-      
-      if (this.bufferIndex >= this.bufferSize) {
-        this.flush();
+      const sample = channelData[i];
+      if (sampleRate === this.targetSampleRate) {
+        this.pushSample(sample);
+        continue;
+      }
+
+      // Browsers may ignore the requested AudioContext rate and run at
+      // 44.1/48kHz. Downsample to the exact 16kHz declared to Deepgram so audio
+      // never arrives faster than real time and builds a transcription backlog.
+      this.resampleSum += sample;
+      this.resampleCount += 1;
+      this.resamplePhase += this.targetSampleRate;
+      if (this.resamplePhase >= sampleRate) {
+        this.pushSample(this.resampleSum / this.resampleCount);
+        this.resamplePhase -= sampleRate;
+        this.resampleSum = 0;
+        this.resampleCount = 0;
       }
     }
 
     return true;
   }
 
+  pushSample(sample) {
+    this.buffer[this.bufferIndex++] = sample;
+    if (this.bufferIndex >= this.bufferSize) this.flush();
+  }
+
   flush() {
     // Convert Float32 to Int16 PCM
-    // We assume the AudioContext is already at the target sample rate (e.g. 24kHz)
-    // to avoid expensive interpolation in the worklet thread.
     const pcm16 = new Int16Array(this.bufferSize);
     
     for (let i = 0; i < this.bufferSize; i++) {

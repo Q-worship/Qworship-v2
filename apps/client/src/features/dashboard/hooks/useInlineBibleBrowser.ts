@@ -3,6 +3,7 @@ import { BIBLE_BOOKS_LCC, BIBLE_VERSIONS_LCC } from '../data/bibleBooks';
 import { db } from '../../../lib/db';
 import { useBibleRAMCache } from './useBibleRAMCache';
 import { apiClient } from '../../../lib/api';
+import { ensureBibleVersionCached } from '../../../hooks/useBibleSync';
 
 let revisionCheck: Promise<Record<string, number>> | null = null;
 const getBibleRevisions = () => {
@@ -54,22 +55,6 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
       const verseEnd = bookData?.verses[chapter - 1] ?? 150;
       const vKey = version.toLowerCase() as any;
 
-      // Invalidate offline/RAM data when an administrator publishes a newer
-      // translation revision. The API fallback below then hydrates fresh text.
-      const revisions = await getBibleRevisions();
-      const remoteRevision = Number(revisions[vKey] || 1);
-      const syncState = await db.syncState.get(vKey);
-      const revisionStorageKey = `qworship-bible-revision-${vKey}`;
-      const cachedRevision = Number(window.localStorage.getItem(revisionStorageKey) || 0);
-      const hasCachedVerses = await db.verses.where('version').equals(vKey).limit(1).count();
-      if ((cachedRevision && cachedRevision !== remoteRevision) || (!cachedRevision && hasCachedVerses > 0) ||
-          (syncState?.revision && syncState.revision !== remoteRevision)) {
-        await db.verses.where('version').equals(vKey).delete();
-        await db.syncState.delete(vKey);
-        useBibleRAMCache.getState().clearVersion(vKey);
-      }
-      window.localStorage.setItem(revisionStorageKey, String(remoteRevision));
-
       // 0. Try RAM Cache Fetching (0.00ms latency)
       const memStartTime = performance.now();
       const ramVerses = useBibleRAMCache.getState().getChapter(vKey, bookName, chapter);
@@ -110,6 +95,17 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
         setBibleIsLoading(false);
         console.log(`🚀 [IndexedDB] Fetched ${bookName} ${chapter} (${vKey}) locally in ${(endTime - startTime).toFixed(2)}ms`);
         return p;
+      }
+
+      // Only perform revision/network work after both local tiers miss.
+      // A background version hydration will subsequently refresh stale data.
+      const revisions = await getBibleRevisions();
+      const remoteRevision = Number(revisions[vKey] || 1);
+      const syncState = await db.syncState.get(vKey);
+      if (syncState?.revision && syncState.revision !== remoteRevision) {
+        await db.verses.where('version').equals(vKey).delete();
+        await db.syncState.delete(vKey);
+        useBibleRAMCache.getState().clearVersion(vKey);
       }
 
       // 2. Fallback to Cloud API
@@ -165,15 +161,16 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
     setBibleVerseIndex(idx);
   }, [onProjectVerse]);
 
-  const handleBookSelect = useCallback((idx: number) => {
+  const handleBookSelect = useCallback(async (idx: number) => {
     setBibleBookIndex(idx);
-    setBibleChapterNum(0);
+    setBibleChapterNum(1);
     setBibleVerseIndex(-1);
     setBiblePassage(null);
     // Scroll chapter column to top
     if (bibleChapterListRef.current) bibleChapterListRef.current.scrollTop = 0;
     if (bibleVerseListRef.current) bibleVerseListRef.current.scrollTop = 0;
-  }, []);
+    await fetchBibleChapter(BIBLE_BOOKS_LCC[idx].name, 1, selBibleVersion);
+  }, [fetchBibleChapter, selBibleVersion]);
 
   const handleChapterSelect = useCallback(async (ch: number) => {
     setBibleChapterNum(ch);
@@ -255,7 +252,21 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
   // operator choices and no live state is changed here.
   const openBibleMode = useCallback(async () => {
     setIsBibleMode(true);
-  }, []);
+    const initialChapter = bibleChapterNum > 0 ? bibleChapterNum : 1;
+    if (bibleChapterNum === 0) setBibleChapterNum(initialChapter);
+    if (!biblePassage) {
+      await fetchBibleChapter(
+        BIBLE_BOOKS_LCC[bibleBookIndex].name,
+        initialChapter,
+        selBibleVersion,
+      );
+    }
+    // Refresh the active translation silently; local data was already rendered.
+    void ensureBibleVersionCached(selBibleVersion).catch(() => undefined);
+  }, [
+    bibleBookIndex, bibleChapterNum, biblePassage,
+    fetchBibleChapter, selBibleVersion,
+  ]);
 
   return {
     BIBLE_BOOKS: BIBLE_BOOKS_LCC,

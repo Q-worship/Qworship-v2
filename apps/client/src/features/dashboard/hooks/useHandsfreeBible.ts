@@ -13,20 +13,24 @@ import { useToast } from "@/hooks/use-toast";
 import { resolveCachedHFBVerse, useHFBStore } from "./useHFBStore";
 import { apiClient } from "@/lib/api";
 import { parseHFBReference } from "../lib/hfbFastReferenceParser";
+import { ensureBibleVersionCached } from "@/hooks/useBibleSync";
 
 interface UseHandsfreeBibleProps {
   liveWindow: Window | null;
   handsfreeBibleButtonRef: MutableRefObject<HTMLElement | null>;
+  isPanelActive?: boolean;
 }
 
 export const useHandsfreeBible = ({
   liveWindow,
   handsfreeBibleButtonRef,
+  isPanelActive = false,
 }: UseHandsfreeBibleProps) => {
   const { toast } = useToast();
   const setHfbConnectionStatus = useHFBStore(
     (state) => state.setHfbConnectionStatus,
   );
+  const hfbVersion = useHFBStore((state) => state.hfbVersion);
   // Store actions
   const { setMode: setDisplayMode } = useDisplayModeStore();
   const {
@@ -87,7 +91,8 @@ export const useHandsfreeBible = ({
   });
   const voiceReadyRef = useRef(false);
   const connectionAttemptRef = useRef(0);
-  const preReadyAudioChunksRef = useRef(0);
+  const listeningRequestedAtRef = useRef(0);
+  const firstPartialSeenRef = useRef(false);
 
   useEffect(() => {
     liveWindowRef.current = liveWindow;
@@ -98,6 +103,21 @@ export const useHandsfreeBible = ({
   useEffect(() => {
     selectedBibleVersionRef.current = selectedBibleVersion;
   }, [selectedBibleVersion]);
+
+  useEffect(() => {
+    const normalized = hfbVersion.toUpperCase();
+    if (selectedBibleVersionRef.current === normalized) return;
+    selectedBibleVersionRef.current = normalized;
+    setSelectedBibleVersion(normalized);
+    setZustandBibleVersion(normalized);
+  }, [hfbVersion, setZustandBibleVersion]);
+
+  // Silently prepare the active translation for client-side predictive
+  // projection. This never blocks the HFB panel or microphone controls.
+  useEffect(() => {
+    if (!isHandsfreeBibleOpen && !isPanelActive) return;
+    void ensureBibleVersionCached(selectedBibleVersion).catch(() => undefined);
+  }, [isHandsfreeBibleOpen, isPanelActive, selectedBibleVersion]);
 
   // Handle Socket Events
   const handleBibleMatch = (data: any, overrideVersion?: string) => {
@@ -129,6 +149,31 @@ export const useHandsfreeBible = ({
     const text = verseData?.[versionKey] || "";
     const projectionKey = `${versionKey}|${book}|${chapter}|${verseNum}`;
     const now = performance.now();
+
+    // A reference may arrive from local prediction, a server interim, and the
+    // final transcript. Once it is the current active verse, later arrivals
+    // confirm it instead of creating duplicate history entries.
+    const hfbState = useHFBStore.getState();
+    const currentDetection =
+      hfbState.hfbDetectedVerses.find(item => item.isActive) ||
+      hfbState.hfbDetectedVerses[hfbState.hfbDetectedVerses.length - 1];
+    const currentDetectionKey = currentDetection
+      ? `${currentDetection.version.toLowerCase()}|${currentDetection.book}|${currentDetection.chapter}|${currentDetection.verseNum}`
+      : "";
+    const currentProjectionKey = hfbState.hfbCurrentProjected
+      ? `${hfbState.hfbCurrentProjected.version.toLowerCase()}|${hfbState.hfbCurrentProjected.reference}`
+      : "";
+    const incomingProjectionKey = `${versionKey}|${book} ${chapter}:${verseNum}`;
+    if (
+      projectionKey === currentDetectionKey ||
+      incomingProjectionKey === currentProjectionKey
+    ) {
+      lastProjectedRef.current = { key: projectionKey, at: now };
+      setDetectedCommands(`${book} ${chapter}:${verseNum}`);
+      console.info(`[HFB] Duplicate confirmation suppressed: ${projectionKey}`);
+      return;
+    }
+
     if (projectionKey === lastProjectedRef.current.key &&
         now - lastProjectedRef.current.at < 5000) {
       return;
@@ -214,7 +259,9 @@ export const useHandsfreeBible = ({
       serverToClientMs: telemetry.serverResolvedAt
         ? projectedAt - telemetry.serverResolvedAt
         : undefined,
-      clientProjectionMs: telemetry.clientStartedAt
+      clientProjectionMs: telemetry.clientClickAt
+        ? projectedAt - telemetry.clientClickAt
+        : telemetry.clientStartedAt
         ? projectedAt - telemetry.clientStartedAt
         : undefined,
       projectedAt,
@@ -403,12 +450,23 @@ export const useHandsfreeBible = ({
     }, INACTIVITY_TIMEOUT_MS);
   }, [clearInactivityTimer, stopRecording]);
 
-  const { connect, disconnect, sendPCMData, isConnected, setStrictMode } = useRealtimeSocket({
+  const {
+    connect, disconnect, sendPCMData, isConnected, setStrictMode,
+    setBibleVersion, beginSessionTrace,
+  } = useRealtimeSocket({
     onBibleMatch: (data: any) => {
       resetInactivityTimer();
       handleBibleMatch(data);
     },
     onPartialTranscript: (text, metadata) => {
+      if (!firstPartialSeenRef.current && listeningRequestedAtRef.current) {
+        firstPartialSeenRef.current = true;
+        console.info("[HFB Latency] First visible transcript", {
+          clickToFirstTranscriptMs: Math.round(
+            performance.now() - listeningRequestedAtRef.current,
+          ),
+        });
+      }
       resetInactivityTimer();
       setMicrophoneStatus("Processing");
       useHFBStore.getState().setHfbCurrentPartial(text);
@@ -446,6 +504,7 @@ export const useHandsfreeBible = ({
       // until the next render cycle).
       selectedBibleVersionRef.current = normalized;
       setSelectedBibleVersion(normalized);
+      useHFBStore.getState().setHfbVersion(normalized);
       setZustandBibleVersion(normalized);
       setDetectedCommands(`Switched to ${normalized}`);
 
@@ -512,8 +571,12 @@ export const useHandsfreeBible = ({
   useEffect(() => {
     if (isConnected) {
       setStrictMode(hfbStrictMode);
+      setBibleVersion(hfbVersion);
     }
-  }, [isConnected, hfbStrictMode, setStrictMode]);
+  }, [
+    isConnected, hfbStrictMode, hfbVersion,
+    setStrictMode, setBibleVersion,
+  ]);
 
   // Position recalculation on resize (only if not dragged)
   useEffect(() => {
@@ -527,12 +590,23 @@ export const useHandsfreeBible = ({
     return () => window.removeEventListener("resize", handleResize);
   }, [isHandsfreeBibleOpen, hasBeenDragged]);
 
-  // Handle socket connection lifecycle
+  // Warm the browser -> server -> Deepgram path as soon as HFB is visible.
+  // The microphone still starts only from an explicit user click.
   useEffect(() => {
-    if (isHandsfreeBibleOpen && !isConnected) {
+    if ((isHandsfreeBibleOpen || isPanelActive) && !isConnected) {
       connect();
+    } else if (
+      !isHandsfreeBibleOpen &&
+      !isPanelActive &&
+      !isListeningMode &&
+      isConnected
+    ) {
+      disconnect();
     }
-  }, [isHandsfreeBibleOpen, connect, isConnected]);
+  }, [
+    isHandsfreeBibleOpen, isPanelActive, isListeningMode,
+    connect, disconnect, isConnected,
+  ]);
 
   // Clean up socket on unmount ONLY
   useEffect(() => {
@@ -622,6 +696,26 @@ export const useHandsfreeBible = ({
     return { x: window.innerWidth / 2 - 200, y: 100 };
   };
 
+  const closeHandsfreeBible = () => {
+      setIsHandsfreeBibleOpen(false);
+      setIsWidgetVisible(false);
+      setHasBeenDragged(false);
+
+      setDetectedCommands("No commands detected");
+      currentVerseContextRef.current = null;
+      setWidgetVerseData(null);
+      clearZustandProjection();
+      useHFBStore.getState().clearAllState();
+
+      stopRecording();
+      clearInactivityTimer();
+      disconnect();
+      setIsListeningMode(false);
+      setIsVoiceConnecting(false);
+      setIsAudioStreaming(false);
+      setIsSleepMode(true);
+  };
+
   const toggleHandsfreeBible = () => {
     const newState = !isHandsfreeBibleOpen;
 
@@ -636,25 +730,7 @@ export const useHandsfreeBible = ({
       setTimeout(() => {
         setIsWidgetVisible(true);
       }, 20);
-    } else {
-      setIsHandsfreeBibleOpen(false);
-      setIsWidgetVisible(false);
-      setHasBeenDragged(false);
-
-      setDetectedCommands("No commands detected");
-      currentVerseContextRef.current = null;
-      setWidgetVerseData(null);
-      clearZustandProjection();
-      useHFBStore.getState().clearAllState();
-
-      // Stop recording and disconnect
-      stopRecording();
-      clearInactivityTimer();
-      disconnect();
-      setIsListeningMode(false);
-      setIsAudioStreaming(false);
-      setIsSleepMode(true);
-    }
+    } else closeHandsfreeBible();
 
     if (liveWindow && !liveWindow.closed) {
       liveWindow.postMessage(
@@ -680,48 +756,35 @@ export const useHandsfreeBible = ({
       setDetectedCommands("Stopped listening");
     } else {
       const attemptId = ++connectionAttemptRef.current;
+      listeningRequestedAtRef.current = performance.now();
+      firstPartialSeenRef.current = false;
       setIsSleepMode(false);
+      // Reflect the user's action immediately. Connection readiness remains an
+      // internal concern; the same button can stop a pending start.
+      setIsListeningMode(true);
       setIsVoiceConnecting(true);
-      setMicrophoneStatus("Requesting microphone...");
-      setDetectedCommands("Preparing microphone and voice service…");
-      setHfbConnectionStatus("connecting");
+      setMicrophoneStatus("Listening");
+      setDetectedCommands("Listening for a Bible reference…");
+      setHfbConnectionStatus(voiceReadyRef.current ? "ready" : "connecting");
       if (!isConnected) connect();
+      beginSessionTrace(Date.now());
 
       try {
-        // Acquire/resume browser audio directly from the user gesture. Audio is
-        // intentionally discarded until Deepgram confirms that it is ready.
+        // Send immediately. useRealtimeSocket buffers the opening second while
+        // the browser socket connects, and the server buffers again until
+        // Deepgram is open. No opening words are discarded.
         await startRecording((pcmBuffer) => {
-          if (voiceReadyRef.current) {
-            sendPCMData(pcmBuffer);
-          } else {
-            preReadyAudioChunksRef.current += 1;
-            if (preReadyAudioChunksRef.current === 1) {
-              console.info(
-                "[HFB Audio] PCM is flowing but waiting for Deepgram ready before sending",
-              );
-            }
-          }
+          sendPCMData(pcmBuffer);
         });
         if (connectionAttemptRef.current !== attemptId) {
           stopRecording();
           return;
         }
-        setMicrophoneStatus("Connecting voice...");
-        const readyDeadline = Date.now() + 10000;
-        while (!voiceReadyRef.current && Date.now() < readyDeadline &&
-               connectionAttemptRef.current === attemptId) {
-          await new Promise(resolve => window.setTimeout(resolve, 50));
-        }
-        if (connectionAttemptRef.current !== attemptId) return;
-        if (!voiceReadyRef.current) {
-          stopRecording();
-          throw new Error("Voice connection timed out");
-        }
+        console.info("[HFB Latency] Microphone capture started", {
+          clickToCaptureMs: Math.round(performance.now() - listeningRequestedAtRef.current),
+        });
         setIsVoiceConnecting(false);
-        setIsListeningMode(true);
-        setMicrophoneStatus("Checking microphone audio...");
-        setDetectedCommands("Voice connected — checking microphone audio…");
-        setHfbConnectionStatus("ready");
+        setMicrophoneStatus("Listening");
         resetInactivityTimer();
       } catch (err) {
         setIsVoiceConnecting(false);
@@ -753,6 +816,7 @@ export const useHandsfreeBible = ({
     widgetFormattedReference,
     volume,
     toggleHandsfreeBible,
+    closeHandsfreeBible,
     toggleMicrophone,
     setSelectedBibleVersion,
     handleDragStart,

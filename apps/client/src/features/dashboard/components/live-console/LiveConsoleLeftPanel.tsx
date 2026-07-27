@@ -21,6 +21,7 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
   const hfb = useHandsfreeBible({
     liveWindow,
     handsfreeBibleButtonRef: dummyRef,
+    isPanelActive: store.leftPanelTab === 'hfb',
   });
 
   const hfbStore = useHFBStore();
@@ -41,8 +42,19 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
     }
   }, [hfbStore.hfbDetectedVerses]);
 
-  const handleBibleMode = () => { store.setIsBibleMode(true); store.setIsSongMode(false); store.setLeftPanelTab(null); };
-  const handleSongMode = () => { store.setIsSongMode(true); store.setIsBibleMode(false); store.setLeftPanelTab(null); };
+  const handleBibleMode = () => {
+    if (store.leftPanelTab === 'hfb') hfb.closeHandsfreeBible();
+    store.setIsBibleMode(true);
+    store.setIsSongMode(false);
+    store.setLeftPanelTab(null);
+    void bibleProps.openBibleMode?.();
+  };
+  const handleSongMode = () => {
+    if (store.leftPanelTab === 'hfb') hfb.closeHandsfreeBible();
+    store.setIsSongMode(true);
+    store.setIsBibleMode(false);
+    store.setLeftPanelTab(null);
+  };
 
   return (
     <div 
@@ -114,16 +126,20 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 <span className="text-[11px] font-bold tracking-widest uppercase text-purple-300">Hands-Free Bible</span>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <div className={`w-1.5 h-1.5 rounded-full ${
-                    hfbStore.hfbConnectionStatus === 'ready' ? 'bg-emerald-500' :
-                    hfbStore.hfbConnectionStatus === 'connecting' || hfbStore.hfbConnectionStatus === 'reconnecting' ? 'bg-yellow-500 animate-pulse' :
+                    hfb.isListeningMode || hfbStore.hfbConnectionStatus === 'ready' ? 'bg-emerald-500' :
                     hfbStore.hfbConnectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-gray-600'
                   }`} />
                   <span className={`text-[8px] font-bold uppercase tracking-tight ${
-                    hfbStore.hfbConnectionStatus === 'ready' ? 'text-emerald-500/80' :
-                    hfbStore.hfbConnectionStatus === 'connecting' || hfbStore.hfbConnectionStatus === 'reconnecting' ? 'text-yellow-500/80' :
+                    hfb.isListeningMode || hfbStore.hfbConnectionStatus === 'ready' ? 'text-emerald-500/80' :
                     hfbStore.hfbConnectionStatus === 'disconnected' ? 'text-red-500/80' : 'text-gray-600'
                   }`}>
-                    {hfbStore.hfbConnectionStatus || 'Idle'}
+                    {hfb.isListeningMode
+                      ? 'Listening'
+                      : hfbStore.hfbConnectionStatus === 'ready'
+                      ? 'Ready'
+                      : hfbStore.hfbConnectionStatus === 'disconnected'
+                      ? 'Unavailable'
+                      : 'Idle'}
                     {hfbStore.hfbLastLatencyMs !== null
                       ? ` · ${hfbStore.hfbLastLatencyMs}ms ${hfbStore.hfbLastLatencySource === 'client-ram' ? 'RAM' : ''}`
                       : ''}
@@ -148,16 +164,14 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${
                   hfb.isListeningMode
                     ? 'bg-red-500/20 text-red-400 border border-red-600/40'
-                    : hfb.isVoiceConnecting
-                    ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-600/50 animate-pulse'
                     : 'bg-purple-900/30 text-purple-300 border border-purple-700/40'
                 }`}
               >
                 {hfb.isListeningMode ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
-                {hfb.isListeningMode ? 'Stop' : hfb.isVoiceConnecting ? 'Connecting…' : 'Listen'}
+                {hfb.isListeningMode ? 'Stop' : 'Listen'}
               </button>
               <button
-                onClick={() => { hfb.toggleHandsfreeBible(); store.setLeftPanelTab(null); }}
+                onClick={() => { hfb.closeHandsfreeBible(); store.setLeftPanelTab(null); }}
                 className="text-gray-600 hover:text-gray-300 transition-colors p-1 rounded"
                 title="Exit Hands-Free Bible"
               >
