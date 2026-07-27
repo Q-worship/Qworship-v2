@@ -445,6 +445,7 @@ export const useHandsfreeBible = ({
       setIsListeningMode(false);
       setIsSleepMode(false);
       stopRecording();
+      useHFBStore.getState().setHfbCurrentPartial("");
       setMicrophoneStatus("Idle");
       setDetectedCommands("Stopped listening due to inactivity");
     }, INACTIVITY_TIMEOUT_MS);
@@ -531,6 +532,7 @@ export const useHandsfreeBible = ({
     onError: (message) => {
       connectionAttemptRef.current += 1;
       voiceReadyRef.current = false;
+      useHFBStore.getState().setHfbCurrentPartial("");
       setIsVoiceConnecting(false);
       setIsListeningMode(false);
       setIsAudioStreaming(false);
@@ -555,6 +557,7 @@ export const useHandsfreeBible = ({
         setMicrophoneStatus(isListeningMode ? "Listening" : "Voice ready");
       } else if (status === "disconnected") {
         voiceReadyRef.current = false;
+        useHFBStore.getState().setHfbCurrentPartial("");
         setHfbConnectionStatus(isListeningMode ? "reconnecting" : "disconnected");
         setMicrophoneStatus(isListeningMode ? "Reconnecting voice..." : "Disconnected");
       }
@@ -708,6 +711,7 @@ export const useHandsfreeBible = ({
       useHFBStore.getState().clearAllState();
 
       stopRecording();
+      useHFBStore.getState().setHfbCurrentPartial("");
       clearInactivityTimer();
       disconnect();
       setIsListeningMode(false);
@@ -751,6 +755,7 @@ export const useHandsfreeBible = ({
       setIsSleepMode(false);
       setIsAudioStreaming(false);
       stopRecording();
+      useHFBStore.getState().setHfbCurrentPartial("");
       clearInactivityTimer();
       setMicrophoneStatus("Idle");
       setDetectedCommands("Stopped listening");
@@ -758,6 +763,7 @@ export const useHandsfreeBible = ({
       const attemptId = ++connectionAttemptRef.current;
       listeningRequestedAtRef.current = performance.now();
       firstPartialSeenRef.current = false;
+      useHFBStore.getState().setHfbCurrentPartial("");
       setIsSleepMode(false);
       // Reflect the user's action immediately. Connection readiness remains an
       // internal concern; the same button can stop a pending start.

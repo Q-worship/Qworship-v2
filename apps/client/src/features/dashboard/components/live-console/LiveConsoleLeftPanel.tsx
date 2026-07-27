@@ -31,9 +31,14 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
   // Auto-scroll transcript
   useEffect(() => {
     if (transcriptEndRef.current) {
-      transcriptEndRef.current.scrollIntoView({ behavior: "smooth" });
+      // Interim text can update several times per second. Instant scrolling
+      // avoids a queue of smooth-scroll animations falling behind speech.
+      transcriptEndRef.current.scrollIntoView({
+        behavior: "auto",
+        block: "nearest",
+      });
     }
-  }, [hfbStore.hfbTranscriptLines]);
+  }, [hfbStore.hfbTranscriptLines, hfbStore.hfbCurrentPartial]);
 
   // Auto-scroll detections
   useEffect(() => {

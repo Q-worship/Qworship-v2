@@ -27,6 +27,13 @@ import WebSocket from "ws";
 
 // KeepAlive interval — must be less than Deepgram's 10-second timeout
 const KEEPALIVE_INTERVAL_MS = 8000;
+const RECOGNITION_WINDOW_WORDS = 24;
+const TRANSCRIPT_WINDOW_WORDS = 40;
+
+function takeLastWords(text: string, limit: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length > limit ? words.slice(-limit).join(" ") : words.join(" ");
+}
 
 export class DeepgramTranscriptionService extends EventEmitter {
   private socket: WebSocket | null = null;
@@ -242,15 +249,43 @@ export class DeepgramTranscriptionService extends EventEmitter {
                 ...this.finalizedTranscriptParts,
                 ...(isFinal ? [] : [transcript.trim()]),
               ].join(" ").trim();
+              // Keep command recognition constant-time during uninterrupted
+              // speech. The wider display window remains readable while the
+              // parser receives only the words most likely to contain a newly
+              // spoken Bible reference.
+              const recognitionText = takeLastWords(
+                accumulated || transcript,
+                RECOGNITION_WINDOW_WORDS,
+              );
+              const displayText = takeLastWords(
+                accumulated || transcript,
+                TRANSCRIPT_WINDOW_WORDS,
+              );
 
               if (speechFinal) {
                 console.log(
                   `[Deepgram] Final (speech_final=${speechFinal}, is_final=${isFinal}): "${transcript.slice(0, 80)}"`
                 );
-                this.emit("final", accumulated || transcript, confidence);
+                this.emit("final", displayText, confidence, recognitionText);
                 this.finalizedTranscriptParts = [];
               } else {
-                this.emit("partial_raw", accumulated || transcript, confidence);
+                this.emit(
+                  "partial_raw",
+                  recognitionText,
+                  confidence,
+                  displayText,
+                );
+                // Deepgram can finalize several internal segments before VAD
+                // closes an utterance. Compact those segments so this buffer
+                // cannot grow for the duration of a long sermon sentence.
+                if (isFinal) {
+                  this.finalizedTranscriptParts = [
+                    takeLastWords(
+                      this.finalizedTranscriptParts.join(" "),
+                      TRANSCRIPT_WINDOW_WORDS,
+                    ),
+                  ];
+                }
               }
             }
           }
@@ -408,6 +443,10 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
   setContext(context: any) {
     console.log("[Deepgram] Context updated:", context);
+  }
+
+  resetTranscriptContext() {
+    this.finalizedTranscriptParts = [];
   }
 
   stop() {

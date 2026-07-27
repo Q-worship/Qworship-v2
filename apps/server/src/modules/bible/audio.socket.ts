@@ -284,11 +284,15 @@ export function setupAudioSocket(server: Server) {
      *      - Has book+chapter: scan for full ref again (verse may have just arrived)
      *   3. Notify UI of progressive state changes
      */
-    const processPartial = async (text: string, confidence: number) => {
+    const processPartial = async (
+      text: string,
+      confidence: number,
+      displayText = text,
+    ) => {
       // Always send live transcript to UI
       ws.send(JSON.stringify({
         type: "transcript_partial",
-        text,
+        text: displayText,
         confidence,
         serverReceivedAt: Date.now(),
       }));
@@ -399,16 +403,24 @@ export function setupAudioSocket(server: Server) {
     };
 
     // ── Tier 1: Partial (streaming, mid-sentence) ──────────────────────────
-    transcriptionService.on("partial_raw", async (text: string, confidence: number) => {
-      currentPartialText = text;
+    transcriptionService.on("partial_raw", async (
+      recognitionText: string,
+      confidence: number,
+      displayText?: string,
+    ) => {
+      currentPartialText = recognitionText;
       console.log(
-        `[AudioSocket][${T()}] PARTIAL [conf:${confidence?.toFixed(2)}]: "${text.slice(0,80)}"`,
+        `[AudioSocket][${T()}] PARTIAL [conf:${confidence?.toFixed(2)}]: "${recognitionText.slice(0,80)}"`,
         {
           traceId,
           clickToPartialMs: clientClickAt ? Date.now() - clientClickAt : undefined,
         },
       );
-      await processPartial(text, confidence);
+      await processPartial(
+        recognitionText,
+        confidence,
+        displayText || recognitionText,
+      );
     });
 
     // ── Tier 2: End-of-turn flush ──────────────────────────────────────────
@@ -430,19 +442,24 @@ export function setupAudioSocket(server: Server) {
     transcriptionService.on("utterance_end", () => handleEOT("UtteranceEnd"));
 
     // ── Tier 3: Final transcript ───────────────────────────────────────────
-    transcriptionService.on("final", async (text: string, confidence: number) => {
-      console.log(`[AudioSocket][${T()}] FINAL [conf:${confidence?.toFixed(2)}]: "${text.slice(0,80)}"`);
+    transcriptionService.on("final", async (
+      displayText: string,
+      confidence: number,
+      recognitionText?: string,
+    ) => {
+      const textToParse = recognitionText || displayText;
+      console.log(`[AudioSocket][${T()}] FINAL [conf:${confidence?.toFixed(2)}]: "${textToParse.slice(0,80)}"`);
       currentPartialText = "";
       resetPartialState();
 
-      ws.send(JSON.stringify({ type: "transcript_final", text }));
+      ws.send(JSON.stringify({ type: "transcript_final", text: displayText }));
 
       if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
         console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
         return;
       }
 
-      const cmd = FastBibleParser.parse(text);
+      const cmd = FastBibleParser.parse(textToParse);
       if (cmd) await executeCommand(cmd, "Final");
     });
 
@@ -482,6 +499,9 @@ export function setupAudioSocket(server: Server) {
             firstAudioAt = 0;
             audioChunkCount = 0;
             audioByteCount = 0;
+            currentPartialText = "";
+            resetPartialState();
+            transcriptionService.resetTranscriptContext();
             console.log("[HFB Trace] Session started", {
               traceId,
               clientToServerControlMs: clientClickAt

@@ -123,10 +123,13 @@ export const useHFBStore = create<HFBStore>((set) => ({
   hfbTranscriptLines: [],
   addHfbTranscriptLine: (line) => set((state) => {
     const newLines = [...state.hfbTranscriptLines, line];
-    // MEMORY MGMT: Prune to last 50 lines to prevent UI lag
-    return { hfbTranscriptLines: newLines.slice(-50) };
+    // Keep only the immediately useful transcript context.
+    return { hfbTranscriptLines: newLines.slice(-10) };
   }),
-  clearHfbTranscript: () => set({ hfbTranscriptLines: [] }),
+  clearHfbTranscript: () => set({
+    hfbTranscriptLines: [],
+    hfbCurrentPartial: '',
+  }),
   hfbCurrentPartial: '',
   setHfbCurrentPartial: (text) => set({ hfbCurrentPartial: text }),
 
@@ -262,6 +265,7 @@ export const useHFBStore = create<HFBStore>((set) => ({
     hfbChapterVerses: [],
     hfbActiveVerseNum: null,
     hfbTranscriptLines: [],
+    hfbCurrentPartial: '',
     hfbDetectedVerses: [],
     hfbCurrentProjected: null,
     hfbLastLatencyMs: null,
