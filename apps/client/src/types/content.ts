@@ -250,6 +250,32 @@ export interface DownloadResourceLink {
   icon: string
 }
 
+export interface ReleaseFeatureUpdate {
+  id: string
+  title: string
+  body: string
+  table?: {
+    columnLabels: [string, string]
+    rows: [string, string][]
+  }
+}
+
+export interface ReleaseVersionEntry {
+  id: string
+  version: string
+  tagline: string
+  releasedDate: string
+  platform: 'windows' | 'macos'
+  featureUpdates: ReleaseFeatureUpdate[]
+  releaseNotes: string[]
+}
+
+export interface DownloadsResourceContent {
+  releaseVersions: ReleaseVersionEntry[]
+  releaseNotesFooter: string
+  systemSpecificationsNote: string
+}
+
 export interface DownloadsPageCopy {
   banner: {
     title: string
@@ -267,6 +293,7 @@ export interface DownloadsPageCopy {
   }
   platforms: DownloadPlatform[]
   resourceLinks: DownloadResourceLink[]
+  resourceContent: DownloadsResourceContent
   onlineCta: {
     heading: { before: string; accent: string }
     body: string

@@ -5553,6 +5553,169 @@ body.mobile-nav-open {
   flex-shrink: 0;
 }
 
+.downloads-resource-link-chevron {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 0.2s;
+}
+
+.downloads-resource-link-chevron--open {
+  transform: rotate(180deg);
+}
+
+.downloads-resource-panel {
+  padding: 1.75rem 1.5rem 2rem;
+  border-radius: 0.5rem;
+  background: #131316;
+  margin-top: 0.5rem;
+}
+
+.downloads-release-version {
+  padding-bottom: 2rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.downloads-release-version:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.downloads-release-version-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.375rem;
+}
+
+.downloads-release-tagline {
+  font-size: 0.9375rem;
+  color: #bf36ff;
+  margin: 0 0 0.375rem;
+}
+
+.downloads-release-date {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 1.5rem;
+}
+
+.downloads-release-features {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.downloads-release-feature h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem;
+}
+
+.downloads-release-feature p {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.downloads-release-table-wrap {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.downloads-release-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.downloads-release-table th {
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  color: #bf36ff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  white-space: nowrap;
+}
+
+.downloads-release-table td {
+  padding: 0.625rem 0.875rem;
+  color: #d1d5db;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.downloads-release-platform-toggle {
+  display: inline-flex;
+  gap: 0.375rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background: #1a1a1d;
+  margin-bottom: 1.75rem;
+}
+
+.downloads-release-platform-btn {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.375rem;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.downloads-release-platform-btn--active {
+  background: #bf36ff;
+  color: #fff;
+}
+
+.downloads-release-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.downloads-release-notes-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #9ca3af;
+}
+
+.downloads-release-notes-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.15rem;
+  border-radius: 3px;
+  color: #fff;
+  background: #bf36ff;
+}
+
+.downloads-release-empty {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.downloads-release-footer {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 2rem 0 0;
+}
+
 .downloads-online-cta-section {
   background: #000;
 }
