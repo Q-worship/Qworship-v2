@@ -14,6 +14,7 @@ import { resolveCachedHFBVerse, useHFBStore } from "./useHFBStore";
 import { apiClient } from "@/lib/api";
 import { parseHFBReference } from "../lib/hfbFastReferenceParser";
 import { ensureBibleVersionCached } from "@/hooks/useBibleSync";
+import { parseBibleVersionCommand } from "../data/bibleTranslations";
 
 interface UseHandsfreeBibleProps {
   liveWindow: Window | null;
@@ -31,6 +32,7 @@ export const useHandsfreeBible = ({
     (state) => state.setHfbConnectionStatus,
   );
   const hfbVersion = useHFBStore((state) => state.hfbVersion);
+  const loadHfbPreferences = useHFBStore((state) => state.loadHfbPreferences);
   // Store actions
   const { setMode: setDisplayMode } = useDisplayModeStore();
   const {
@@ -111,6 +113,12 @@ export const useHandsfreeBible = ({
     setSelectedBibleVersion(normalized);
     setZustandBibleVersion(normalized);
   }, [hfbVersion, setZustandBibleVersion]);
+
+  useEffect(() => {
+    if (isHandsfreeBibleOpen || isPanelActive) {
+      void loadHfbPreferences();
+    }
+  }, [isHandsfreeBibleOpen, isPanelActive, loadHfbPreferences]);
 
   // Silently prepare the active translation for client-side predictive
   // projection. This never blocks the HFB panel or microphone controls.
@@ -451,6 +459,24 @@ export const useHandsfreeBible = ({
     }, INACTIVITY_TIMEOUT_MS);
   }, [clearInactivityTimer, stopRecording]);
 
+  const applyVoiceVersionChange = (version: string) => {
+    const normalized = version.toUpperCase();
+    if (selectedBibleVersionRef.current === normalized) return;
+
+    selectedBibleVersionRef.current = normalized;
+    setSelectedBibleVersion(normalized);
+    useHFBStore.getState().setHfbVersion(normalized);
+    setZustandBibleVersion(normalized);
+    setDetectedCommands(`Switched to ${normalized}`);
+    void ensureBibleVersionCached(normalized).catch(() => undefined);
+
+    const ctx = currentVerseContextRef.current;
+    if (ctx?.book && ctx.chapter && ctx.verse) {
+      console.log(`[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`);
+      void executeNavigation("jump_to_verse", undefined, ctx.verse, undefined, normalized);
+    }
+  };
+
   const {
     connect, disconnect, sendPCMData, isConnected, setStrictMode,
     setBibleVersion, beginSessionTrace,
@@ -471,12 +497,16 @@ export const useHandsfreeBible = ({
       resetInactivityTimer();
       setMicrophoneStatus("Processing");
       useHFBStore.getState().setHfbCurrentPartial(text);
+      const requestedVersion = parseBibleVersionCommand(text);
+      if (requestedVersion) applyVoiceVersionChange(requestedVersion);
       void processInterimLocally(text, metadata);
     },
     onFinalTranscript: (text) => {
       resetInactivityTimer();
       setMicrophoneStatus("Listening");
       useHFBStore.getState().setHfbCurrentPartial(""); // Clear partial when final arrives
+      const requestedVersion = parseBibleVersionCommand(text);
+      if (requestedVersion) applyVoiceVersionChange(requestedVersion);
       if (text.trim()) {
         useHFBStore.getState().addHfbTranscriptLine({
           id: Date.now(),
@@ -499,24 +529,7 @@ export const useHandsfreeBible = ({
     },
     onVersionChange: (version) => {
       resetInactivityTimer();
-      const normalized = version.toUpperCase();
-      // QC64: Update the synchronous ref FIRST so executeNavigation reads the
-      // new version immediately (React state setter is async and won't flush
-      // until the next render cycle).
-      selectedBibleVersionRef.current = normalized;
-      setSelectedBibleVersion(normalized);
-      useHFBStore.getState().setHfbVersion(normalized);
-      setZustandBibleVersion(normalized);
-      setDetectedCommands(`Switched to ${normalized}`);
-
-      // Re-project the current verse in the new version
-      const ctx = currentVerseContextRef.current;
-      if (ctx && ctx.book && ctx.chapter && ctx.verse) {
-        console.log(`[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`);
-        // Pass normalized as overrideVersion so the API call uses the new version,
-        // not the stale selectedBibleVersion React state value.
-        executeNavigation("jump_to_verse", undefined, ctx.verse, undefined, normalized);
-      }
+      applyVoiceVersionChange(version);
     },
     onNavigation: (commandType, direction, targetVerse, offset) => {
       resetInactivityTimer();

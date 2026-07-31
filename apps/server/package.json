@@ -7,6 +7,8 @@
     "build": "tsc && mkdir -p dist/modules/bible/data && cp -r src/modules/bible/data/. dist/modules/bible/data/",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "migrate:auth-onboarding": "tsx src/scripts/migrate-auth-onboarding.ts",
+    "import:bible-export": "tsx src/scripts/import-wide-bible-export.ts",
+    "audit:bible": "tsx src/scripts/audit-bible-database.ts",
     "check:brevo": "tsx src/scripts/check-brevo-smtp.ts"
   },
   "dependencies": {

@@ -1,5 +1,6 @@
 import fs from "fs";
 import { BibleVerse } from "./bible.model.js";
+import { isBibleVersionCode } from "./bible-translations.js";
 
 export class BibleImportService {
   /**
@@ -7,7 +8,7 @@ export class BibleImportService {
    * (fastBibleImport, fullBibleImport, quickBibleImport, robustBibleImport, etc.)
    */
   static async importBibleJSON(filePath: string, versionKey: string) {
-    if (!["kjv", "nkjv", "amp", "msg", "esv", "niv"].includes(versionKey)) {
+    if (!isBibleVersionCode(versionKey)) {
       throw new Error(`Unsupported version: ${versionKey}`);
     }
 

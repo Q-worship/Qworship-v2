@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { DeepgramTranscriptionService } from "./deepgram.service.js";
 import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
+import { isBibleVersionCode } from "./bible-translations.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -487,7 +488,7 @@ export function setupAudioSocket(server: Server) {
 
           if (msg.type === "set_bible_version") {
             const requestedVersion = String(msg.version || "").toLowerCase();
-            if (["kjv", "nkjv", "niv", "esv", "amp", "msg"].includes(requestedVersion)) {
+            if (isBibleVersionCode(requestedVersion)) {
               activeVersion = requestedVersion;
               console.log(`[AudioSocket] Active Bible version: ${activeVersion.toUpperCase()}`);
             }

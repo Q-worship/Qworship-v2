@@ -180,16 +180,20 @@ export class DeepgramTranscriptionService extends EventEmitter {
     const TRANSLATION_TERMS = [
       "King James", "New King James", "New International",
       "English Standard", "Amplified", "The Message",
-      "KJV", "NKJV", "NIV", "ESV", "AMP",
+      "Good News Translation", "New Living Translation",
+      "New Revised Standard Version", "American Standard Version",
+      "Young's Literal Translation", "World English Bible", "Webster Bible",
+      "KJV", "NKJV", "NIV", "ESV", "AMP", "MSG", "GN", "NLT",
+      "NRSV", "ASV", "YLT", "WEB", "WEBSTER",
     ];
     const ESSENTIAL_COMMANDS = [
       "chapter", "verse", "next verse", "previous verse", "switch to", "go to",
     ];
     const prioritizedKeyterms = [
       ...CANONICAL_BIBLE_BOOKS,
-      ...SPOKEN_NUMBERED_BOOKS,
       ...TRANSLATION_TERMS,
       ...ESSENTIAL_COMMANDS,
+      ...SPOKEN_NUMBERED_BOOKS,
     ].slice(0, 100);
     for (const term of prioritizedKeyterms) {
       deepgramUrl.searchParams.append("keyterm", term);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SearchIcon, InfoIcon, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, ChevronDown, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from '../../../lib/api';
+import { HFBTranslationControls } from './live-console/HFBTranslationControls';
 
 interface OnScreenBibleEditorProps {
   content: any;
@@ -37,9 +38,6 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
       setSearchInput(content.reference);
     }
   }, [content?.reference]);
-
-  // Bible versions from your requirements
-  const bibleVersions = ['KJV', 'NKJV', 'NIV', 'AMP', 'GN', 'MSG', 'ESV'];
 
   // Display options
   const [showBibleReference, setShowBibleReference] = useState<string>(content?.referenceDisplay || 'every-slide');
@@ -407,24 +405,11 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
         <div className="w-full flex flex-col h-full">
           {/* Bible Version Tabs - Moved from above */}
           <div className="px-4 py-2 border-b border-gray-600 flex-shrink-0">
-            <div className="flex items-center space-x-1">
-              {bibleVersions.map((version) => (
-                <button
-                  key={version}
-                  onClick={() => handleVersionChange(version)}
-                  className={`px-3 py-1 text-sm font-medium rounded transition-all ${
-                    activeVersion === version
-                      ? 'bg-[#8356F3] text-white'
-                      : 'text-purple-300 hover:text-white hover:bg-purple-700/50'
-                  }`}
-                >
-                  {version}
-                </button>
-              ))}
-              <button className="px-3 py-1 text-sm font-medium text-purple-300 hover:text-white hover:bg-purple-700/50 rounded transition-all">
-                Add more
-              </button>
-            </div>
+            <HFBTranslationControls
+              activeVersion={activeVersion}
+              onVersionSelect={(version) => handleVersionChange(version.toUpperCase())}
+              accent="purple"
+            />
           </div>
           
 

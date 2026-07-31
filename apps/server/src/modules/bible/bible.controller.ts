@@ -2,6 +2,12 @@ import { Request, Response } from 'express';
 import { BibleService } from './bible.service.js';
 import type { BibleReference } from './bible.service.js';
 import { BibleVerse, BibleTranslation } from './bible.model.js';
+import {
+  BIBLE_TRANSLATIONS,
+  BIBLE_VERSION_KEYS,
+  isBibleVersionCode,
+} from './bible-translations.js';
+import { getCanonicalBibleCoordinates } from './bible-admin.service.js';
 
 export const searchBible = async (req: Request, res: Response) => {
   try {
@@ -45,22 +51,23 @@ export const searchBible = async (req: Request, res: Response) => {
       const requestedVersion = (searchReference.version || 'kjv').toLowerCase();
       
       const mappedVerses = result.verses.map(v => ({
-         number: v.verse,
-         // The DB stores versions as lowercase keys: v.kjv, v.nkjv, etc.
-         text: (v as any)[requestedVersion] || ''
+        number: v.verse,
+        text: String((v as any)[requestedVersion] || '').trim(),
       }));
-      if (mappedVerses.some(verse => !verse.text.trim())) {
+      const availableVerses = mappedVerses.filter(verse => verse.text);
+      if (!availableVerses.length) {
         return res.status(422).json({
           success: false,
           code: 'TRANSLATION_TEXT_MISSING',
-          message: `${requestedVersion.toUpperCase()} text is missing for part of ${result.formattedReference}`,
+          message: `${requestedVersion.toUpperCase()} text is missing for ${result.formattedReference}`,
         });
       }
 
       const passage = {
          reference: result.formattedReference,
          version: result.version || requestedVersion.toUpperCase(),
-         verses: mappedVerses,
+         verses: availableVerses,
+         missingVerses: mappedVerses.filter(verse => !verse.text).map(verse => verse.number),
          book: result.book,
          chapter: result.chapter
       };
@@ -246,14 +253,26 @@ export const structuredSearchBible = async (req: Request, res: Response) => {
 
     if (result && result.verses.length > 0) {
       const requestedVersion = String(reference.version || 'kjv').toLowerCase();
-      if (result.verses.some((verse: any) => !String(verse[requestedVersion] || '').trim())) {
+      const availableVerses = result.verses.filter((verse: any) =>
+        String(verse[requestedVersion] || '').trim(),
+      );
+      if (!availableVerses.length) {
         return res.status(422).json({
           success: false,
           code: 'TRANSLATION_TEXT_MISSING',
           message: `${requestedVersion.toUpperCase()} text is missing for this reference`,
         });
       }
-      return res.json({ success: true, result });
+      return res.json({
+        success: true,
+        result: {
+          ...result,
+          verses: availableVerses,
+          missingVerses: result.verses
+            .filter((verse: any) => !String(verse[requestedVersion] || '').trim())
+            .map(verse => verse.verse),
+        },
+      });
     } else {
       return res.status(404).json({ success: false, message: 'Bible reference not found' });
     }
@@ -266,9 +285,8 @@ export const structuredSearchBible = async (req: Request, res: Response) => {
 export const exportBibleVersion = async (req: Request, res: Response) => {
   try {
     const version = (req.params.version || 'kjv').toLowerCase();
-    const validVersions = ['kjv', 'nkjv', 'amp', 'msg', 'esv', 'niv'];
 
-    if (!validVersions.includes(version)) {
+    if (!isBibleVersionCode(version)) {
       return res.status(400).json({ success: false, message: 'Invalid version specified' });
     }
 
@@ -279,13 +297,16 @@ export const exportBibleVersion = async (req: Request, res: Response) => {
       { bookName: 1, chapter: 1, verse: 1, [version]: 1, _id: 0 }
     ).sort({ bookName: 1, chapter: 1, verse: 1 }).lean();
 
-    const payload = verses.map((v: any) => ({
-      book: v.bookName,
-      chapter: v.chapter,
-      verse: v.verse,
-      text: v[version] || '',
-      version: version
-    }));
+    const canonical = getCanonicalBibleCoordinates();
+    const payload = verses
+      .filter((v: any) => canonical.has(`${v.bookName}|${v.chapter}|${v.verse}`))
+      .map((v: any) => ({
+        book: v.bookName,
+        chapter: v.chapter,
+        verse: v.verse,
+        text: v[version] || '',
+        version,
+      }));
 
     const translation = await BibleTranslation.findOne({ code: version }, { revision: 1 }).lean();
     return res.json({
@@ -304,7 +325,24 @@ export const exportBibleVersion = async (req: Request, res: Response) => {
 export const getBibleRevisions = async (_req: Request, res: Response) => {
   const translations = await BibleTranslation.find({}, { code: 1, revision: 1, _id: 0 }).lean();
   const revisions: Record<string, number> = {};
-  for (const version of ['kjv', 'nkjv', 'amp', 'msg', 'esv', 'niv']) revisions[version] = 1;
+  for (const version of BIBLE_VERSION_KEYS) revisions[version] = 1;
   translations.forEach((item: any) => { revisions[item.code] = item.revision || 1; });
   return res.json({ success: true, revisions });
+};
+
+export const getBibleTranslations = async (_req: Request, res: Response) => {
+  const stored = await BibleTranslation.find({}, {
+    code: 1, revision: 1, source: 1, license: 1, lastImportedAt: 1, _id: 0,
+  }).lean();
+  const storedByCode = new Map(stored.map((item: any) => [item.code, item]));
+  return res.json({
+    success: true,
+    translations: BIBLE_TRANSLATIONS.map(item => ({
+      code: item.code,
+      abbreviation: item.abbreviation,
+      displayName: item.displayName,
+      revision: (storedByCode.get(item.code) as any)?.revision || 1,
+      imported: storedByCode.has(item.code),
+    })),
+  });
 };

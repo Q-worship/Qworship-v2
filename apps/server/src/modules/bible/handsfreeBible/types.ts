@@ -14,7 +14,9 @@ export interface BibleReference {
   version: BibleVersion;
 }
 
-export type BibleVersion = 'kjv' | 'nkjv' | 'niv' | 'esv' | 'amp' | 'msg' | 'gn';
+export type BibleVersion =
+  | 'kjv' | 'nkjv' | 'niv' | 'esv' | 'amp' | 'msg' | 'gn'
+  | 'nlt' | 'nrsv' | 'asv' | 'ylt' | 'web' | 'webster';
 
 export interface ParsedCommand {
   originalText: string;

@@ -2,6 +2,10 @@ import { normalizeBookName } from "./handsfreeBible/index.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  BIBLE_VERSION_KEYS,
+  type BibleVersionCode,
+} from "./bible-translations.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,8 +27,10 @@ const getCanonicalCoordinates = () => {
   return canonicalCoordinates;
 };
 
-export const BIBLE_VERSION_KEYS = ["kjv", "nkjv", "amp", "msg", "esv", "niv"] as const;
-export type ManagedBibleVersion = typeof BIBLE_VERSION_KEYS[number];
+export const getCanonicalBibleCoordinates = () => new Set(getCanonicalCoordinates());
+
+export { BIBLE_VERSION_KEYS };
+export type ManagedBibleVersion = BibleVersionCode;
 
 export interface ParsedBibleVerse {
   book: string;

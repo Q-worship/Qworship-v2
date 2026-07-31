@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signIn, signUp, verifyEmail, resendVerification, requestPasswordReset, resetPassword, updateProfile, updatePassword } from './auth.controller.js';
+import { signIn, signUp, verifyEmail, resendVerification, requestPasswordReset, resetPassword, updateProfile, updatePassword, getBiblePreferences, updateBiblePreferences } from './auth.controller.js';
 import { rateLimit } from './rate-limit.middleware.js';
 
 export const authRouter = Router();
@@ -54,6 +54,7 @@ const currentUserHandler = [protect, async (req: any, res: any) => {
         onboardingCompletedAt: req.user.onboardingCompletedAt,
         selectedFeatures: req.user.selectedFeatures,
         trialStatus: req.user.trialStatus,
+        biblePreferences: req.user.biblePreferences,
         createdAt: req.user.createdAt
       },
       organizations: organizations.map(org => ({ id: org._id, name: org.name }))
@@ -71,3 +72,5 @@ authRouter.get('/current', ...currentUserHandler as any);
 const protectMiddlewares = [protect] as any;
 authRouter.put('/profile', ...protectMiddlewares, updateProfile as any);
 authRouter.put('/update-password', ...protectMiddlewares, updatePassword as any);
+authRouter.get('/bible-preferences', ...protectMiddlewares, getBiblePreferences as any);
+authRouter.put('/bible-preferences', ...protectMiddlewares, updateBiblePreferences as any);

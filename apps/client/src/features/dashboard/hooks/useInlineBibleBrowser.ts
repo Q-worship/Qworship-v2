@@ -33,7 +33,7 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
   const [bibleChapterNum, setBibleChapterNum] = useState(0);
   // -1 means the operator is still navigating and has not committed a verse.
   const [bibleVerseIndex, setBibleVerseIndex] = useState(-1);
-  const [selBibleVersion, setSelBibleVersion] = useState<typeof BIBLE_VERSIONS_LCC[number]>('KJV');
+  const [selBibleVersion, setSelBibleVersion] = useState<string>('KJV');
   const [biblePassage, setBiblePassage] = useState<BiblePassage | null>(null);
   const [bibleIsLoading, setBibleIsLoading] = useState(false);
   const [bibleSearch, setBibleSearch] = useState('');
@@ -180,7 +180,7 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
     if (bibleVerseListRef.current) bibleVerseListRef.current.scrollTop = 0;
   }, [bibleBookIndex, selBibleVersion, fetchBibleChapter]);
 
-  const handleVersionChange = useCallback(async (v: typeof BIBLE_VERSIONS_LCC[number]) => {
+  const handleVersionChange = useCallback(async (v: string) => {
     setSelBibleVersion(v);
     setBibleVerseIndex(-1);
     setBiblePassage(null);

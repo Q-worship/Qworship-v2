@@ -224,6 +224,20 @@ export class FastBibleParser {
     { re: /\bmessage\s+(?:bible|version)\b/i,           version: "msg" },
     { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?(?:the\s+)?message\b/i, version: "msg" },
     { re: /\b(?:show\s+me\s+(?:the\s+)?|switch\s+to\s+|use\s+|change\s+to\s+|let'?s?\s+see\s+(?:the\s+)?|read\s+in\s+(?:the\s+)?)?msg\b/i,           version: "msg" },
+    // ── Additional translations ─────────────────────────────────────────────
+    { re: /\bgood\s+news(?:\s+(?:bible|translation))?\b/i, version: "gn" },
+    { re: /\b(?:gn|gnt)\b/i, version: "gn" },
+    { re: /\bnew\s+living\s+translation\b/i, version: "nlt" },
+    { re: /\bnlt\b/i, version: "nlt" },
+    { re: /\bnew\s+revised\s+standard\s+version\b/i, version: "nrsv" },
+    { re: /\bnrsv\b/i, version: "nrsv" },
+    { re: /\bamerican\s+standard\s+version\b/i, version: "asv" },
+    { re: /\basv\b/i, version: "asv" },
+    { re: /\byoung'?s\s+literal(?:\s+translation)?\b/i, version: "ylt" },
+    { re: /\bylt\b/i, version: "ylt" },
+    { re: /\bworld\s+english\s+bible\b/i, version: "web" },
+    { re: /\bweb\b/i, version: "web" },
+    { re: /\bwebster'?s?(?:\s+bible)?\b/i, version: "webster" },
   ];
 
   // ─── Public API ───────────────────────────────────────────────────────────
@@ -298,14 +312,21 @@ export class FastBibleParser {
     let clean = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
     clean = this.normalizeNumbers(clean);
 
-    // 1. Version switch — QC64: scan all VERSION_PATTERNS (full names first, then abbreviations)
+    // 1. Version switch — choose the latest mention in the rolling transcript.
+    // Deepgram partials can still contain an older version name before the
+    // operator's newest command ("we were in KJV; show me NRSV").
+    let latestVersionMatch: { version: string; index: number } | null = null;
     for (const vp of this.VERSION_PATTERNS) {
-      if (vp.re.test(clean)) {
-        return {
-          name: "switch_bible_version",
-          arguments: { version: vp.version },
-        };
+      const match = vp.re.exec(clean);
+      if (match && (!latestVersionMatch || match.index > latestVersionMatch.index)) {
+        latestVersionMatch = { version: vp.version, index: match.index };
       }
+    }
+    if (latestVersionMatch) {
+      return {
+        name: "switch_bible_version",
+        arguments: { version: latestVersionMatch.version },
+      };
     }
 
     // 2a. Goto-verse (QC63): "verse N" / "take me to verse N" / "go to verse N"

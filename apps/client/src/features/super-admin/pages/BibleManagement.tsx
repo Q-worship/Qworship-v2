@@ -9,8 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { BIBLE_TRANSLATIONS, type BibleVersionCode } from "@/features/dashboard/data/bibleTranslations";
 
-const VERSIONS = ["kjv", "nkjv", "amp", "msg", "esv", "niv"] as const;
+const VERSIONS = BIBLE_TRANSLATIONS.map(item => item.code);
 
 interface ManagedVerse {
   id: string;
@@ -35,9 +36,10 @@ interface ImportPreview {
 
 export function BibleManagement() {
   const { toast } = useToast();
-  const [version, setVersion] = useState<(typeof VERSIONS)[number]>("kjv");
+  const [version, setVersion] = useState<BibleVersionCode>("kjv");
   const [coverage, setCoverage] = useState<Record<string, number>>({});
   const [totalCoordinates, setTotalCoordinates] = useState(0);
+  const [invalidCoordinates, setInvalidCoordinates] = useState(0);
   const [book, setBook] = useState("Genesis");
   const [chapter, setChapter] = useState("1");
   const [missingOnly, setMissingOnly] = useState(false);
@@ -62,6 +64,7 @@ export function BibleManagement() {
     const data = await response.json();
     setCoverage(data.coverage || {});
     setTotalCoordinates(data.total || 0);
+    setInvalidCoordinates(data.invalidCoordinates || 0);
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -196,6 +199,13 @@ export function BibleManagement() {
           <p className="text-2xl font-bold mt-2">{percentage}%</p>
         </div>
       </div>
+
+      {invalidCoordinates > 0 && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+          {invalidCoordinates.toLocaleString()} non-canonical database coordinates were excluded from coverage and exports.
+          They cannot appear in Bible search or HFB projection.
+        </div>
+      )}
 
       <section className="rounded-xl border bg-card p-5 space-y-4">
         <div className="flex items-center gap-2"><Search className="w-5 h-5" /><h2 className="font-semibold">Browse and edit verses</h2></div>

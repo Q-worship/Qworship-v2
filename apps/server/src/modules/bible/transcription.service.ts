@@ -72,7 +72,7 @@ export class TranscriptionService extends EventEmitter {
                   chapter: { type: "number", description: "The chapter number." },
                   verse_start: { type: "number", description: "The starting verse number." },
                   verse_end: { type: "number", description: "The optional ending verse number." },
-                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV"], description: "The Bible version." }
+                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV", "GN", "NLT", "NRSV", "ASV", "YLT", "WEB", "WEBSTER"], description: "The Bible version." }
                 },
                 required: ["book", "chapter", "verse_start"]
               }
@@ -97,7 +97,7 @@ export class TranscriptionService extends EventEmitter {
               parameters: {
                 type: "object",
                 properties: {
-                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV", "NLT", "NASB", "KJV-BR", "RVR1960"] }
+                  version: { type: "string", enum: ["KJV", "NKJV", "NIV", "AMP", "MSG", "ESV", "GN", "NLT", "NRSV", "ASV", "YLT", "WEB", "WEBSTER"] }
                 },
                 required: ["version"]
               }

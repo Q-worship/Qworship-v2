@@ -12,6 +12,13 @@ export interface IBibleVerse extends Document {
   msg?: string;
   esv?: string;
   niv?: string;
+  gn?: string;
+  nlt?: string;
+  nrsv?: string;
+  asv?: string;
+  ylt?: string;
+  web?: string;
+  webster?: string;
 }
 
 const BibleVerseSchema = new Schema<IBibleVerse>({
@@ -25,6 +32,13 @@ const BibleVerseSchema = new Schema<IBibleVerse>({
   msg: String,
   esv: String,
   niv: String,
+  gn: String,
+  nlt: String,
+  nrsv: String,
+  asv: String,
+  ylt: String,
+  web: String,
+  webster: String,
 });
 
 // Compound index for ultra-fast verse lookup: Book -> Chapter -> Verse
@@ -51,7 +65,7 @@ const BibleImportJobSchema = new Schema({
   license: String,
   received: Number,
   written: Number,
-  status: { type: String, enum: ['completed', 'rolled-back', 'failed'], default: 'completed' },
+  status: { type: String, enum: ['running', 'completed', 'rolled-back', 'failed'], default: 'completed' },
 }, { timestamps: true });
 
 export const BibleImportJob = mongoose.model('BibleImportJob', BibleImportJobSchema);
@@ -73,7 +87,7 @@ export interface ISpeechSession extends Document {
   currentBook?: string;
   currentChapter?: number;
   currentVerse?: number;
-  currentVersion: 'kjv' | 'nkjv' | 'amp' | 'msg' | 'esv' | 'niv';
+  currentVersion: string;
   lastCommand?: string;
   contextData?: string;
   isActive: boolean;

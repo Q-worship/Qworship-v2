@@ -26,6 +26,9 @@ export interface IUser extends Document {
   selectedFeatures: string[];
   trialStatus: 'not_started' | 'active' | 'expired' | 'converted' | 'cancelled';
   trialActivatedAt?: Date;
+  biblePreferences?: {
+    pinnedVersions: string[];
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +60,12 @@ const UserSchema = new Schema<IUser>(
     trialStatus: { type: String, enum: ['not_started', 'active', 'expired', 'converted', 'cancelled'], default: 'not_started' },
     trialActivatedAt: { type: Date },
     subscriptionStatus: { type: String, default: 'inactive' },
+    biblePreferences: {
+      pinnedVersions: {
+        type: [String],
+        default: ['kjv', 'nkjv', 'niv', 'msg', 'esv', 'amp'],
+      },
+    },
   },
   { timestamps: true }
 );

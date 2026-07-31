@@ -9,6 +9,7 @@ import {
 import { BibleService } from "../bible/bible.service.js";
 import {
   BIBLE_VERSION_KEYS,
+  getCanonicalBibleCoordinates,
   parseBibleInput,
   type ManagedBibleVersion,
   type ParsedBibleVerse,
@@ -189,7 +190,7 @@ const OT_BOOKS = new Set([
 export const seedBibleTranslation = async (req: Request, res: Response) => {
   try {
     const { version, verses } = req.body;
-    const validVersions = ["amp", "msg", "kjv", "nkjv", "esv", "niv"];
+    const validVersions = BIBLE_VERSION_KEYS;
 
     if (!validVersions.includes(version)) {
       return res
@@ -505,17 +506,33 @@ export const updateManagedBibleVerse = async (req: Request, res: Response) => {
  */
 export const getBibleCoverage = async (req: Request, res: Response) => {
   try {
-    const versions = ["kjv", "nkjv", "amp", "msg", "esv", "niv"];
-    const coverage: Record<string, number> = {};
-
-    for (const v of versions) {
-      coverage[v] = await BibleVerse.countDocuments({
-        [v]: { $exists: true, $nin: ["", null] },
-      });
+    const canonical = getCanonicalBibleCoordinates();
+    const coverage: Record<string, number> = Object.fromEntries(
+      BIBLE_VERSION_KEYS.map(version => [version, 0]),
+    );
+    const projection = Object.fromEntries([
+      ["bookName", 1], ["chapter", 1], ["verse", 1],
+      ...BIBLE_VERSION_KEYS.map(version => [version, 1]),
+    ]);
+    const rows = await BibleVerse.find({}, projection).lean();
+    let invalidCoordinates = 0;
+    for (const row of rows as any[]) {
+      if (!canonical.has(`${row.bookName}|${row.chapter}|${row.verse}`)) {
+        invalidCoordinates += 1;
+        continue;
+      }
+      for (const version of BIBLE_VERSION_KEYS) {
+        if (typeof row[version] === "string" && row[version].trim()) {
+          coverage[version] += 1;
+        }
+      }
     }
-
-    const total = await BibleVerse.countDocuments();
-    res.json({ success: true, total, coverage });
+    res.json({
+      success: true,
+      total: canonical.size,
+      coverage,
+      invalidCoordinates,
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -12,6 +12,12 @@ import memoizee from "memoizee";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  BIBLE_VERSION_ALIASES,
+  BIBLE_VERSION_ALIAS_PATTERN,
+  BIBLE_VERSION_KEYS,
+  BUNDLED_BIBLE_VERSION_KEYS,
+} from "./bible-translations.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,13 +83,17 @@ const REGEX_PATTERNS = {
 
   // Version switching patterns: "show me NKJV", "switch to NIV", "use the ESV"
   // Captures the version name in group 1 - supports full conversational names
-  versionSwitch:
-    /^(?:show\s+(?:me\s+)?(?:the\s+)?|switch\s+to\s+(?:the\s+)?|use\s+(?:the\s+)?|change\s+(?:to\s+)?(?:the\s+)?|in\s+(?:the\s+)?|read\s+(?:it\s+)?in\s+(?:the\s+)?|display\s+(?:in\s+)?(?:the\s+)?|give\s+(?:me\s+)?(?:the\s+)?|let\s+me\s+(?:see|hear)\s+(?:the\s+)?|i\s+want\s+(?:the\s+)?|can\s+(?:you\s+)?(?:show|read)\s+(?:me\s+)?(?:the\s+)?)(kjv|nkjv|niv|esv|amp|msg|gn|gnt|amplified|amplified\s+bible|king\s+james|king\s+james\s+version|new\s+king\s+james|new\s+king\s+james\s+version|message|the\s+message|good\s+news|good\s+news\s+bible|good\s+news\s+translation|english\s+standard|english\s+standard\s+version|new\s+international|new\s+international\s+version)(?:\s+(?:version|translation|bible))?$/i,
+  versionSwitch: new RegExp(
+    `^(?:show\\s+(?:me\\s+)?(?:the\\s+)?|switch\\s+to\\s+(?:the\\s+)?|use\\s+(?:the\\s+)?|change\\s+(?:to\\s+)?(?:the\\s+)?|in\\s+(?:the\\s+)?|read\\s+(?:it\\s+)?in\\s+(?:the\\s+)?|display\\s+(?:in\\s+)?(?:the\\s+)?|give\\s+(?:me\\s+)?(?:the\\s+)?|let\\s+me\\s+(?:see|hear)\\s+(?:the\\s+)?|i\\s+want\\s+(?:the\\s+)?|can\\s+(?:you\\s+)?(?:show|read)\\s+(?:me\\s+)?(?:the\\s+)?)(${BIBLE_VERSION_ALIAS_PATTERN})(?:\\s+(?:version|translation|bible))?$`,
+    "i",
+  ),
 
   // Simple version-only pattern (after conversational stripping): "nkjv", "amplified version", "msg"
   // This catches cases where "show me the NKJV" becomes just "nkjv" after stripping
-  versionOnly:
-    /^(?:the\s+)?(kjv|nkjv|niv|esv|amp|msg|gn|gnt|amplified|amplified\s+bible|king\s+james|king\s+james\s+version|new\s+king\s+james|new\s+king\s+james\s+version|message|the\s+message|good\s+news|good\s+news\s+bible|good\s+news\s+translation|english\s+standard|english\s+standard\s+version|new\s+international|new\s+international\s+version)(?:\s+(?:version|translation|bible))?$/i,
+  versionOnly: new RegExp(
+    `^(?:the\\s+)?(${BIBLE_VERSION_ALIAS_PATTERN})(?:\\s+(?:version|translation|bible))?$`,
+    "i",
+  ),
 
   // Standard reference patterns: "John 3:16", "Genesis 1:1-3", "John 3.16"
   colonFormat:
@@ -125,12 +135,7 @@ export interface BibleSearchResult {
   chapter: number;
   verses: Array<{
     verse: number;
-    kjv: string | null;
-    nkjv: string | null;
-    amp: string | null;
-    msg: string | null;
-    esv: string | null;
-    niv: string | null;
+    [version: string]: string | number | null;
   }>;
   version: string;
   formattedReference: string;
@@ -203,7 +208,7 @@ export class BibleService {
     console.log("[BibleService] Initializing In-Memory Bible Store...");
     const startTime = performance.now();
     const dataDir = path.join(__dirname, "data");
-    const versions = ["kjv", "nkjv", "amp", "msg", "esv", "niv"];
+    const versions = BUNDLED_BIBLE_VERSION_KEYS;
 
     for (const version of versions) {
       const filePath = path.join(dataDir, `${version}.json`);
@@ -234,7 +239,10 @@ export class BibleService {
     // the bundled baseline so admin repairs are effective after every restart.
     const databaseVerses = await BibleVerse.find(
       {},
-      { bookName: 1, chapter: 1, verse: 1, kjv: 1, nkjv: 1, amp: 1, msg: 1, esv: 1, niv: 1 },
+      Object.fromEntries([
+        ["bookName", 1], ["chapter", 1], ["verse", 1],
+        ...versions.map(version => [version, 1]),
+      ]),
     ).lean();
     for (const row of databaseVerses as any[]) {
       for (const version of versions) {
@@ -295,12 +303,7 @@ export class BibleService {
       chapter: ref.chapter,
       verses: filtered.map(v => ({
         verse: v.verse,
-        kjv: version === 'kjv' ? v.text : null,
-        nkjv: version === 'nkjv' ? v.text : null,
-        amp: version === 'amp' ? v.text : null,
-        msg: version === 'msg' ? v.text : null,
-        esv: version === 'esv' ? v.text : null,
-        niv: version === 'niv' ? v.text : null,
+        [version]: v.text,
       })),
       version: version.toUpperCase(),
       formattedReference: verseEnd > ref.verseStart 
@@ -492,51 +495,8 @@ export class BibleService {
     rev: "Revelation",
   };
 
-  private static readonly VERSION_ALIASES: Record<string, BibleVersion> = {
-    // King James Version
-    "king james": "kjv",
-    "king james version": "kjv",
-    "the king james": "kjv",
-    "the king james version": "kjv",
-    kjv: "kjv",
-    // New King James Version
-    "new king james": "nkjv",
-    "new king james version": "nkjv",
-    "the new king james": "nkjv",
-    "the new king james version": "nkjv",
-    nkjv: "nkjv",
-    // Amplified Bible
-    amplified: "amp",
-    "amplified bible": "amp",
-    "the amplified": "amp",
-    "the amplified bible": "amp",
-    amp: "amp",
-    // The Message
-    message: "msg",
-    "the message": "msg",
-    "the message bible": "msg",
-    msg: "msg",
-    // English Standard Version
-    "english standard": "esv",
-    "english standard version": "esv",
-    "the english standard": "esv",
-    "the english standard version": "esv",
-    esv: "esv",
-    // New International Version
-    "new international": "niv",
-    "new international version": "niv",
-    "the new international": "niv",
-    "the new international version": "niv",
-    niv: "niv",
-    // Good News Translation
-    "good news": "gn",
-    "good news bible": "gn",
-    "good news translation": "gn",
-    "the good news": "gn",
-    "the good news bible": "gn",
-    gn: "gn",
-    gnt: "gn",
-  };
+  private static readonly VERSION_ALIASES: Record<string, BibleVersion> =
+    BIBLE_VERSION_ALIASES as Record<string, BibleVersion>;
 
   private static readonly SLEEP_COMMANDS = [
     "ok",
@@ -1410,33 +1370,7 @@ export class BibleService {
   ): BibleVersion | null {
     const normalized = versionText.toLowerCase().trim().replace(/\s+/g, " ");
 
-    const versionMap: Record<string, BibleVersion> = {
-      kjv: "kjv",
-      "king james": "kjv",
-      "king james version": "kjv",
-      nkjv: "nkjv",
-      "new king james": "nkjv",
-      "new king james version": "nkjv",
-      niv: "niv",
-      "new international": "niv",
-      "new international version": "niv",
-      esv: "esv",
-      "english standard": "esv",
-      "english standard version": "esv",
-      amp: "amp",
-      amplified: "amp",
-      "amplified bible": "amp",
-      msg: "msg",
-      message: "msg",
-      "the message": "msg",
-      gn: "gn",
-      gnt: "gn",
-      "good news": "gn",
-      "good news bible": "gn",
-      "good news translation": "gn",
-    };
-
-    return versionMap[normalized] || null;
+    return (BIBLE_VERSION_ALIASES[normalized] as BibleVersion | undefined) || null;
   }
 
   /**
@@ -2319,11 +2253,21 @@ export class BibleService {
       }
 
       // 2. Fallback to Mongoose for verse query (Only if JSON store isn't ready/found)
-      const verseResults = await BibleVerse.find({
-        bookName: new RegExp(`^${normalizedBookName}$`, 'i'),
-        chapter: reference.chapter,
-        verse: { $gte: reference.verseStart, $lte: verseEnd },
-      }).sort({ verse: 1 }).lean();
+      const databaseResults = await BibleVerse.find(
+        {
+          bookName: new RegExp(`^${normalizedBookName}$`, 'i'),
+          chapter: reference.chapter,
+          verse: { $gte: reference.verseStart, $lte: verseEnd },
+        },
+        { bookName: 1, chapter: 1, verse: 1, [version]: 1 },
+      ).sort({ verse: 1 }).lean();
+      const canonicalVerseNumbers = new Set(
+        (this.bibleStore.kjv?.[normalizedBookName]?.[reference.chapter] || [])
+          .map(item => item.verse),
+      );
+      const verseResults = canonicalVerseNumbers.size
+        ? databaseResults.filter((item: any) => canonicalVerseNumbers.has(item.verse))
+        : databaseResults;
 
       if (verseResults.length === 0) {
         console.error(
@@ -2338,15 +2282,18 @@ export class BibleService {
       );
 
       // We need to map the verses to ensure they conform to the expected shape (no _id, exact properties)
-      const formattedVerses = verseResults.map((v) => ({
+      const formattedVerses = verseResults.map((v: any) => ({
         verse: v.verse,
-        kjv: v.kjv || null,
-        nkjv: v.nkjv || null,
-        amp: v.amp || null,
-        msg: v.msg || null,
-        esv: v.esv || null,
-        niv: v.niv || null,
+        [version]: typeof v[version] === "string" ? v[version] : null,
       }));
+
+      for (const item of verseResults as any[]) {
+        if (typeof item[version] === "string" && item[version].trim()) {
+          this.upsertMemoryVerse(
+            version, item.bookName, item.chapter, item.verse, item[version].trim(),
+          );
+        }
+      }
 
       // Normalize the book name based on the actual DB result
       const exactBookName = verseResults[0].bookName || normalizedBookName;

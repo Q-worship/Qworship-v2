@@ -2,6 +2,7 @@ import { useLiveConsoleStore } from "../../hooks/useLiveConsoleStore";
 import { ChevronRight, Music, Timer, Mic } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useHFBStore } from "../../hooks/useHFBStore";
+import { HFBTranslationControls } from "./HFBTranslationControls";
 
 interface CenterStageProps {
   bibleProps: any;
@@ -59,26 +60,11 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                 Clear screen
               </button>
             </div>
-            {/* Translation tabs — equal-width, full-row */}
-            <div className="flex items-center gap-1.5">
-              {bibleProps.BIBLE_VERSIONS.map((v: string) => (
-                <button
-                  key={v}
-                  onClick={() => bibleProps.handleVersionChange(v)}
-                  className={`flex-1 py-1.5 text-[11px] font-bold rounded transition-all duration-150 tracking-wide ${
-                    bibleProps.selBibleVersion === v
-                      ? 'text-white'
-                      : 'text-white hover:brightness-110'
-                  }`}
-                  style={bibleProps.selBibleVersion === v
-                    ? { background: '#6366f1', boxShadow: '0 0 8px rgba(99,102,241,0.5)' }
-                    : { background: '#0d1020', border: '1px solid rgba(255,255,255,0.08)' }
-                  }
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
+            <HFBTranslationControls
+              activeVersion={bibleProps.selBibleVersion}
+              onVersionSelect={(version) => bibleProps.handleVersionChange(version.toUpperCase())}
+              accent="purple"
+            />
           </div>
 
           {/* Verse list — 2-column grid */}
@@ -323,29 +309,7 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                 </button>
               )}
             </div>
-            {/* Version tabs */}
-            <div className="flex items-center gap-1.5">
-              {['KJV','NKJV','NIV','MSG','ESV','AMP'].map(v => (
-                <button
-                  key={v}
-                  onClick={() => {
-                     hfbStore.setHfbVersion(v);
-                     if (hfbStore.hfbBookName && hfbStore.hfbChapter) {
-                        hfbStore.fetchHFBChapter(hfbStore.hfbBookName, hfbStore.hfbChapter, v, hfbStore.hfbActiveVerseNum ?? undefined);
-                     }
-                  }}
-                  className={`flex-1 py-1.5 text-[11px] font-bold rounded transition-all tracking-wide ${
-                    hfbStore.hfbVersion === v ? 'text-white' : 'text-gray-300 hover:brightness-110'
-                  }`}
-                  style={hfbStore.hfbVersion === v
-                    ? { background: '#0e7490', boxShadow: '0 0 8px rgba(14,116,144,0.5)' }
-                    : { background: '#0d1020', border: '1px solid rgba(255,255,255,0.08)' }
-                  }
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
+            <HFBTranslationControls liveWindow={liveWindow} />
           </div>
 
           {/* Verse list */}

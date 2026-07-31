@@ -2,6 +2,32 @@ import { create } from 'zustand';
 import { db } from '../../../lib/db';
 import { useBibleRAMCache } from './useBibleRAMCache';
 import { apiClient } from '../../../lib/api';
+import {
+  BIBLE_VERSION_KEYS,
+  DEFAULT_PINNED_BIBLE_VERSIONS,
+  type BibleVersionCode,
+} from '../data/bibleTranslations';
+
+const HFB_PREFERENCES_STORAGE_KEY = 'qworship_hfb_pinned_versions';
+
+const normalizePinnedVersions = (values: unknown): BibleVersionCode[] => {
+  if (!Array.isArray(values)) return DEFAULT_PINNED_BIBLE_VERSIONS;
+  const normalized = [...new Set(values
+    .map(value => String(value).toLowerCase())
+    .filter((value): value is BibleVersionCode =>
+      BIBLE_VERSION_KEYS.includes(value as BibleVersionCode),
+    ))].slice(0, 6);
+  return normalized.length ? normalized : DEFAULT_PINNED_BIBLE_VERSIONS;
+};
+
+const readStoredPinnedVersions = (): BibleVersionCode[] => {
+  if (typeof window === 'undefined') return DEFAULT_PINNED_BIBLE_VERSIONS;
+  try {
+    return normalizePinnedVersions(JSON.parse(localStorage.getItem(HFB_PREFERENCES_STORAGE_KEY) || 'null'));
+  } catch {
+    return DEFAULT_PINNED_BIBLE_VERSIONS;
+  }
+};
 
 
 export interface HFBChapterVerse {
@@ -58,6 +84,11 @@ interface HFBStore {
   // Version config
   hfbVersion: string;
   setHfbVersion: (version: string) => void;
+  hfbPinnedVersions: BibleVersionCode[];
+  hfbPreferencesLoaded: boolean;
+  setHfbPinnedVersions: (versions: BibleVersionCode[]) => void;
+  loadHfbPreferences: () => Promise<void>;
+  saveHfbPreferences: (versions: BibleVersionCode[]) => Promise<void>;
 
   // Strict Mode
   hfbStrictMode: boolean;
@@ -103,9 +134,44 @@ interface HFBStore {
   clearAllState: () => void;
 }
 
-export const useHFBStore = create<HFBStore>((set) => ({
+export const useHFBStore = create<HFBStore>((set, get) => ({
   hfbVersion: 'KJV',
   setHfbVersion: (version) => set({ hfbVersion: version }),
+  hfbPinnedVersions: readStoredPinnedVersions(),
+  hfbPreferencesLoaded: false,
+  setHfbPinnedVersions: (versions) => {
+    const normalized = normalizePinnedVersions(versions);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(HFB_PREFERENCES_STORAGE_KEY, JSON.stringify(normalized));
+    }
+    set({ hfbPinnedVersions: normalized });
+  },
+  loadHfbPreferences: async () => {
+    if (get().hfbPreferencesLoaded) return;
+    try {
+      const response = await apiClient.get('/auth/bible-preferences');
+      const normalized = normalizePinnedVersions(response.data?.pinnedVersions);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(HFB_PREFERENCES_STORAGE_KEY, JSON.stringify(normalized));
+      }
+      set({ hfbPinnedVersions: normalized, hfbPreferencesLoaded: true });
+    } catch (error) {
+      console.warn('[HFB] Using locally cached Bible preferences', error);
+      set({ hfbPreferencesLoaded: true });
+    }
+  },
+  saveHfbPreferences: async (versions) => {
+    const normalized = normalizePinnedVersions(versions);
+    if (normalized.length > 6) throw new Error('Choose no more than 6 translations');
+    const response = await apiClient.put('/auth/bible-preferences', {
+      pinnedVersions: normalized,
+    });
+    const saved = normalizePinnedVersions(response.data?.pinnedVersions);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(HFB_PREFERENCES_STORAGE_KEY, JSON.stringify(saved));
+    }
+    set({ hfbPinnedVersions: saved, hfbPreferencesLoaded: true });
+  },
 
   hfbStrictMode: false,
   setHfbStrictMode: (strict) => set({ hfbStrictMode: strict }),

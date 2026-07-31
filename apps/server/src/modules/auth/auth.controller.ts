@@ -6,6 +6,10 @@ import { User } from './auth.model.js';
 import { EmailVerification } from './email-verification.model.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from './email.service.js';
 import { notifyPasswordChange } from '../notifications/notification.service.js';
+import {
+  DEFAULT_PINNED_BIBLE_VERSIONS,
+  isBibleVersionCode,
+} from '../bible/bible-translations.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -35,6 +39,11 @@ function publicUser(user: any) {
     trialStartDate: user.trialStartDate,
     trialEndDate: user.trialEndDate,
     subscriptionStatus: user.subscriptionStatus,
+    biblePreferences: {
+      pinnedVersions: user.biblePreferences?.pinnedVersions?.length
+        ? user.biblePreferences.pinnedVersions
+        : DEFAULT_PINNED_BIBLE_VERSIONS,
+    },
   };
 }
 
@@ -236,4 +245,31 @@ export const updatePassword = async (req: Request, res: Response) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Server error updating password' });
   }
+};
+
+export const getBiblePreferences = async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  return res.json({
+    success: true,
+    pinnedVersions: user.biblePreferences?.pinnedVersions?.length
+      ? user.biblePreferences.pinnedVersions
+      : DEFAULT_PINNED_BIBLE_VERSIONS,
+  });
+};
+
+export const updateBiblePreferences = async (req: Request, res: Response) => {
+  const values = Array.isArray(req.body?.pinnedVersions)
+    ? req.body.pinnedVersions.map((value: unknown) => String(value).toLowerCase())
+    : [];
+  const unique = [...new Set(values)];
+  if (unique.length < 1 || unique.length > 6 || unique.some(value => !isBibleVersionCode(value))) {
+    return res.status(400).json({
+      success: false,
+      message: 'Choose between 1 and 6 unique supported Bible translations',
+    });
+  }
+  const user = (req as any).user;
+  user.biblePreferences = { pinnedVersions: unique };
+  await user.save();
+  return res.json({ success: true, pinnedVersions: unique });
 };
