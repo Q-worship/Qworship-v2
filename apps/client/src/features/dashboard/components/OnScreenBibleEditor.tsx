@@ -3,6 +3,7 @@ import { SearchIcon, InfoIcon, Bold, Italic, Underline, Strikethrough, AlignLeft
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from '../../../lib/api';
 import { HFBTranslationControls } from './live-console/HFBTranslationControls';
+import { useBibleProjectionStore } from '@/stores/useBibleProjectionStore';
 
 interface OnScreenBibleEditorProps {
   content: any;
@@ -244,6 +245,28 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
             
             // Call parent update with updated content and slides
             onUpdate(updatedContent);
+
+            // If this Bible item currently owns the live projection, preserve
+            // the selected verse and atomically replace only its translation.
+            const projection = useBibleProjectionStore.getState();
+            const current = projection.currentVerse;
+            if (projection.isProjecting && current &&
+                current.book.toLowerCase() === String(result.book || current.book).toLowerCase() &&
+                current.chapter === Number(result.chapter || current.chapter)) {
+              const translatedVerse = result.verses.find(
+                (item: any) => Number(item.number) === current.verse,
+              );
+              if (translatedVerse?.text?.trim()) {
+                projection.setVerse({
+                  book: current.book,
+                  chapter: current.chapter,
+                  verse: current.verse,
+                  text: translatedVerse.text,
+                  version,
+                  [version.toLowerCase()]: translatedVerse.text,
+                }, projection.formattedReference, version);
+              }
+            }
             
             // Show version change success
             toast({

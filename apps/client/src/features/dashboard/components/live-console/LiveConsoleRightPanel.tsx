@@ -86,7 +86,10 @@ export function LiveConsoleRightPanel({ liveWindow }: RightPanelProps) {
               )}
               {store.previewProjectionType === 'bible' && store.previewBibleProjection && (
                 <div className="text-center w-full px-1">
-                  <div className="text-purple-300 font-semibold mb-1" style={{ fontSize: '7px' }}>{store.previewBibleProjection.reference}</div>
+                  <div className="flex items-center justify-center gap-1 text-purple-300 font-semibold mb-1" style={{ fontSize: '7px' }}>
+                    <span>{store.previewBibleProjection.reference}</span>
+                    <span className="text-purple-200/70 uppercase">• {store.previewBibleProjection.version}</span>
+                  </div>
                   <div className="text-white font-medium leading-relaxed" style={{ fontSize: '7px', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{store.previewBibleProjection.text}</div>
                 </div>
               )}
@@ -156,13 +159,23 @@ export function LiveConsoleRightPanel({ liveWindow }: RightPanelProps) {
             className="relative overflow-hidden rounded-lg border border-gray-700"
             style={{ height: '220px', background: '#000' }}
           >
-            {/* Black background for lower third preview */}
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/60" />
 
             <div className="absolute inset-0 flex flex-col justify-end p-2 pb-4 pointer-events-none">
               <div className="bg-gradient-to-r from-purple-900/90 to-indigo-900/90 border border-purple-500/50 rounded p-3 shadow-2xl backdrop-blur-md">
-                 <h4 className="text-white text-xs font-bold uppercase tracking-wider">{activeData?.reference || "Lower Third Preview"}</h4>
-                 <p className="text-gray-200 text-xs mt-1 leading-snug">{activeData?.verse || "Active lower third template output will appear here."}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-white text-xs font-bold uppercase tracking-wider">
+                    {activeData?.reference || "Lower Third Preview"}
+                  </h4>
+                  {activeData?.type === 'scripture' && activeData.version && (
+                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-purple-200">
+                      {activeData.version}
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-200 text-xs mt-1 leading-snug">
+                  {activeData?.verse || "Active lower third template output will appear here."}
+                </p>
               </div>
             </div>
           </div>

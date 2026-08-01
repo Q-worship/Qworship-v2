@@ -337,6 +337,7 @@ export const useLowerThirdStore = create<LowerThirdState>((set, get) => {
     setSelectedTemplateId: (id) => {
       set({ selectedTemplateId: id });
       persistState({ ...get(), selectedTemplateId: id });
+      get().broadcastState();
     },
 
     setScriptureTemplateId: (id) => {
@@ -346,16 +347,33 @@ export const useLowerThirdStore = create<LowerThirdState>((set, get) => {
         scriptureTemplateId: id,
         selectedTemplateId: id,
       });
+      get().broadcastState();
+      const state = get();
+      if (state.activeData?.type === "scripture" && state.isVisible) {
+        pushToServer({ templateId: id, activeData: state.activeData, isVisible: true });
+      }
     },
 
     setLyricTemplateId: (id) => {
       set({ lyricTemplateId: id });
       persistState({ ...get(), lyricTemplateId: id });
+      const state = get();
+      if (state.activeData?.type === "lyrics" && state.isVisible) {
+        set({ selectedTemplateId: id });
+        get().broadcastState();
+        pushToServer({ templateId: id, activeData: state.activeData, isVisible: true });
+      }
     },
 
     setAnnouncementTemplateId: (id) => {
       set({ announcementTemplateId: id });
       persistState({ ...get(), announcementTemplateId: id });
+      const state = get();
+      if (state.activeData?.type === "announcement" && state.isVisible) {
+        set({ selectedTemplateId: id });
+        get().broadcastState();
+        pushToServer({ templateId: id, activeData: state.activeData, isVisible: true });
+      }
     },
 
     addCustomTemplate: async (template) => {
@@ -386,6 +404,15 @@ export const useLowerThirdStore = create<LowerThirdState>((set, get) => {
       await apiUpdateTemplate(template).catch((err) => {
         console.error("[LT Store] updateCustomTemplate server error:", err.message);
       });
+      const state = get();
+      if (state.selectedTemplateId === template.id && state.activeData && state.isVisible) {
+        state.broadcastState();
+        pushToServer({
+          templateId: template.id,
+          activeData: state.activeData,
+          isVisible: true,
+        });
+      }
     },
 
     setThumbnailOverride: (templateId, url) => {

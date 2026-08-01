@@ -474,9 +474,18 @@ export const useLivePresentation = ({
                 | "amp"
                 | "gn"
                 | "msg"
-                | "esv";
+                | "esv"
+                | "nlt"
+                | "nrsv"
+                | "asv"
+                | "ylt"
+                | "web"
+                | "webster";
               const text =
                 bibleStore.currentVerse[versionKey] ||
+                (bibleStore.currentVerse.version?.toLowerCase() === versionKey
+                  ? bibleStore.currentVerse.text
+                  : "") ||
                 bibleStore.currentVerse.kjv ||
                 "";
 

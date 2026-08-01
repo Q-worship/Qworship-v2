@@ -3,7 +3,6 @@ import { BIBLE_BOOKS_LCC, BIBLE_VERSIONS_LCC } from '../data/bibleBooks';
 import { db } from '../../../lib/db';
 import { useBibleRAMCache } from './useBibleRAMCache';
 import { apiClient } from '../../../lib/api';
-import { ensureBibleVersionCached } from '../../../hooks/useBibleSync';
 
 let revisionCheck: Promise<Record<string, number>> | null = null;
 const getBibleRevisions = () => {
@@ -61,15 +60,25 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
       const memEndTime = performance.now();
 
       if (ramVerses && ramVerses.length > 0) {
-        const p: BiblePassage = {
-          book: bookName, chapter, verses: ramVerses as BibleVerse[],
-          version: version.toUpperCase(),
-          reference: `${bookName} ${chapter}`,
-        };
-        setBiblePassage(p);
-        setBibleIsLoading(false);
-        console.log(`🚀 [RAM CACHE] Fetched ${bookName} ${chapter} (${vKey}) in ${(memEndTime - memStartTime).toFixed(2)}ms`);
-        return p;
+        const hasEmptyTranslationText = ramVerses.some(
+          verse => !String(verse.text || '').trim(),
+        );
+        if (hasEmptyTranslationText) {
+          console.warn(
+            `[RAM CACHE] Discarding incomplete ${vKey.toUpperCase()} cache for ${bookName} ${chapter}`,
+          );
+          useBibleRAMCache.getState().setChapterInRam(vKey, bookName, chapter, []);
+        } else {
+          const p: BiblePassage = {
+            book: bookName, chapter, verses: ramVerses as BibleVerse[],
+            version: version.toUpperCase(),
+            reference: `${bookName} ${chapter}`,
+          };
+          setBiblePassage(p);
+          setBibleIsLoading(false);
+          console.log(`🚀 [RAM CACHE] Fetched ${bookName} ${chapter} (${vKey}) in ${(memEndTime - memStartTime).toFixed(2)}ms`);
+          return p;
+        }
       }
 
       // 1. Try Local IndexedDB fetching
@@ -81,20 +90,33 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
 
       if (localVerses && localVerses.length > 0) {
         localVerses.sort((a: any, b: any) => a.verse - b.verse);
-        const mappedVerses: BibleVerse[] = localVerses.map((v: any) => ({
-          number: v.verse,
-          text: v.text || '',
-        }));
+        const hasEmptyTranslationText = localVerses.some(
+          (verse: any) => !String(verse.text || '').trim(),
+        );
+        if (hasEmptyTranslationText) {
+          console.warn(
+            `[IndexedDB] Discarding incomplete ${vKey.toUpperCase()} cache for ${bookName} ${chapter}`,
+          );
+          await db.verses
+            .where({ version: vKey, book: bookName, chapter })
+            .delete();
+          useBibleRAMCache.getState().setChapterInRam(vKey, bookName, chapter, []);
+        } else {
+          const mappedVerses: BibleVerse[] = localVerses.map((v: any) => ({
+            number: v.verse,
+            text: v.text || '',
+          }));
 
-        const p: BiblePassage = {
-          book: bookName, chapter, verses: mappedVerses,
-          version: version.toUpperCase(),
-          reference: `${bookName} ${chapter}`,
-        };
-        setBiblePassage(p);
-        setBibleIsLoading(false);
-        console.log(`🚀 [IndexedDB] Fetched ${bookName} ${chapter} (${vKey}) locally in ${(endTime - startTime).toFixed(2)}ms`);
-        return p;
+          const p: BiblePassage = {
+            book: bookName, chapter, verses: mappedVerses,
+            version: version.toUpperCase(),
+            reference: `${bookName} ${chapter}`,
+          };
+          setBiblePassage(p);
+          setBibleIsLoading(false);
+          console.log(`🚀 [IndexedDB] Fetched ${bookName} ${chapter} (${vKey}) locally in ${(endTime - startTime).toFixed(2)}ms`);
+          return p;
+        }
       }
 
       // Only perform revision/network work after both local tiers miss.
@@ -181,15 +203,29 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
   }, [bibleBookIndex, selBibleVersion, fetchBibleChapter]);
 
   const handleVersionChange = useCallback(async (v: string) => {
+    const activeVerseNumber = bibleVerseIndex >= 0
+      ? biblePassage?.verses[bibleVerseIndex]?.number
+      : undefined;
     setSelBibleVersion(v);
-    setBibleVerseIndex(-1);
-    setBiblePassage(null);
     if (bibleChapterNum > 0) {
-      await fetchBibleChapter(
+      const translatedPassage = await fetchBibleChapter(
         BIBLE_BOOKS_LCC[bibleBookIndex].name, bibleChapterNum, v
       );
+      if (translatedPassage && activeVerseNumber !== undefined) {
+        const translatedIndex = translatedPassage.verses.findIndex(
+          verse => verse.number === activeVerseNumber,
+        );
+        if (translatedIndex >= 0) {
+          projectVerse(translatedPassage, translatedIndex);
+          return;
+        }
+      }
     }
-  }, [bibleBookIndex, bibleChapterNum, fetchBibleChapter]);
+    setBibleVerseIndex(-1);
+  }, [
+    bibleBookIndex, bibleChapterNum, biblePassage, bibleVerseIndex,
+    fetchBibleChapter, projectVerse,
+  ]);
 
   const handleVerseClick = useCallback((idx: number) => {
     setBibleVerseIndex(idx);
@@ -261,11 +297,35 @@ export function useInlineBibleBrowser({ onProjectVerse }: UseInlineBibleBrowserP
         selBibleVersion,
       );
     }
-    // Refresh the active translation silently; local data was already rendered.
-    void ensureBibleVersionCached(selBibleVersion).catch(() => undefined);
   }, [
     bibleBookIndex, bibleChapterNum, biblePassage,
     fetchBibleChapter, selBibleVersion,
+  ]);
+
+  useEffect(() => {
+    const refreshInvalidatedVersion = (event: Event) => {
+      const versions = (event as CustomEvent<{ versions?: string[] }>).detail?.versions || [];
+      if (!versions.includes(selBibleVersion.toLowerCase()) || bibleChapterNum <= 0) return;
+      const activeVerse = bibleVerseIndex >= 0
+        ? biblePassage?.verses[bibleVerseIndex]?.number
+        : undefined;
+      void (async () => {
+        const refreshed = await fetchBibleChapter(
+          BIBLE_BOOKS_LCC[bibleBookIndex].name,
+          bibleChapterNum,
+          selBibleVersion,
+        );
+        if (refreshed && activeVerse !== undefined) {
+          const index = refreshed.verses.findIndex(verse => verse.number === activeVerse);
+          if (index >= 0) projectVerse(refreshed, index);
+        }
+      })().catch(() => undefined);
+    };
+    window.addEventListener('qworship:bible-cache-invalidated', refreshInvalidatedVersion);
+    return () => window.removeEventListener('qworship:bible-cache-invalidated', refreshInvalidatedVersion);
+  }, [
+    bibleBookIndex, bibleChapterNum, biblePassage, bibleVerseIndex,
+    fetchBibleChapter, projectVerse, selBibleVersion,
   ]);
 
   return {

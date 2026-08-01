@@ -1,6 +1,7 @@
 import { useLiveConsoleStore } from "../../hooks/useLiveConsoleStore";
 import { ChevronRight, ChevronLeft, Maximize } from "lucide-react";
 import { useHFBStore } from "../../hooks/useHFBStore";
+import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 
 import { useMemo } from "react";
 
@@ -115,6 +116,11 @@ export function LiveConsoleBottomStrip({
                     }, window.location.origin);
                   }
                   hfbStore.setHfbCurrentProjected({ reference: v.reference, text: v.verseText, version: v.version });
+                  useBibleProjectionStore.getState().setVerse({
+                    book: v.book, chapter: v.chapter, verse: v.verseNum,
+                    text: v.verseText, version: v.version,
+                    [v.version.toLowerCase()]: v.verseText,
+                  }, v.reference, v.version);
                   hfbStore.setHfbDetectedVerses(prev => prev.map(d => ({ ...d, isActive: d.id === v.id })));
                   hfbStore.setHfbActiveVerseNum(v.verseNum);
                   hfbStore.fetchHFBChapter(v.book, v.chapter, v.version, v.verseNum);

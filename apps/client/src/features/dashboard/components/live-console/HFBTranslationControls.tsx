@@ -22,6 +22,7 @@ import {
   type BibleVersionCode,
 } from "../../data/bibleTranslations";
 import { useHFBStore } from "../../hooks/useHFBStore";
+import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 
 interface HFBTranslationControlsProps {
   liveWindow?: Window | null;
@@ -103,6 +104,14 @@ export function HFBTranslationControls({
     }
     const reference = `${stateAfter.hfbBookName} ${stateAfter.hfbChapter}:${verse.number}`;
     stateAfter.setHfbCurrentProjected({ reference, text: verse.text, version: abbreviation });
+    useBibleProjectionStore.getState().setVerse({
+      book: stateAfter.hfbBookName,
+      chapter: stateAfter.hfbChapter,
+      verse: verse.number,
+      text: verse.text,
+      version: abbreviation,
+      [version]: verse.text,
+    }, reference, abbreviation);
     if (liveWindow && !liveWindow.closed) {
       liveWindow.postMessage({
         type: "BIBLE_VERSE_DISPLAY",

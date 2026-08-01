@@ -359,8 +359,16 @@ export const LivePresentation = (): JSX.Element => {
         | "amp"
         | "gn"
         | "msg"
-        | "esv";
-      const text = currentVerse[versionKey] || currentVerse.kjv || "";
+        | "esv"
+        | "nlt"
+        | "nrsv"
+        | "asv"
+        | "ylt"
+        | "web"
+        | "webster";
+      const text = currentVerse[versionKey] ||
+        (currentVerse.version?.toLowerCase() === versionKey ? currentVerse.text : "") ||
+        currentVerse.kjv || "";
 
       console.log(
         "LivePresentation: Zustand store updated (HFB) - projecting verse as slide content:",

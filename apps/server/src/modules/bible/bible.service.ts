@@ -235,6 +235,18 @@ export class BibleService {
       }
     }
 
+    // Bundled translations are usable immediately. Additional translations
+    // intentionally use indexed MongoDB chapter lookups and are cached into
+    // memory on demand; loading every complete translation would substantially
+    // increase Coolify memory usage and startup time.
+    this.isInitialized = true;
+    const lazyVersions = BIBLE_VERSION_KEYS.filter(
+      version => !BUNDLED_BIBLE_VERSION_KEYS.includes(version),
+    );
+    console.log(
+      `[BibleService] Bundled memory ready; lazy chapter cache enabled for ${lazyVersions.map(v => v.toUpperCase()).join(", ")}`,
+    );
+
     // MongoDB is authoritative. Overlay every populated DB translation onto
     // the bundled baseline so admin repairs are effective after every restart.
     const databaseVerses = await BibleVerse.find(
@@ -254,9 +266,8 @@ export class BibleService {
     }
     console.log(`[BibleService] Applied ${databaseVerses.length} authoritative database verse records`);
 
-    this.isInitialized = true;
     const duration = performance.now() - startTime;
-    console.log(`\x1b[32m[BibleService] In-Memory Store Ready in ${duration.toFixed(2)}ms\x1b[0m`);
+    console.log(`\x1b[32m[BibleService] Authoritative memory overlay ready in ${duration.toFixed(2)}ms\x1b[0m`);
   }
 
   /**
@@ -691,13 +702,7 @@ export class BibleService {
           book: sessionContext?.currentBook || "",
           chapter: sessionContext?.currentChapter || 1,
           verseStart: sessionContext?.currentVerse || 1,
-          version: versionMatch as
-            | "kjv"
-            | "nkjv"
-            | "amp"
-            | "msg"
-            | "esv"
-            | "niv",
+          version: versionMatch as BibleVersion,
         },
         commandType: "version_change",
         confidence: 0.85,
@@ -2370,7 +2375,7 @@ export class BibleService {
       currentBook: string;
       currentChapter: number;
       currentVerse: number;
-      currentVersion: "kjv" | "nkjv" | "amp" | "msg" | "esv" | "niv";
+      currentVersion: BibleVersion;
       lastCommand: string;
       contextData: string;
     }>,

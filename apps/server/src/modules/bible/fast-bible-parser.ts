@@ -78,6 +78,12 @@ export class FastBibleParser {
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.95,
     },
+    // "1st Kings 2 verse 2" / "Romans 8 verse 12" — chapter cue omitted
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\w+)\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
+      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
+      confidence: 0.94,
+    },
     // "Matthew chapter 7 7" / "Matthew chapter 7 verse 7" without 'verse' keyword
     // This catches the common pattern where Deepgram drops the word 'verse'
     {
@@ -136,6 +142,16 @@ export class FastBibleParser {
    */
   private static readonly GOTO_VERSE_RE =
     /\b(?:take me to|go to|show me|jump to)?\s*verse\s+(\d+)\b/i;
+
+  /**
+   * Context-aware chapter + verse navigation. The current Bible book is kept,
+   * while both the chapter and verse are replaced.
+   *
+   * Examples: "chapter 4 verse 7", "show me chapter 4 verse 7",
+   * "go to chapter 4 verse 7", "look at chapter 4 verse 7".
+   */
+  private static readonly GOTO_CHAPTER_VERSE_RE =
+    /\b(?:(?:take me to|go to|show me|jump to|look at|look to|turn to|let'?s look at|let'?s go to)\s+)?chapter\s+(\d+)(?:\s*[,.:;-]\s*|\s+)(?:and\s+)?(?:verse\s+)?(\d+)\b/i;
 
   /**
    * QC63 — Expanded navigation patterns.
@@ -329,7 +345,33 @@ export class FastBibleParser {
       };
     }
 
-    // 2a. Goto-verse (QC63): "verse N" / "take me to verse N" / "go to verse N"
+    // 2a. Contextual chapter+verse: preserve the active book and replace both
+    //     numbers. This must be checked before the verse-only navigation rule.
+    const chapterVerseMatch = clean.match(this.GOTO_CHAPTER_VERSE_RE);
+    if (chapterVerseMatch) {
+      const chapter = parseInt(chapterVerseMatch[1]);
+      const verse = parseInt(chapterVerseMatch[2]);
+      // A spoken book name before "chapter" makes this a complete reference,
+      // not contextual navigation (e.g. "show me Genesis chapter 4 verse 7").
+      // Only inspect the unmatched prefix: otherwise conversational "look"
+      // can be mistaken for the phonetic Luke alias.
+      const unmatchedPrefix = clean.slice(0, chapterVerseMatch.index ?? 0);
+      const hasBook = unmatchedPrefix.trim().length > 0 &&
+        this.parseStage(unmatchedPrefix) !== null;
+      if (!hasBook && chapter >= 1 && chapter <= 150 && verse >= 1 && verse <= 176) {
+        return {
+          name: "navigate_bible",
+          arguments: {
+            direction: "goto",
+            scope: "chapter_verse",
+            chapter,
+            verse,
+          },
+        };
+      }
+    }
+
+    // 2b. Goto-verse (QC63): "verse N" / "take me to verse N" / "go to verse N"
     //     Checked BEFORE NAV_PATTERNS so "verse 10" doesn't get swallowed by
     //     the Bible reference scanner (which could misparse "verse" as a book name).
     //     Only fires when the transcript contains NO recognised book name — if a
@@ -351,7 +393,7 @@ export class FastBibleParser {
       }
     }
 
-    // 2b. Navigation (next/previous verse/chapter)
+    // 2c. Navigation (next/previous verse/chapter)
     for (const nav of this.NAV_PATTERNS) {
       if (nav.re.test(clean)) return nav.cmd;
     }
@@ -365,7 +407,23 @@ export class FastBibleParser {
    * Returns the highest-confidence complete reference found.
    */
   static scanForReference(text: string): any | null {
-    let best: { cmd: any; confidence: number } | null = null;
+    const references = this.scanForReferences(text);
+    if (!references.length) return null;
+    return references.reduce((best, current) =>
+      (current._confidence ?? 0) > (best._confidence ?? 0) ? current : best,
+    );
+  }
+
+  /**
+   * Scan a rolling transcript for every complete Bible reference.
+   *
+   * Multiple regex patterns can describe the same span, so matches are
+   * de-duplicated by transcript position + canonical reference and then
+   * returned in spoken order. The private transcript offsets are only used by
+   * the audio pipeline and are not included in Bible lookup responses.
+   */
+  static scanForReferences(text: string): any[] {
+    const candidates = new Map<string, any>();
 
     for (const pattern of this.SCAN_PATTERNS) {
       // Reset lastIndex for global regex
@@ -403,24 +461,23 @@ export class FastBibleParser {
             chapter,
             verse_start: verseStart,
             verse_end: verseEnd || null,
-            version: "kjv",
           },
           _confidence: pattern.confidence,
+          _start: match.index,
+          _end: pattern.re.lastIndex,
         };
 
-        // Keep the highest-confidence match
-        if (!best || pattern.confidence > best.confidence) {
-          best = { cmd, confidence: pattern.confidence };
+        const key = `${match.index}|${bookName}|${chapter}|${verseStart}|${verseEnd || verseStart}`;
+        const previous = candidates.get(key);
+        if (!previous || pattern.confidence > previous._confidence) {
+          candidates.set(key, cmd);
         }
-
-        // If we have a near-perfect match (colon format), stop scanning
-        if (pattern.confidence >= 0.95) break;
       }
-
-      if (best && best.confidence >= 0.95) break;
     }
 
-    return best ? best.cmd : null;
+    return [...candidates.values()].sort((left, right) =>
+      left._start - right._start || right._confidence - left._confidence,
+    );
   }
 
   // ─── Number normalisation ─────────────────────────────────────────────────
@@ -428,6 +485,10 @@ export class FastBibleParser {
   static normalizeNumbers(text: string): string {
     let t = text;
 
+    // Deepgram's `numerals=true` commonly renders spoken numbered books as
+    // "1st Kings", "2nd Samuel", and "3rd John". Canonicalize those before
+    // the goto-verse rule decides whether a book name is present.
+    t = t.replace(/\b([1-3])(?:st|nd|rd)\b/gi, "$1");
     // Ordinals first ("first" → "1")
     for (const [word, digit] of Object.entries(this.ORDINALS)) {
       t = t.replace(new RegExp(`\\b${word}\\b`, "gi"), digit);

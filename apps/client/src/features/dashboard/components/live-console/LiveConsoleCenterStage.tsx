@@ -3,6 +3,7 @@ import { ChevronRight, Music, Timer, Mic } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useHFBStore } from "../../hooks/useHFBStore";
 import { HFBTranslationControls } from "./HFBTranslationControls";
+import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 
 interface CenterStageProps {
   bibleProps: any;
@@ -345,6 +346,14 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                         const ref = `${hfbStore.hfbBookName} ${hfbStore.hfbChapter}:${verse.number}`;
                         hfbStore.setHfbActiveVerseNum(verse.number);
                         hfbStore.setHfbCurrentProjected({ reference: ref, text: verse.text, version: hfbStore.hfbVersion });
+                        useBibleProjectionStore.getState().setVerse({
+                          book: hfbStore.hfbBookName,
+                          chapter: hfbStore.hfbChapter,
+                          verse: verse.number,
+                          text: verse.text,
+                          version: hfbStore.hfbVersion,
+                          [hfbStore.hfbVersion.toLowerCase()]: verse.text,
+                        }, ref, hfbStore.hfbVersion);
                         hfbStore.setHfbDetectedVerses(prev => prev.map(d => ({ ...d, isActive: false })));
                         
                         if (liveWindow) {

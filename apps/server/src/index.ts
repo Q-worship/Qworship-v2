@@ -97,11 +97,17 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
-    await BibleService.initializeStore();
     const server = createServer(app);
     setupAudioSocket(server);
     server.listen(PORT, () => {
       console.log(`[Q-worship] Server running on port ${PORT}`);
+      // The bundled translations become available from memory first, while
+      // the authoritative MongoDB repair overlay warms in the background.
+      // Server health and targeted indexed Bible queries must not wait for the
+      // full collection transfer from Atlas.
+      void BibleService.initializeStore().catch((error) => {
+        console.error("[BibleService] Background memory warm-up failed:", error);
+      });
     });
   } catch (error) {
     console.error("Failed to start server:", error);

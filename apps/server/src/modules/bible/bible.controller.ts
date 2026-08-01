@@ -114,6 +114,7 @@ export const handleVoiceCommand = async (req: Request, res: Response) => {
       // Navigation context fields sent by executeNavigation()
       commandType: reqCommandType,
       direction,
+      targetChapter,
       targetVerse,
       currentBook,
       currentChapter,
@@ -147,6 +148,27 @@ export const handleVoiceCommand = async (req: Request, res: Response) => {
         }
       } else if (reqCommandType === 'jump_to_verse') {
         newVerseStart = parseInt(targetVerse) || verse;
+      } else if (reqCommandType === 'jump_to_chapter_verse') {
+        const newChapter = parseInt(targetChapter);
+        newVerseStart = parseInt(targetVerse);
+        if (!newChapter || !newVerseStart) {
+          return res.json({
+            success: false,
+            error: 'A valid chapter and verse are required',
+            commandType: reqCommandType,
+          });
+        }
+        const ref: BibleReference = {
+          book,
+          chapter: newChapter,
+          verseStart: newVerseStart,
+          version: version as any,
+        };
+        const result = await BibleService.searchBible(ref);
+        if (result && result.verses.length > 0) {
+          return res.json({ success: true, result, commandType: reqCommandType });
+        }
+        return res.json({ success: false, error: 'Verse not found', commandType: reqCommandType });
       } else if (reqCommandType === 'chapter_change') {
         // Chapter navigation — keep verse 1 of next/previous chapter
         const newChapter = direction === 'next' ? chapter + 1 : Math.max(1, chapter - 1);

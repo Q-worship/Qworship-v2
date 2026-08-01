@@ -122,6 +122,14 @@ function buildDedupKey(cmd: any): string {
   return JSON.stringify(cmd.arguments);
 }
 
+function isDeterministicContextNavigation(cmd: any): boolean {
+  return cmd?.name === "navigate_bible" &&
+    cmd.arguments?.direction === "goto" &&
+    cmd.arguments?.scope === "chapter_verse" &&
+    Number(cmd.arguments?.chapter) > 0 &&
+    Number(cmd.arguments?.verse) > 0;
+}
+
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
@@ -131,8 +139,7 @@ export function setupAudioSocket(server: Server) {
     console.log(`[AudioSocket] Client connected to live audio stream`);
 
     // ── Session state ──────────────────────────────────────────────────────
-    let lastExecutedReference: string | null = null;
-    let lastExecutionTime = 0;
+    const recentlyExecuted = new Map<string, number>();
     let currentPartialText = "";
     let currentContext: any = null;
     let strictMode = false;
@@ -194,14 +201,17 @@ export function setupAudioSocket(server: Server) {
       // Fix 5: Use reference-keyed dedup (book+chapter+verse) with 5s window
       const refKey = buildDedupKey(cmd);
       const now = Date.now();
+      const lastExecutionTime = recentlyExecuted.get(refKey) || 0;
 
-      if (refKey === lastExecutedReference && now - lastExecutionTime < DEDUP_WINDOW_MS) {
+      if (lastExecutionTime && now - lastExecutionTime < DEDUP_WINDOW_MS) {
         console.log(`[AudioSocket] Dedup skip [${source}]: ${refKey} (${now - lastExecutionTime}ms ago)`);
         return;
       }
 
-      lastExecutedReference = refKey;
-      lastExecutionTime = now;
+      recentlyExecuted.set(refKey, now);
+      for (const [key, executedAt] of recentlyExecuted) {
+        if (now - executedAt >= DEDUP_WINDOW_MS) recentlyExecuted.delete(key);
+      }
 
       const executionStartedAt = Date.now();
       const conf = cmd._confidence != null ? ` [conf: ${cmd._confidence.toFixed(2)}]` : "";
@@ -241,14 +251,65 @@ export function setupAudioSocket(server: Server) {
         }
 
       } else if (cmd.name === "navigate_bible") {
-        const { direction, scope, verse: targetVerse } = cmd.arguments;
+        const {
+          direction,
+          scope,
+          chapter: targetChapter,
+          verse: targetVerse,
+        } = cmd.arguments;
+
+        // Resolve contextual chapter+verse navigation directly on the voice
+        // socket. This avoids a second browser -> HTTP -> server round trip and
+        // guarantees the active book is retained.
+        if (
+          direction === "goto" &&
+          scope === "chapter_verse" &&
+          currentContext?.book &&
+          targetChapter &&
+          targetVerse
+        ) {
+          const result = await BibleService.searchBible({
+            book: currentContext.book,
+            chapter: targetChapter,
+            verseStart: targetVerse,
+            version: activeVersion as any,
+          });
+          if (result?.verses?.length) {
+            ws.send(JSON.stringify({
+              type: "bible_match",
+              result,
+              commandType: "jump_to_chapter_verse",
+              telemetry: {
+                source,
+                traceId,
+                clientClickAt,
+                commandStartedAt: executionStartedAt,
+                serverResolvedAt: Date.now(),
+                serverLookupMs: Date.now() - executionStartedAt,
+              },
+            }));
+            currentContext = {
+              book: result.book,
+              chapter: result.chapter,
+              verseStart: result.verses[0].verse,
+            };
+            transcriptionService.setContext(currentContext);
+            console.log(
+              `[AudioSocket][${T()}] CONTEXT NAV SENT: ${result.book} ${result.chapter}:${result.verses[0].verse}`,
+            );
+            return;
+          }
+        }
         // QC63: Map internal direction names to client-expected values.
         // Server uses "prev"; client onNavigation callback expects "previous".
         // Server uses "goto"; client expects commandType="jump_to_verse" + targetVerse.
         let commandType: string;
         let clientDirection: "next" | "previous" | undefined;
 
-        if (direction === "goto" && scope === "verse") {
+        if (direction === "goto" && scope === "chapter_verse") {
+          commandType = "jump_to_chapter_verse";
+          clientDirection = undefined;
+        } else if (direction === "goto" && scope === "verse") {
           commandType = "jump_to_verse";
           clientDirection = undefined;
         } else if (scope === "chapter") {
@@ -263,6 +324,7 @@ export function setupAudioSocket(server: Server) {
           type: "navigation",
           commandType,
           direction: clientDirection,
+          ...(targetChapter !== undefined ? { targetChapter } : {}),
           ...(targetVerse !== undefined ? { targetVerse } : {}),
         }));
 
@@ -298,7 +360,15 @@ export function setupAudioSocket(server: Server) {
         serverReceivedAt: Date.now(),
       }));
 
+      const deterministicCommand = FastBibleParser.parse(text);
+
       if (confidence < INTERIM_MEDIUM_CONFIDENCE) {
+        // An explicit "chapter N verse N" command is structurally
+        // unambiguous. Do not discard it merely because Deepgram assigned a
+        // lower sentence-level confidence score.
+        if (confidence >= 0.4 && isDeterministicContextNavigation(deterministicCommand)) {
+          await executeCommand(deterministicCommand, "LowConfidencePartial");
+        }
         console.log(
           `[AudioSocket] Ignoring low-confidence interim (${confidence?.toFixed(2)})`,
         );
@@ -306,14 +376,18 @@ export function setupAudioSocket(server: Server) {
       }
 
       // ── Step 1: Try full reference parse first ─────────────────────────
-      const fullCmd = FastBibleParser.parse(text);
-      if (fullCmd && fullCmd.name === "project_bible_reference") {
+      const referenceCommands = FastBibleParser.scanForReferences(
+        FastBibleParser.normalizeNumbers(text.toLowerCase()),
+      );
+      if (referenceCommands.length) {
         // QC59b (V2 port): Guard against premature verse-1 default projection.
         // If verse_start=1 was not explicitly spoken (e.g. only "Genesis chapter 2"
         // was heard so far), hold off — the verse number is still incoming.
         // This prevents the pattern: project Gen 2:1 → immediately correct to Gen 2:8.
-        const verseStart = fullCmd.arguments?.verse_start ?? 1;
-        if (!hasExplicitVerse(text, verseStart)) {
+        const explicitCommands = referenceCommands.filter((command) =>
+          hasExplicitVerse(text, command.arguments?.verse_start ?? 1),
+        );
+        if (!explicitCommands.length) {
           console.log(`[AudioSocket] QC59b: Partial verse-1 default suppressed — waiting for explicit verse in: "${text.slice(0, 60)}"`);
           // Still update progressive state so we track book+chapter
           const stage = FastBibleParser.parseStage(text);
@@ -330,7 +404,7 @@ export function setupAudioSocket(server: Server) {
           );
           return;
         }
-        const candidateKey = buildDedupKey(fullCmd);
+        const candidateKey = referenceCommands.map(buildDedupKey).join("|");
         const candidateNow = Date.now();
         const sameCandidate = interimCandidate.key === candidateKey &&
           candidateNow - interimCandidate.lastSeenAt < 1500;
@@ -349,11 +423,16 @@ export function setupAudioSocket(server: Server) {
           );
           return;
         }
-        // Full reference found with explicit verse — execute immediately and reset state
-        await executeCommand(fullCmd, "Partial");
+        // Execute every newly detected reference in spoken order. Per-reference
+        // dedup prevents partial/EOT/final confirmations from replaying them.
+        for (const command of explicitCommands) {
+          await executeCommand(command, "Partial");
+        }
         resetPartialState();
         return;
       }
+
+      const fullCmd = deterministicCommand;
 
       // Handle navigation/version commands immediately
       if (fullCmd && fullCmd.name !== "project_bible_reference") {
@@ -432,8 +511,15 @@ export function setupAudioSocket(server: Server) {
       console.log(`[AudioSocket] ${label} — flushing: "${textToFlush}"`);
 
       // Try full parse on the accumulated text
-      const cmd = FastBibleParser.parse(textToFlush);
-      if (cmd) await executeCommand(cmd, label);
+      const references = FastBibleParser.scanForReferences(
+        FastBibleParser.normalizeNumbers(textToFlush.toLowerCase()),
+      );
+      if (references.length) {
+        for (const command of references) await executeCommand(command, label);
+      } else {
+        const cmd = FastBibleParser.parse(textToFlush);
+        if (cmd) await executeCommand(cmd, label);
+      }
 
       resetPartialState();
     };
@@ -455,13 +541,24 @@ export function setupAudioSocket(server: Server) {
 
       ws.send(JSON.stringify({ type: "transcript_final", text: displayText }));
 
+      const deterministicCommand = FastBibleParser.parse(textToParse);
+
       if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
-        console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
-        return;
+        if (!isDeterministicContextNavigation(deterministicCommand) || confidence < 0.4) {
+          console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
+          return;
+        }
       }
 
-      const cmd = FastBibleParser.parse(textToParse);
-      if (cmd) await executeCommand(cmd, "Final");
+      const references = FastBibleParser.scanForReferences(
+        FastBibleParser.normalizeNumbers(textToParse.toLowerCase()),
+      );
+      if (references.length) {
+        for (const command of references) await executeCommand(command, "Final");
+      } else {
+        const cmd = deterministicCommand;
+        if (cmd) await executeCommand(cmd, "Final");
+      }
     });
 
     // ── Error handling ─────────────────────────────────────────────────────
@@ -491,6 +588,19 @@ export function setupAudioSocket(server: Server) {
             if (isBibleVersionCode(requestedVersion)) {
               activeVersion = requestedVersion;
               console.log(`[AudioSocket] Active Bible version: ${activeVersion.toUpperCase()}`);
+            }
+          }
+
+          if (msg.type === "set_bible_context") {
+            const book = String(msg.book || "").trim();
+            const chapter = Number(msg.chapter);
+            const verseStart = Number(msg.verse);
+            if (book && chapter > 0 && verseStart > 0) {
+              currentContext = { book, chapter, verseStart };
+              transcriptionService.setContext(currentContext);
+              console.log(
+                `[AudioSocket] Active Bible context: ${book} ${chapter}:${verseStart}`,
+              );
             }
           }
 

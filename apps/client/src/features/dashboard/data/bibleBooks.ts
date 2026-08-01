@@ -70,5 +70,8 @@ export const BIBLE_BOOKS_LCC: { name: string; chapters: number; verses: number[]
   { name: 'Revelation', chapters: 22, verses: [20,29,22,11,14,17,17,13,21,11,19,17,18,20,8,21,18,24,21,15,27,21] },
 ];
 
-export const BIBLE_VERSIONS_LCC = ['KJV', 'NKJV', 'NIV', 'MSG', 'AMP', 'GN', 'ESV'] as const;
-export type BibleVersionKey = 'kjv' | 'nkjv' | 'niv' | 'msg' | 'amp' | 'gn' | 'esv';
+export const BIBLE_VERSIONS_LCC = [
+  'KJV', 'NKJV', 'NIV', 'MSG', 'AMP', 'GN', 'ESV',
+  'NLT', 'NRSV', 'ASV', 'YLT', 'WEB', 'WEBSTER',
+] as const;
+export type BibleVersionKey = Lowercase<typeof BIBLE_VERSIONS_LCC[number]>;

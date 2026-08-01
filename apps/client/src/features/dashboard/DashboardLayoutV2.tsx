@@ -195,6 +195,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         ).toLowerCase() as keyof typeof state.currentVerse;
         const verseText =
           (state.currentVerse![versionKey] as string | undefined) ??
+          (state.currentVerse!.version?.toLowerCase() === versionKey
+            ? state.currentVerse!.text
+            : undefined) ??
           state.currentVerse!.kjv ??
           "";
         const ref = state.formattedReference ?? "";

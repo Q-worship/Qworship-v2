@@ -120,8 +120,10 @@ export function LiveControlCentre(props: LiveConsoleProps) {
          book: passageData?.book || bookName,
          chapter: passageData?.chapter || chap,
          verse: parseInt(verseMatch ? verseMatch[1] : '1'),
+         text: verseMatch ? verseMatch[2] : text,
+         version,
          [version.toLowerCase()]: verseMatch ? verseMatch[2] : text
-      }, ref);
+      }, ref, version);
       
       state.setPreviewBibleProjection({ reference: ref, text, version });
       state.setPreviewSongProjection(null);

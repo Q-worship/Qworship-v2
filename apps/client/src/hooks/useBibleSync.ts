@@ -4,6 +4,50 @@ import { apiClient } from "../lib/api";
 import { useBibleRAMCache } from "../features/dashboard/hooks/useBibleRAMCache";
 
 const versionHydrations = new Map<string, Promise<void>>();
+const REVISION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+let revisionCheck: Promise<Record<string, number>> | null = null;
+let revisionCheckedAt = 0;
+let cachedRevisions: Record<string, number> = {};
+
+export const checkBibleCacheRevisions = (
+  force = false,
+): Promise<Record<string, number>> => {
+  if (!force && revisionCheck) return revisionCheck;
+  if (!force && revisionCheckedAt && Date.now() - revisionCheckedAt < REVISION_CHECK_INTERVAL_MS) {
+    return Promise.resolve(cachedRevisions);
+  }
+
+  revisionCheck = (async () => {
+    const response = await apiClient.get('/bible/revisions');
+    const revisions: Record<string, number> = response.data?.revisions || {};
+    const localStates = await db.syncState.toArray();
+    const staleVersions = localStates
+      .filter(state => state.status === 'synced' &&
+        Number(state.revision || 1) !== Number(revisions[state.version] || 1))
+      .map(state => state.version);
+
+    if (staleVersions.length) {
+      await db.transaction('rw', db.verses, db.syncState, async () => {
+        for (const version of staleVersions) {
+          await db.verses.where('version').equals(version).delete();
+          await db.syncState.delete(version);
+        }
+      });
+      staleVersions.forEach(version => useBibleRAMCache.getState().clearVersion(version));
+      window.dispatchEvent(new CustomEvent('qworship:bible-cache-invalidated', {
+        detail: { versions: staleVersions },
+      }));
+      console.info('[Offline Bible] Invalidated stale translations', staleVersions);
+    }
+
+    revisionCheckedAt = Date.now();
+    cachedRevisions = revisions;
+    return revisions;
+  })().finally(() => {
+    revisionCheck = null;
+  });
+  return revisionCheck;
+};
 
 export const ensureBibleVersionCached = (rawVersion: string): Promise<void> => {
   const version = rawVersion.toLowerCase();
@@ -11,9 +55,9 @@ export const ensureBibleVersionCached = (rawVersion: string): Promise<void> => {
   if (existing) return existing;
 
   const hydration = (async () => {
+    const revisions = await checkBibleCacheRevisions();
     const state = await db.syncState.get(version);
-    const revisionResponse = await apiClient.get('/bible/revisions');
-    const remoteRevision = Number(revisionResponse.data?.revisions?.[version] || 1);
+    const remoteRevision = Number(revisions[version] || 1);
     const localCount = await db.verses.where("version").equals(version).count();
 
     if (
@@ -71,7 +115,7 @@ export const ensureBibleVersionCached = (rawVersion: string): Promise<void> => {
   return hydration;
 };
 
-export const useBibleSync = () => {
+export const useBibleSync = (enabled = true) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,6 +158,18 @@ export const useBibleSync = () => {
     hydrateDefaultVersions();
   }, [hydrateDefaultVersions]);
   */
+
+  useEffect(() => {
+    if (!enabled) return;
+    void checkBibleCacheRevisions().catch((err: any) => {
+      console.warn('[Offline Bible] Revision manifest check failed', err);
+      setError(err?.message || 'Failed to check Bible updates');
+    });
+    const interval = window.setInterval(() => {
+      void checkBibleCacheRevisions(true).catch(() => undefined);
+    }, REVISION_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [enabled]);
 
   return {
     isSyncing,

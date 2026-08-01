@@ -88,7 +88,7 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   }, []);
   
   // Hydrate the IndexedDB background caches once authenticated
-  const { isSyncing: isBibleSyncing } = useBibleSync();
+  const { isSyncing: isBibleSyncing } = useBibleSync(isAuthenticated);
   const { isSyncing: isSongSyncing } = useSongSync();
 
   const isSyncing = isBibleSyncing || isSongSyncing;

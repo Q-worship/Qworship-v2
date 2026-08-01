@@ -4,6 +4,8 @@ export interface VerseData {
   book: string;
   chapter: number;
   verse: number;
+  text?: string;
+  version?: string;
   kjv?: string;
   nkjv?: string;
   niv?: string;
@@ -11,6 +13,12 @@ export interface VerseData {
   gn?: string;
   msg?: string;
   esv?: string;
+  nlt?: string;
+  nrsv?: string;
+  asv?: string;
+  ylt?: string;
+  web?: string;
+  webster?: string;
 }
 
 export interface BibleProjectionState {
@@ -19,7 +27,7 @@ export interface BibleProjectionState {
   bibleVersion: string;
   isProjecting: boolean;
   lastUpdated: number;
-  setVerse: (verse: VerseData | null, reference: string) => void;
+  setVerse: (verse: VerseData | null, reference: string, version?: string) => void;
   setBibleVersion: (version: string) => void;
   clearProjection: () => void;
   setProjecting: (isProjecting: boolean) => void;
@@ -55,6 +63,7 @@ export const useBibleProjectionStore = create<BibleProjectionState>((set, get) =
           set({
             currentVerse: payload.verse,
             formattedReference: payload.reference,
+            bibleVersion: payload.version ?? get().bibleVersion,
             isProjecting: true,
             lastUpdated: Date.now(),
           });
@@ -107,10 +116,11 @@ export const useBibleProjectionStore = create<BibleProjectionState>((set, get) =
     isProjecting: false,
     lastUpdated: Date.now(),
 
-    setVerse: (verse, reference) => {
+    setVerse: (verse, reference, version) => {
       set({
         currentVerse: verse,
         formattedReference: reference,
+        bibleVersion: version ?? get().bibleVersion,
         isProjecting: true,
         lastUpdated: Date.now(),
       });
@@ -118,7 +128,7 @@ export const useBibleProjectionStore = create<BibleProjectionState>((set, get) =
       const ch = getBroadcastChannel();
       ch?.postMessage({
         type: 'SET_VERSE',
-        payload: { verse, reference },
+        payload: { verse, reference, version },
       });
     },
 

@@ -6,6 +6,7 @@ import { InlineSongBrowser } from "../InlineSongBrowser";
 import { useHandsfreeBible } from "../../hooks/useHandsfreeBible";
 import { MutableRefObject, useRef, useEffect } from "react";
 import { useHFBStore } from "../../hooks/useHFBStore";
+import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 
 interface LeftPanelProps {
   bibleProps: any;
@@ -282,6 +283,11 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                         }, window.location.origin);
                       }
                       hfbStore.setHfbCurrentProjected({ reference: v.reference, text: v.verseText, version: v.version });
+                      useBibleProjectionStore.getState().setVerse({
+                        book: v.book, chapter: v.chapter, verse: v.verseNum,
+                        text: v.verseText, version: v.version,
+                        [v.version.toLowerCase()]: v.verseText,
+                      }, v.reference, v.version);
                       hfbStore.setHfbDetectedVerses(prev => prev.map(d => ({ ...d, isActive: d.id === v.id })));
                       hfbStore.fetchHFBChapter(v.book, v.chapter, v.version, v.verseNum);
                     }}

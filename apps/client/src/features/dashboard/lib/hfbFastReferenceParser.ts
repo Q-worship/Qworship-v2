@@ -9,6 +9,11 @@ export interface HFBParsedReference {
   explicit: true;
 }
 
+export interface HFBContextNavigation {
+  chapter: number;
+  verse: number;
+}
+
 const aliases = new Map<string, string>();
 for (const item of BIBLE_BOOKS_LCC) aliases.set(item.name.toLowerCase(), item.name);
 [
@@ -22,6 +27,14 @@ for (const item of BIBLE_BOOKS_LCC) aliases.set(item.name.toLowerCase(), item.na
   ["first kings", "1 Kings"], ["second kings", "2 Kings"],
   ["first samuel", "1 Samuel"], ["second samuel", "2 Samuel"],
   ["first chronicles", "1 Chronicles"], ["second chronicles", "2 Chronicles"],
+  ["1st corinthians", "1 Corinthians"], ["2nd corinthians", "2 Corinthians"],
+  ["1st thessalonians", "1 Thessalonians"], ["2nd thessalonians", "2 Thessalonians"],
+  ["1st timothy", "1 Timothy"], ["2nd timothy", "2 Timothy"],
+  ["1st peter", "1 Peter"], ["2nd peter", "2 Peter"],
+  ["1st john", "1 John"], ["2nd john", "2 John"], ["3rd john", "3 John"],
+  ["1st kings", "1 Kings"], ["2nd kings", "2 Kings"],
+  ["1st samuel", "1 Samuel"], ["2nd samuel", "2 Samuel"],
+  ["1st chronicles", "1 Chronicles"], ["2nd chronicles", "2 Chronicles"],
 ].forEach(([alias, canonical]) => aliases.set(alias, canonical));
 
 const bookAlternation = [...aliases.keys()]
@@ -57,10 +70,40 @@ const numberWords = "(?:\\d+|(?:one|two|three|four|five|six|seven|eight|nine|ten
 
 const patterns = [
   new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(${numberWords})\\s+verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
+  new RegExp(`\\b(${bookAlternation})\\s+(${numberWords})\\s+verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(\\d+)\\s*[:.]\\s*(\\d+)(?:\\s*[-–—]\\s*(\\d+))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(\\d+)\\s+(\\d+)(?:\\s+(?:to|through|and)\\s+(\\d+))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(\\d+)\\s+(\\d+)(?:\\s+(?:to|through|and)\\s+(\\d+))?\\b`, "i"),
 ];
+
+const contextualChapterVersePattern = new RegExp(
+  `(?:^|\\b(?:show me|go to|take me to|jump to|look at|look to|turn to|let'?s look at|let'?s go to)\\s+)` +
+  `chapter\\s+(${numberWords})\\s+(?:and\\s+)?(?:verse\\s+)?(${numberWords})\\b`,
+  "i",
+);
+
+/**
+ * Parse a chapter+verse command that intentionally omits the book. The cue is
+ * constrained to the start of the phrase or a known navigation expression so
+ * a complete reference such as "show me Genesis chapter 4 verse 7" is not
+ * mistaken for contextual navigation.
+ */
+export function parseHFBContextNavigation(
+  text: string,
+): HFBContextNavigation | null {
+  const clean = text
+    .toLowerCase()
+    .replace(/[!?;,.:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = clean.match(contextualChapterVersePattern);
+  if (!match) return null;
+  const chapter = parseNumber(match[1]);
+  const verse = parseNumber(match[2]);
+  if (!Number.isInteger(chapter) || chapter < 1 || chapter > 150 ||
+      !Number.isInteger(verse) || verse < 1 || verse > 176) return null;
+  return { chapter, verse };
+}
 
 export function parseHFBReference(text: string): HFBParsedReference | null {
   const clean = text.toLowerCase().replace(/[!?;,]+/g, " ").replace(/\s+/g, " ").trim();
@@ -78,10 +121,9 @@ export function parseHFBReference(text: string): HFBParsedReference | null {
     if (!bookData || chapter > bookData.chapters) continue;
     return {
       book, chapter, verse, verseEnd,
-      confidence: index === 1 ? 0.99 : index === 0 ? 0.96 : 0.9,
+      confidence: index === 2 ? 0.99 : index === 0 ? 0.96 : index === 1 ? 0.94 : 0.9,
       explicit: true,
     };
   }
   return null;
 }
-

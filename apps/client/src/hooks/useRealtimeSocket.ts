@@ -24,6 +24,7 @@ interface RealtimeSocketProps {
     direction: "next" | "previous" | undefined,
     targetVerse?: number,
     offset?: number,
+    targetChapter?: number,
   ) => void;
 }
 
@@ -154,6 +155,7 @@ export const useRealtimeSocket = ({
               data.direction,
               data.targetVerse,
               data.offset,
+              data.targetChapter,
             );
             break;
           case "reference_stage":
@@ -244,6 +246,19 @@ export const useRealtimeSocket = ({
     }
   }, []);
 
+  const setBibleContext = useCallback((context: {
+    book: string;
+    chapter: number;
+    verse: number;
+  }) => {
+    const message = JSON.stringify({ type: "set_bible_context", ...context });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(message);
+    } else {
+      pendingControlRef.current.push(message);
+    }
+  }, []);
+
   const beginSessionTrace = useCallback((clientClickAt: number) => {
     const message = JSON.stringify({
       type: "hfb_trace_start",
@@ -264,6 +279,7 @@ export const useRealtimeSocket = ({
     sendPCMData,
     setStrictMode,
     setBibleVersion,
+    setBibleContext,
     beginSessionTrace,
   };
 };
