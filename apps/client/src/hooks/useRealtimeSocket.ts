@@ -6,6 +6,14 @@ interface RealtimeSocketProps {
     confidence?: number;
     serverReceivedAt?: number;
     clientReceivedAt: number;
+    detectedReferences?: Array<{
+      book: string;
+      chapter: number;
+      verse: number;
+      formatted: string;
+      start?: number;
+      end?: number;
+    }>;
   }) => void;
   onFinalTranscript?: (text: string) => void;
   onSleepCommand?: () => void;
@@ -116,11 +124,13 @@ export const useRealtimeSocket = ({
             console.info("[HFB Socket][5/5] Partial transcript received", {
               text: data.text,
               confidence: data.confidence,
+              detectedReferences: data.detectedReferences,
             });
             cb.onPartialTranscript?.(data.text, {
               confidence: data.confidence,
               serverReceivedAt: data.serverReceivedAt,
               clientReceivedAt: Date.now(),
+              detectedReferences: data.detectedReferences,
             });
             break;
           case "transcript_final":

@@ -17,7 +17,9 @@ export interface HFBContextNavigation {
 const aliases = new Map<string, string>();
 for (const item of BIBLE_BOOKS_LCC) aliases.set(item.name.toLowerCase(), item.name);
 [
-  ["psalm", "Psalms"], ["song of songs", "Song of Solomon"],
+  ["psalm", "Psalms"], ["psalms", "Psalms"], ["pslams", "Psalms"], ["salm", "Psalms"], ["salms", "Psalms"], ["book of psalms", "Psalms"],
+  ["phillippians", "Philippians"], ["phillipians", "Philippians"],
+  ["liviticus", "Leviticus"], ["song of songs", "Song of Solomon"],
   ["revelations", "Revelation"], ["mathew", "Matthew"], ["look", "Luke"],
   ["first corinthians", "1 Corinthians"], ["second corinthians", "2 Corinthians"],
   ["first thessalonians", "1 Thessalonians"], ["second thessalonians", "2 Thessalonians"],
@@ -77,16 +79,14 @@ const patterns = [
 ];
 
 const contextualChapterVersePattern = new RegExp(
-  `(?:^|\\b(?:show me|go to|take me to|jump to|look at|look to|turn to|let'?s look at|let'?s go to)\\s+)` +
-  `chapter\\s+(${numberWords})\\s+(?:and\\s+)?(?:verse\\s+)?(${numberWords})\\b`,
+  `\\bchapter\\s+(${numberWords})\\s+(?:and\\s+)?(?:verse\\s+)?(${numberWords})\\b`,
   "i",
 );
 
 /**
- * Parse a chapter+verse command that intentionally omits the book. The cue is
- * constrained to the start of the phrase or a known navigation expression so
- * a complete reference such as "show me Genesis chapter 4 verse 7" is not
- * mistaken for contextual navigation.
+ * Parse a chapter+verse command that intentionally omits the book.
+ * Ensures a complete reference such as "Genesis chapter 4 verse 7" is not
+ * mistaken for contextual navigation by checking for book names prior to "chapter".
  */
 export function parseHFBContextNavigation(
   text: string,
@@ -98,6 +98,17 @@ export function parseHFBContextNavigation(
     .trim();
   const match = clean.match(contextualChapterVersePattern);
   if (!match) return null;
+
+  // Check if a recognized book name precedes "chapter"
+  const prefix = clean.slice(0, match.index ?? 0);
+  if (prefix.trim().length > 0) {
+    for (const [alias] of aliases) {
+      if (new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(prefix)) {
+        return null; // Complete reference with book, not contextual navigation
+      }
+    }
+  }
+
   const chapter = parseNumber(match[1]);
   const verse = parseNumber(match[2]);
   if (!Number.isInteger(chapter) || chapter < 1 || chapter > 150 ||
@@ -107,23 +118,34 @@ export function parseHFBContextNavigation(
 
 export function parseHFBReference(text: string): HFBParsedReference | null {
   const clean = text.toLowerCase().replace(/[!?;,]+/g, " ").replace(/\s+/g, " ").trim();
+  let latest: (HFBParsedReference & { start: number; patternIndex: number }) | null = null;
   for (let index = 0; index < patterns.length; index++) {
-    const match = clean.match(patterns[index]);
-    if (!match) continue;
-    const book = aliases.get(match[1].toLowerCase());
-    const chapter = parseNumber(match[2]);
-    const verse = parseNumber(match[3]);
-    const verseEnd = match[4] ? parseNumber(match[4]) : undefined;
-    if (!book || !Number.isInteger(chapter) || chapter < 1 ||
-        !Number.isInteger(verse) || verse < 1 || verse > 176 ||
-        (verseEnd !== undefined && (!Number.isInteger(verseEnd) || verseEnd < verse))) continue;
-    const bookData = BIBLE_BOOKS_LCC.find(item => item.name === book);
-    if (!bookData || chapter > bookData.chapters) continue;
-    return {
-      book, chapter, verse, verseEnd,
-      confidence: index === 2 ? 0.99 : index === 0 ? 0.96 : index === 1 ? 0.94 : 0.9,
-      explicit: true,
-    };
+    const matcher = new RegExp(patterns[index].source, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = matcher.exec(clean)) !== null) {
+      const book = aliases.get(match[1].toLowerCase());
+      const chapter = parseNumber(match[2]);
+      const verse = parseNumber(match[3]);
+      const verseEnd = match[4] ? parseNumber(match[4]) : undefined;
+      if (!book || !Number.isInteger(chapter) || chapter < 1 ||
+          !Number.isInteger(verse) || verse < 1 || verse > 176 ||
+          (verseEnd !== undefined && (!Number.isInteger(verseEnd) || verseEnd < verse))) continue;
+      const bookData = BIBLE_BOOKS_LCC.find(item => item.name === book);
+      if (!bookData || chapter > bookData.chapters) continue;
+      const candidate = {
+        book, chapter, verse, verseEnd,
+        confidence: index === 2 ? 0.99 : index === 0 ? 0.96 : index === 1 ? 0.94 : 0.9,
+        explicit: true as const,
+        start: match.index,
+        patternIndex: index,
+      };
+      if (!latest || candidate.start > latest.start ||
+          (candidate.start === latest.start && candidate.patternIndex < latest.patternIndex)) {
+        latest = candidate;
+      }
+    }
   }
-  return null;
+  if (!latest) return null;
+  const { start: _start, patternIndex: _patternIndex, ...reference } = latest;
+  return reference;
 }

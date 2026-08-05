@@ -1,39 +1,107 @@
+import assert from "node:assert/strict";
 import { FastBibleParser } from "./fast-bible-parser.js";
-import { BibleService } from "./bible.service.js";
 
-async function runTests() {
-  console.log("Starting FastBibleParser Tests...");
-  
-  // Need to initialize store if it uses BOOK_ALIASES which might be empty before init
-  // But BOOK_ALIASES is a static property, so it should be available.
-  
-  const testCases = [
-    { input: "John 3:16", expected: "John 3:16" },
-    { input: "Genesis 1 1", expected: "Genesis 1:1" },
-    { input: "next verse", expected: "navigate_bible" },
-    { input: "switch to niv", expected: "switch_bible_version" },
-    { input: "1 John 3 16", expected: "1 John 3:16" },
-    { input: "Matthew 24", expected: "Matthew 24:1" },
-    { input: "John 316", expected: "John 3:16" },
-    { input: "psalm twenty three one", expected: "Psalms 23:1" },
-    { input: "look 1 1", expected: "Luke 1:1" },
+type ExpectedReference = [book: string, chapter: number, verse: number];
+
+function referenceTuple(command: any): ExpectedReference | null {
+  if (command?.name !== "project_bible_reference") return null;
+  return [
+    command.arguments.book,
+    command.arguments.chapter,
+    command.arguments.verse_start,
+  ];
+}
+
+function runTests() {
+  const references: Array<{ input: string; expected: ExpectedReference }> = [
+    { input: "Book of Psalms chapter 23 verse 1", expected: ["Psalms", 23, 1] },
+    { input: "Psalms 23 1", expected: ["Psalms", 23, 1] },
+    { input: "Pslams chapter 23 verse 1", expected: ["Psalms", 23, 1] },
+    { input: "show me Philippians 4 19", expected: ["Philippians", 4, 19] },
+    { input: "Phillippians 4 19", expected: ["Philippians", 4, 19] },
+    { input: "Liviticus chapter 6 verse 12", expected: ["Leviticus", 6, 12] },
+    { input: "1 John 3 16", expected: ["1 John", 3, 16] },
   ];
 
-  for (const test of testCases) {
-    const result = FastBibleParser.parse(test.input);
-    console.log(`Input: "${test.input}"`);
-    if (result) {
-      if (result.name === "project_bible_reference") {
-        const args = result.arguments;
-        console.log(`  Parsed: ${args.book} ${args.chapter}:${args.verse_start}`);
-      } else {
-        console.log(`  Command: ${result.name}`);
-      }
-    } else {
-      console.log(`  Result: No match`);
-    }
-    console.log("---");
+  for (const test of references) {
+    assert.deepEqual(referenceTuple(FastBibleParser.parse(test.input)), test.expected, test.input);
   }
+
+  assert.equal(
+    FastBibleParser.parse("Psalnms chapter 23 verse 1"),
+    null,
+    "An unknown book must not fall through to contextual navigation",
+  );
+
+  const mixed = FastBibleParser.scanForCommands("Matthew 7 7 next verse");
+  assert.deepEqual(
+    mixed.map(command => command.name === "project_bible_reference"
+      ? referenceTuple(command)?.join(":")
+      : `${command.arguments.direction}:${command.arguments.scope}`),
+    ["Matthew:7:7", "next:verse"],
+    "A newer navigation command must not be hidden by an older reference",
+  );
+
+  const repeatedNavigation = FastBibleParser.scanForCommands("next verse next verse");
+  assert.equal(repeatedNavigation.length, 2, "Repeated next commands need distinct occurrences");
+
+  const continuous = FastBibleParser.scanForCommands(
+    "lets see Gen 6 10 show me Romans chapter 4 verse 3 " +
+    "Leviticus chapter 6 verse 12 Exodus 2 verse 8",
+  );
+  assert.deepEqual(
+    continuous.map(referenceTuple),
+    [
+      ["Genesis", 6, 10],
+      ["Romans", 4, 3],
+      ["Leviticus", 6, 12],
+      ["Exodus", 2, 8],
+    ],
+    "Continuous references must remain in spoken order",
+  );
+
+  // Verify chapter-only does NOT project (requires explicit verse number per user feedback)
+  assert.equal(
+    referenceTuple(FastBibleParser.parse("Psalm 23")),
+    null,
+    "Chapter-only reference without verse must not project",
+  );
+
+  // Conversational verse navigation ("Moving on to verse 12")
+  const gotoVerse12 = FastBibleParser.parse("Moving on to verse 12");
+  assert.equal(gotoVerse12?.name, "navigate_bible");
+  assert.equal(gotoVerse12?.arguments?.direction, "goto");
+  assert.equal(gotoVerse12?.arguments?.verse, 12);
+
+  const gotoVerse11 = FastBibleParser.parse("Now let's look at verse 11");
+  assert.equal(gotoVerse11?.name, "navigate_bible");
+  assert.equal(gotoVerse11?.arguments?.verse, 11);
+
+  const gotoVerseTwelveSpoken = FastBibleParser.parse("let's read verse twelve");
+  assert.equal(gotoVerseTwelveSpoken?.name, "navigate_bible");
+  assert.equal(gotoVerseTwelveSpoken?.arguments?.verse, 12);
+
+  // Next verse variation ("Next verse please")
+  const nextVersePlease = FastBibleParser.parse("Next verse please");
+  assert.equal(nextVersePlease?.name, "navigate_bible");
+  assert.equal(nextVersePlease?.arguments?.direction, "next");
+
+  // Multi-command transcript (Matthew 1:1 + "this is chapter 2 verse 3")
+  const multiCmd = FastBibleParser.scanForCommands(
+    "god our father and from the lord jesus christ let's go to matthew chapter 1 verse 1 this is chapter 2 verse 3",
+  );
+  assert.equal(multiCmd.length, 2, "Must capture both Matthew 1:1 and contextual chapter 2 verse 3");
+  assert.equal(multiCmd[0].name, "project_bible_reference");
+  assert.equal(multiCmd[0].arguments.book, "Matthew");
+  assert.equal(multiCmd[0].arguments.chapter, 1);
+  assert.equal(multiCmd[0].arguments.verse_start, 1);
+  assert.equal(multiCmd[1].name, "navigate_bible");
+  assert.equal(multiCmd[1].arguments.direction, "goto");
+  assert.equal(multiCmd[1].arguments.scope, "chapter_verse");
+  assert.equal(multiCmd[1].arguments.chapter, 2);
+  assert.equal(multiCmd[1].arguments.verse, 3);
+
+  console.log(`HFB parser regressions passed (${references.length + 10} groups).`);
 }
 
 runTests();

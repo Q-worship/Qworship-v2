@@ -109,10 +109,29 @@ export class FastBibleParser {
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.88,
     },
-    // "John 316" — compressed 3-digit voice format
+    // "John 316" / "Romans 121" — compressed 3 or 4 digit voice format
     {
-      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d)(\d{2})\b/gi,
-      extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3] }),
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d{3,5})\b/gi,
+      extract: (m) => {
+        const rawBook = m[1];
+        const numStr = m[2];
+        // For 3-digit number like "121", prefer 2-digit chapter if valid for book (Romans 12:1 > Romans 1:21)
+        if (numStr.length === 3) {
+          const chap2 = parseInt(numStr.slice(0, 2));
+          const verse1 = parseInt(numStr.slice(2));
+          if (chap2 >= 1 && chap2 <= 150 && verse1 >= 1) {
+            return { rawBook, chapter: String(chap2), verse: String(verse1) };
+          }
+        }
+        if (numStr.length === 4) {
+          const chap2 = parseInt(numStr.slice(0, 2));
+          const verse2 = parseInt(numStr.slice(2));
+          if (chap2 >= 1 && chap2 <= 150 && verse2 >= 1) {
+            return { rawBook, chapter: String(chap2), verse: String(verse2) };
+          }
+        }
+        return { rawBook, chapter: numStr.slice(0, 1), verse: numStr.slice(1) };
+      },
       confidence: 0.85,
     },
     // "John 3" — chapter only (lowest confidence, partial reference)
@@ -141,17 +160,17 @@ export class FastBibleParser {
    * commands are context-free — they operate on the current book+chapter).
    */
   private static readonly GOTO_VERSE_RE =
-    /\b(?:take me to|go to|show me|jump to)?\s*verse\s+(\d+)\b/i;
+    /\b(?:take me to|go to|show me|jump to|move to|moving on to|look at|turn to|now in|let'?s look at|let'?s read|let'?s go to)?\s*verse\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/i;
 
   /**
    * Context-aware chapter + verse navigation. The current Bible book is kept,
    * while both the chapter and verse are replaced.
    *
    * Examples: "chapter 4 verse 7", "show me chapter 4 verse 7",
-   * "go to chapter 4 verse 7", "look at chapter 4 verse 7".
+   * "go to chapter 4 verse 7", "this is chapter 2 verse 3".
    */
   private static readonly GOTO_CHAPTER_VERSE_RE =
-    /\b(?:(?:take me to|go to|show me|jump to|look at|look to|turn to|let'?s look at|let'?s go to)\s+)?chapter\s+(\d+)(?:\s*[,.:;-]\s*|\s+)(?:and\s+)?(?:verse\s+)?(\d+)\b/i;
+    /\bchapter\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\s+(?:and\s+)?(?:verse\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/i;
 
   /**
    * QC63 — Expanded navigation patterns.
@@ -159,13 +178,13 @@ export class FastBibleParser {
    * Supported commands:
    *   Next verse:
    *     "next verse", "next", "go next", "forward", "next one"
-   *     "show me the next verse", "take me to the next verse"
-   *     "show me the next", "take me to the next"
+   *     "show me the next verse", "take me to the next verse", "next verse please"
+   *     "move to next verse", "go to next verse", "skip to next verse"
    *
    *   Previous verse:
    *     "previous verse", "previous", "go back", "back one"
-   *     "show me the previous verse", "take me to the previous verse"
-   *     "show me the previous", "take me to the previous"
+   *     "show me the previous verse", "take me to the previous verse", "previous verse please"
+   *     "move to previous verse", "go to previous verse"
    *
    *   Chapter navigation (unchanged):
    *     "next chapter", "following chapter"
@@ -177,7 +196,7 @@ export class FastBibleParser {
   private static readonly NAV_PATTERNS: Array<{ re: RegExp; cmd: any }> = [
     // ── Next verse (all variants) ────────────────────────────────────────────
     {
-      re: /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse|go next|forward|next one)\b/i,
+      re: /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse|go next|forward|next one)\b/i,
       cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } },
     },
     // Bare "next" — must be a standalone word to avoid false positives
@@ -187,7 +206,7 @@ export class FastBibleParser {
     },
     // ── Previous verse (all variants) ────────────────────────────────────────
     {
-      re: /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse|go back|back one)\b/i,
+      re: /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse|go back|back one)\b/i,
       cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } },
     },
     // Bare "previous" — must be a standalone word to avoid false positives
@@ -349,16 +368,27 @@ export class FastBibleParser {
     //     numbers. This must be checked before the verse-only navigation rule.
     const chapterVerseMatch = clean.match(this.GOTO_CHAPTER_VERSE_RE);
     if (chapterVerseMatch) {
-      const chapter = parseInt(chapterVerseMatch[1]);
-      const verse = parseInt(chapterVerseMatch[2]);
-      // A spoken book name before "chapter" makes this a complete reference,
-      // not contextual navigation (e.g. "show me Genesis chapter 4 verse 7").
-      // Only inspect the unmatched prefix: otherwise conversational "look"
-      // can be mistaken for the phonetic Luke alias.
-      const unmatchedPrefix = clean.slice(0, chapterVerseMatch.index ?? 0);
-      const hasBook = unmatchedPrefix.trim().length > 0 &&
-        this.parseStage(unmatchedPrefix) !== null;
-      if (!hasBook && chapter >= 1 && chapter <= 150 && verse >= 1 && verse <= 176) {
+      const chapter = parseInt(this.normalizeNumbers(chapterVerseMatch[1]));
+      const verse = parseInt(this.normalizeNumbers(chapterVerseMatch[2]));
+      const unmatchedPrefix = clean.slice(0, chapterVerseMatch.index ?? 0).trim();
+      const leadInCues =
+        /\b(?:please|show\s+me|take\s+me\s+to|go\s+to|jump\s+to|look\s+at|look\s+to|turn\s+to|let'?s\s+(?:look\s+at|read|see|go\s+to)|this\s+is|now\s+in|now|and|in)\s*$/i;
+      const cleanedPrefix = unmatchedPrefix.replace(leadInCues, "").trim();
+
+      // If cleanedPrefix is non-empty, check if it contains a recognized book
+      let hasBook = false;
+      let unknownBookPrefix = false;
+      if (cleanedPrefix.length > 0) {
+        const stage = this.parseStage(cleanedPrefix);
+        if (stage) {
+          hasBook = true;
+        } else {
+          // Non-empty prefix that is NOT a valid book name -> fail closed
+          unknownBookPrefix = true;
+        }
+      }
+
+      if (!hasBook && !unknownBookPrefix && chapter >= 1 && chapter <= 150 && verse >= 1 && verse <= 176) {
         return {
           name: "navigate_bible",
           arguments: {
@@ -379,12 +409,14 @@ export class FastBibleParser {
     //     and the SCAN_PATTERNS below will handle it correctly.
     const gotoMatch = clean.match(this.GOTO_VERSE_RE);
     if (gotoMatch) {
-      const verseNum = parseInt(gotoMatch[1]);
+      const rawVerse = this.normalizeNumbers(gotoMatch[1]);
+      const verseNum = parseInt(rawVerse);
       if (!isNaN(verseNum) && verseNum >= 1 && verseNum <= 176) {
-        // Only treat as a navigation command if no book name is present in the text.
-        // If a book IS present, fall through to the Bible reference scanner.
         const hasBook = this.parseStage(clean) !== null;
-        if (!hasBook) {
+        const prefix = clean.slice(0, gotoMatch.index ?? 0).trim();
+        const looksLikeUnknownBookRef =
+          /[a-z]+\s+\d+\s*$/i.test(prefix) || /\bchapter\s+\d+\s*$/i.test(prefix);
+        if (!hasBook && !looksLikeUnknownBookRef) {
           return {
             name: "navigate_bible",
             arguments: { direction: "goto", scope: "verse", verse: verseNum },
@@ -480,6 +512,71 @@ export class FastBibleParser {
     );
   }
 
+  /**
+   * Return every actionable reference/navigation command in spoken order.
+   * Navigation matches that overlap a complete reference are discarded so
+   * "John chapter 3 verse 16" never also becomes contextual "verse 16".
+   */
+  static scanForCommands(text: string): any[] {
+    const clean = this.normalizeNumbers(text.toLowerCase());
+    const references = this.scanForReferences(clean);
+    const navigation: any[] = [];
+    const overlapsReference = (start: number, end: number) => references.some(
+      command => start < command._end && end > command._start,
+    );
+    const addNavigation = (
+      match: RegExpExecArray,
+      args: Record<string, unknown>,
+    ) => {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (overlapsReference(start, end)) return;
+      navigation.push({
+        name: "navigate_bible",
+        arguments: args,
+        _confidence: 0.97,
+        _start: start,
+        _end: end,
+      });
+    };
+
+    const chapterVerseRe = new RegExp(this.GOTO_CHAPTER_VERSE_RE.source, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = chapterVerseRe.exec(clean)) !== null) {
+      const chapter = Number(match[1]);
+      const verse = Number(match[2]);
+      if (chapter > 0 && chapter <= 150 && verse > 0 && verse <= 176) {
+        addNavigation(match, { direction: "goto", scope: "chapter_verse", chapter, verse });
+      }
+    }
+
+    const gotoVerseRe = /\b(?:(?:take me to|go to|show me|jump to)\s+)?verse\s+(\d+)\b/gi;
+    while ((match = gotoVerseRe.exec(clean)) !== null) {
+      const verse = Number(match[1]);
+      const immediatePrefix = clean.slice(0, match.index).trim();
+      const looksLikeUnknownReference = /[a-z]+\s+\d+\s*$/i.test(immediatePrefix) ||
+        /\bchapter\s+\d+\s*$/i.test(immediatePrefix);
+      if (verse > 0 && verse <= 176 && !looksLikeUnknownReference) {
+        addNavigation(match, { direction: "goto", scope: "verse", verse });
+      }
+    }
+
+    for (const nav of this.NAV_PATTERNS) {
+      const flags = nav.re.flags.includes("g") ? nav.re.flags : `${nav.re.flags}g`;
+      const re = new RegExp(nav.re.source, flags);
+      while ((match = re.exec(clean)) !== null) addNavigation(match, nav.cmd.arguments);
+    }
+
+    const unique = new Map<string, any>();
+    for (const command of [...references, ...navigation]) {
+      const key = `${command._start}|${command._end}|${command.name}|${JSON.stringify(command.arguments)}`;
+      unique.set(key, command);
+    }
+    return [...unique.values()].sort((left, right) =>
+      left._start - right._start || left._end - right._end,
+    );
+  }
+
   // ─── Number normalisation ─────────────────────────────────────────────────
 
   static normalizeNumbers(text: string): string {
@@ -524,7 +621,6 @@ export class FastBibleParser {
 
     // Speech-specific fuzzy overrides
     const speechMap: Record<string, string> = {
-      "look": "Luke",
       "luke": "Luke",
       "acts of the apostles": "Acts",
       "revelations": "Revelation",
@@ -532,6 +628,9 @@ export class FastBibleParser {
       "song of songs": "Song of Solomon",
       "psalms": "Psalms",
       "psalm": "Psalms",
+      "pslams": "Psalms",
+      "salm": "Psalms",
+      "salms": "Psalms",
       "proverb": "Proverbs",
       "proverbs": "Proverbs",
       "mathew": "Matthew",
@@ -560,6 +659,8 @@ export class FastBibleParser {
       "first chronicles": "1 Chronicles",
       "second chronicles": "2 Chronicles",
       "philippians": "Philippians",
+      "phillippians": "Philippians",
+      "phillipians": "Philippians",
       "philemon": "Philemon",
       "ephesians": "Ephesians",
       "galatians": "Galatians",
@@ -575,6 +676,7 @@ export class FastBibleParser {
       "ecclesiastes": "Ecclesiastes",
       "deuteronomy": "Deuteronomy",
       "leviticus": "Leviticus",
+      "liviticus": "Leviticus",
       "numbers": "Numbers",
       "genesis": "Genesis",
       "exodus": "Exodus",

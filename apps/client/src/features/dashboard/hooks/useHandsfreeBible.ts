@@ -102,6 +102,10 @@ export const useHandsfreeBible = ({
     key: "",
     at: 0,
   });
+  const localLookupSequenceRef = useRef(0);
+  const lastServerProjectionSequenceRef = useRef(0);
+  const projectionGenerationRef = useRef(0);
+  const navigationRequestSequenceRef = useRef(0);
   const executeNavigationRef = useRef<(
     commandType: string,
     direction?: string,
@@ -140,6 +144,15 @@ export const useHandsfreeBible = ({
     if (data.success === false) {
       setDetectedCommands(data.error || "Command not recognized");
       return;
+    }
+
+    if (Number.isFinite(data.projectionSequence)) {
+      const incomingSequence = Number(data.projectionSequence);
+      if (incomingSequence <= lastServerProjectionSequenceRef.current) {
+        console.info(`[HFB] Stale server projection suppressed: ${incomingSequence}`);
+        return;
+      }
+      lastServerProjectionSequenceRef.current = incomingSequence;
     }
 
     const { book, chapter, verses } = data.result;
@@ -198,6 +211,7 @@ export const useHandsfreeBible = ({
       console.warn(`[HFB] ${effectiveVersion} text is unavailable for ${book} ${chapter}:${verseNum}`);
       return;
     }
+    projectionGenerationRef.current += 1;
     lastProjectedRef.current = { key: projectionKey, at: now };
 
     const currentVerseContext = { book, chapter, verse: verseNum };
@@ -305,7 +319,7 @@ export const useHandsfreeBible = ({
     const strictMode = useHFBStore.getState().hfbStrictMode;
     const confidence = metadata?.confidence ?? 0;
     const hasStrictCue =
-      /\b(?:bible|show|project|display|open|turn\s+to|go\s+to|read(?:\s+from)?)\b/i.test(text);
+      /\b(?:bible|show(?:\s+me)?|project|display|open|turn\s+to|go\s+to|take\s+me\s+to|look\s+(?:at|to)|let'?s\s+see|let\s+us\s+see|can\s+we\s+see|read(?:\s+from)?)\b/i.test(text);
     if (strictMode && !hasStrictCue) return;
 
     // Clear, complete references project on their first high-confidence
@@ -317,10 +331,16 @@ export const useHandsfreeBible = ({
       (lastProjectedRef.current.key === key && now - lastProjectedRef.current.at < 5000)
     ) return;
 
+    const lookupSequence = ++localLookupSequenceRef.current;
+    const projectionGeneration = projectionGenerationRef.current;
     const cached = await resolveCachedHFBVerse(
       parsed.book, parsed.chapter, parsed.verse, version,
     );
     if (!cached) return; // Server RAM result remains the reliable fallback.
+    if (
+      lookupSequence !== localLookupSequenceRef.current ||
+      projectionGeneration !== projectionGenerationRef.current
+    ) return;
 
     const versionKey = version.toLowerCase();
     handleBibleMatch({
@@ -340,7 +360,7 @@ export const useHandsfreeBible = ({
 
   const executeNavigation = async (
     commandType: string,
-    direction: "next" | "previous" | undefined,
+    direction?: string,
     targetVerse?: number,
     offset?: number,
     overrideVersion?: string,  // QC64: explicit version override for version-switch re-projection
@@ -395,6 +415,8 @@ export const useHandsfreeBible = ({
       "[HandsfreeBible] Fetching from API with context:",
       currentContext,
     );
+    const requestSequence = ++navigationRequestSequenceRef.current;
+    const projectionGeneration = projectionGenerationRef.current;
     try {
       const response = await apiClient.post("/bible/voice-command", {
           text: commandText,
@@ -414,6 +436,13 @@ export const useHandsfreeBible = ({
 
       console.log("[HandsfreeBible] Fetch status:", response.status);
       if (response.status >= 200 && response.status < 300) {
+        if (
+          requestSequence !== navigationRequestSequenceRef.current ||
+          projectionGeneration !== projectionGenerationRef.current
+        ) {
+          console.info("[HFB] Stale navigation response suppressed");
+          return;
+        }
         const data = response.data;
         console.log("[HandsfreeBible] Navigation API response:", data);
         if (data.success && data.result) {
@@ -513,7 +542,7 @@ export const useHandsfreeBible = ({
     const now = performance.now();
     if (
       lastContextNavigationRef.current.key === key &&
-      now - lastContextNavigationRef.current.at < 5000
+      now - lastContextNavigationRef.current.at < 650
     ) return true;
 
     lastContextNavigationRef.current = { key, at: now };
@@ -550,7 +579,7 @@ export const useHandsfreeBible = ({
       }
       resetInactivityTimer();
       setMicrophoneStatus("Processing");
-      useHFBStore.getState().setHfbCurrentPartial(text);
+      useHFBStore.getState().setHfbCurrentPartial(text, metadata?.detectedReferences);
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
       if (!processContextNavigationLocally(text)) {

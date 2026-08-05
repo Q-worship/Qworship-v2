@@ -305,6 +305,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
           // SpeechStarted / SpeechFinished — informational VAD events
           if (response.type === "SpeechStarted") {
             console.log("[Deepgram] SpeechStarted");
+            this.emit("speech_started");
           }
           if (response.type === "SpeechFinished") {
             console.log("[Deepgram] SpeechFinished");

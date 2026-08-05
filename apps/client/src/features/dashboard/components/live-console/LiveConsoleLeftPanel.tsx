@@ -241,11 +241,23 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 })
               )}
               {hfbStore.hfbCurrentPartial && (
-                <div className="flex gap-1.5 items-start pl-1.5 border-l-2 border-cyan-500/30 -ml-0.5 opacity-60">
-                  <span className="text-[8px] text-gray-700 shrink-0 mt-0.5 whitespace-nowrap">NOW</span>
-                  <span className="text-[10px] leading-snug text-cyan-200 italic">
-                    {hfbStore.hfbCurrentPartial}
-                  </span>
+                <div className="flex flex-col gap-1 pl-1.5 border-l-2 border-cyan-500/30 -ml-0.5">
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-[8px] text-gray-700 shrink-0 mt-0.5 whitespace-nowrap">NOW</span>
+                    <span className="text-[10px] leading-snug text-cyan-200 italic">
+                      {hfbStore.hfbCurrentPartial}
+                    </span>
+                  </div>
+                  {hfbStore.hfbCurrentPartialReferences && hfbStore.hfbCurrentPartialReferences.length > 0 && (
+                    <div className="flex flex-wrap gap-1 ml-5">
+                      {hfbStore.hfbCurrentPartialReferences.map((ref, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 bg-purple-900/70 text-purple-200 border border-purple-500/50 text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm animate-pulse">
+                          <span className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
+                          {ref.formatted}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <div ref={transcriptEndRef} />

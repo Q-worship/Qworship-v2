@@ -114,12 +114,15 @@ function hasExplicitVerse(text: string, _verseStart: number): boolean {
  *   - Different verses → never blocked
  *   - Navigation/version commands → use full JSON (unchanged behaviour)
  */
-function buildDedupKey(cmd: any): string {
+function buildDedupKey(cmd: any, context?: any): string {
   if (cmd.name === "project_bible_reference") {
     const { book, chapter, verse_start } = cmd.arguments;
     return `${cmd.name}:${book}:${chapter}:${verse_start ?? 1}`;
   }
-  return JSON.stringify(cmd.arguments);
+  if (cmd.name === "navigate_bible") {
+    return `${JSON.stringify(cmd.arguments)}@${context?.book || ""}:${context?.chapter || ""}:${context?.verseStart || ""}`;
+  }
+  return `${cmd.name}:${JSON.stringify(cmd.arguments)}`;
 }
 
 function isDeterministicContextNavigation(cmd: any): boolean {
@@ -146,17 +149,20 @@ export function setupAudioSocket(server: Server) {
     let activeVersion = "kjv";
     let traceId: string | null = null;
     let clientClickAt: number | null = null;
-    let interimCandidate = { key: "", count: 0, firstSeenAt: 0, lastSeenAt: 0 };
+    let projectionSequence = 0;
+    let commandQueue: Promise<void> = Promise.resolve();
+    const executedOccurrences = new Map<string, number>();
+    const interimOccurrences = new Map<string, { count: number; lastSeenAt: number }>();
 
-    // Fix 5: Extended dedup window — 5000ms (was 800ms).
-    // Covers non-stop speakers who quote a reference mid-sentence and keep
-    // talking for several seconds before speech_final fires.
-    const DEDUP_WINDOW_MS = 5000;
-    const CONFIDENCE_THRESHOLD = 0.75;
-    const INTERIM_MEDIUM_CONFIDENCE = 0.65;
+    // Occurrence tracking handles partial/final replay for the whole utterance.
+    // These short guards only collapse duplicate transport events; navigation
+    // includes its starting context so legitimate consecutive commands remain valid.
+    const REFERENCE_DEDUP_WINDOW_MS = 1500;
+    const NAVIGATION_DEDUP_WINDOW_MS = 650;
+    const EXECUTED_OCCURRENCE_TTL_MS = 10000;
     const INTERIM_HIGH_CONFIDENCE = 0.85;
     const hasStrictCommandCue = (text: string) =>
-      /\b(?:bible|show|project|display|open|turn\s+to|go\s+to|read(?:\s+from)?)\b/i.test(text);
+      /\b(?:bible|show(?:\s+me)?|project|display|open|turn\s+to|go\s+to|take\s+me\s+to|look\s+(?:at|to)|let'?s\s+(?:see|read|look)|let\s+us\s+see|can\s+we\s+see|read(?:\s+from)?|in|opening|reading|from|scripture|verse|chapter)\b/i.test(text);
 
     // Predictive accumulator — tracks in-progress reference assembly
     let partialState: PartialReferenceState = {
@@ -178,7 +184,16 @@ export function setupAudioSocket(server: Server) {
         lastPartialText: "",
         bookDetectedAt: 0,
       };
-      interimCandidate = { key: "", count: 0, firstSeenAt: 0, lastSeenAt: 0 };
+    };
+
+    const resetUtteranceTracking = () => {
+      interimOccurrences.clear();
+      resetPartialState();
+      // Clean up stale executed occurrences older than TTL
+      const now = Date.now();
+      for (const [key, at] of executedOccurrences) {
+        if (now - at > EXECUTED_OCCURRENCE_TTL_MS) executedOccurrences.delete(key);
+      }
     };
 
     // ── Deepgram service ───────────────────────────────────────────────────
@@ -195,22 +210,34 @@ export function setupAudioSocket(server: Server) {
     );
 
     transcriptionService.connect();
+    transcriptionService.on("speech_started", () => {
+      // A new VAD turn gets a fresh occurrence namespace. Final/EOT callbacks
+      // from the previous turn remain harmless because they retain their seen
+      // occurrences until this explicit new-speech boundary.
+      currentPartialText = "";
+      resetUtteranceTracking();
+    });
 
     // ── Command execution ──────────────────────────────────────────────────
     const executeCommand = async (cmd: any, source: string) => {
-      // Fix 5: Use reference-keyed dedup (book+chapter+verse) with 5s window
-      const refKey = buildDedupKey(cmd);
+      // Transport-level duplicate guard. Per-utterance occurrence tracking is
+      // the primary replay protection and does not expire while text is active.
+      const contextBeforeCommand = currentContext ? { ...currentContext } : null;
+      const refKey = buildDedupKey(cmd, contextBeforeCommand);
       const now = Date.now();
       const lastExecutionTime = recentlyExecuted.get(refKey) || 0;
+      const dedupWindow = cmd.name === "navigate_bible"
+        ? NAVIGATION_DEDUP_WINDOW_MS
+        : REFERENCE_DEDUP_WINDOW_MS;
 
-      if (lastExecutionTime && now - lastExecutionTime < DEDUP_WINDOW_MS) {
+      if (lastExecutionTime && now - lastExecutionTime < dedupWindow) {
         console.log(`[AudioSocket] Dedup skip [${source}]: ${refKey} (${now - lastExecutionTime}ms ago)`);
         return;
       }
 
       recentlyExecuted.set(refKey, now);
       for (const [key, executedAt] of recentlyExecuted) {
-        if (now - executedAt >= DEDUP_WINDOW_MS) recentlyExecuted.delete(key);
+        if (now - executedAt >= REFERENCE_DEDUP_WINDOW_MS) recentlyExecuted.delete(key);
       }
 
       const executionStartedAt = Date.now();
@@ -233,6 +260,7 @@ export function setupAudioSocket(server: Server) {
             type: "bible_match",
             result,
             commandType: "lookup",
+            projectionSequence: ++projectionSequence,
             telemetry: {
               source,
               traceId,
@@ -258,27 +286,56 @@ export function setupAudioSocket(server: Server) {
           verse: targetVerse,
         } = cmd.arguments;
 
-        // Resolve contextual chapter+verse navigation directly on the voice
-        // socket. This avoids a second browser -> HTTP -> server round trip and
-        // guarantees the active book is retained.
-        if (
-          direction === "goto" &&
-          scope === "chapter_verse" &&
-          currentContext?.book &&
-          targetChapter &&
-          targetVerse
-        ) {
-          const result = await BibleService.searchBible({
+        // Keep navigation authoritative on this socket so consecutive commands
+        // see the context produced by the immediately preceding command.
+        if (currentContext?.book) {
+          let chapter = currentContext.chapter;
+          let verse = currentContext.verseStart;
+          if (direction === "goto" && scope === "chapter_verse") {
+            chapter = Number(targetChapter);
+            verse = Number(targetVerse);
+          } else if (direction === "goto" && scope === "verse") {
+            verse = Number(targetVerse);
+          } else if (scope === "chapter") {
+            chapter = Math.max(1, chapter + (direction === "next" ? 1 : -1));
+            verse = 1;
+          } else if (scope === "verse") {
+            if (direction === "prev" && verse <= 1 && chapter > 1) {
+              chapter -= 1;
+              verse = (await BibleService.getChapterMaxVerse(currentContext.book, chapter)) || 1;
+            } else {
+              verse = Math.max(1, verse + (direction === "next" ? 1 : -1));
+            }
+          }
+
+          let result = await BibleService.searchBible({
             book: currentContext.book,
-            chapter: targetChapter,
-            verseStart: targetVerse,
+            chapter,
+            verseStart: verse,
             version: activeVersion as any,
           });
+
+          // Cross chapter boundaries for next/previous verse navigation.
+          if (!result && scope === "verse" && direction === "next") {
+            chapter += 1;
+            verse = 1;
+            result = await BibleService.searchBible({
+              book: currentContext.book, chapter, verseStart: verse,
+              version: activeVersion as any,
+            });
+          }
+
           if (result?.verses?.length) {
+            const commandType = direction === "goto" && scope === "chapter_verse"
+              ? "jump_to_chapter_verse"
+              : direction === "goto" && scope === "verse"
+                ? "jump_to_verse"
+                : scope === "chapter" ? "chapter_change" : "verse_change";
             ws.send(JSON.stringify({
               type: "bible_match",
               result,
-              commandType: "jump_to_chapter_verse",
+              commandType,
+              projectionSequence: ++projectionSequence,
               telemetry: {
                 source,
                 traceId,
@@ -295,7 +352,7 @@ export function setupAudioSocket(server: Server) {
             };
             transcriptionService.setContext(currentContext);
             console.log(
-              `[AudioSocket][${T()}] CONTEXT NAV SENT: ${result.book} ${result.chapter}:${result.verses[0].verse}`,
+              `[AudioSocket][${T()}] NAV SENT: ${result.book} ${result.chapter}:${result.verses[0].verse}`,
             );
             return;
           }
@@ -337,6 +394,75 @@ export function setupAudioSocket(server: Server) {
       }
     };
 
+    const enqueueCommand = (cmd: any, source: string) => {
+      const scheduled = commandQueue.then(() => executeCommand(cmd, source));
+      commandQueue = scheduled.catch((error) => {
+        console.error(`[AudioSocket] Command queue failure [${source}]`, error);
+      });
+      return scheduled;
+    };
+
+    const commandOccurrenceEntries = (commands: any[]) => {
+      const counts = new Map<string, number>();
+      return commands.map((command) => {
+        const base = `${command.name}:${JSON.stringify(command.arguments)}`;
+        const occurrence = (counts.get(base) || 0) + 1;
+        counts.set(base, occurrence);
+        return { command, occurrenceKey: `${base}#${occurrence}` };
+      });
+    };
+
+    const executeTranscriptCommands = async (
+      text: string,
+      source: string,
+      confidence: number,
+      isFinal: boolean,
+    ) => {
+      const commands = FastBibleParser.scanForCommands(text);
+      if (!commands.length) return false;
+
+      let acceptedAny = false;
+      const now = Date.now();
+      for (const { command, occurrenceKey } of commandOccurrenceEntries(commands)) {
+        const lastExecuted = executedOccurrences.get(occurrenceKey);
+        if (lastExecuted && now - lastExecuted < EXECUTED_OCCURRENCE_TTL_MS) continue;
+        if (
+          !isFinal &&
+          command.name === "project_bible_reference" &&
+          !hasExplicitVerse(text, command.arguments?.verse_start ?? 1)
+        ) continue;
+        if (
+          strictMode &&
+          command.name === "project_bible_reference" &&
+          !hasStrictCommandCue(text)
+        ) continue;
+
+        const previous = interimOccurrences.get(occurrenceKey);
+        const stableCount = previous && now - previous.lastSeenAt < 1500
+          ? previous.count + 1
+          : 1;
+        interimOccurrences.set(occurrenceKey, { count: stableCount, lastSeenAt: now });
+
+        if (!isFinal) {
+          const deterministicNavigation = command.name === "navigate_bible";
+          const structurallyCompleteReference =
+            command.name === "project_bible_reference" && command._confidence >= 0.88;
+          // Deterministic navigation commands execute immediately on first partial (requiredResults = 1)
+          const requiredResults = (deterministicNavigation || confidence >= INTERIM_HIGH_CONFIDENCE)
+            ? 1
+            : confidence >= 0.5 && structurallyCompleteReference
+              ? 2
+              : Infinity;
+          if (stableCount < requiredResults) continue;
+        }
+
+        executedOccurrences.set(occurrenceKey, now);
+        acceptedAny = true;
+        await enqueueCommand(command, source);
+      }
+      return acceptedAny;
+    };
+
     // ── Predictive accumulator ─────────────────────────────────────────────
     /**
      * Called on every partial_raw event. Implements the progressive detection:
@@ -352,91 +478,39 @@ export function setupAudioSocket(server: Server) {
       confidence: number,
       displayText = text,
     ) => {
-      // Always send live transcript to UI
+      // Scan for any Bible references in partial text to provide live UI highlighting metadata
+      const scannedCmds = FastBibleParser.scanForCommands(text);
+      const detectedReferences = scannedCmds
+        .filter((c) => c.name === "project_bible_reference")
+        .map((c) => ({
+          book: c.arguments.book,
+          chapter: c.arguments.chapter,
+          verse: c.arguments.verse_start,
+          formatted: `${c.arguments.book} ${c.arguments.chapter}:${c.arguments.verse_start}`,
+          start: c._start,
+          end: c._end,
+        }));
+
+      // Always send live transcript to UI with detected references
       ws.send(JSON.stringify({
         type: "transcript_partial",
         text: displayText,
         confidence,
+        detectedReferences,
         serverReceivedAt: Date.now(),
       }));
 
-      const deterministicCommand = FastBibleParser.parse(text);
-
-      if (confidence < INTERIM_MEDIUM_CONFIDENCE) {
-        // An explicit "chapter N verse N" command is structurally
-        // unambiguous. Do not discard it merely because Deepgram assigned a
-        // lower sentence-level confidence score.
-        if (confidence >= 0.4 && isDeterministicContextNavigation(deterministicCommand)) {
-          await executeCommand(deterministicCommand, "LowConfidencePartial");
+      const versionCommand = FastBibleParser.parse(text);
+      if (versionCommand?.name === "switch_bible_version") {
+        const occurrenceKey = `${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
+        if (!executedOccurrences.has(occurrenceKey) && confidence >= 0.5) {
+          executedOccurrences.set(occurrenceKey, Date.now());
+          await enqueueCommand(versionCommand, "Partial");
         }
-        console.log(
-          `[AudioSocket] Ignoring low-confidence interim (${confidence?.toFixed(2)})`,
-        );
-        return;
       }
 
-      // ── Step 1: Try full reference parse first ─────────────────────────
-      const referenceCommands = FastBibleParser.scanForReferences(
-        FastBibleParser.normalizeNumbers(text.toLowerCase()),
-      );
-      if (referenceCommands.length) {
-        // QC59b (V2 port): Guard against premature verse-1 default projection.
-        // If verse_start=1 was not explicitly spoken (e.g. only "Genesis chapter 2"
-        // was heard so far), hold off — the verse number is still incoming.
-        // This prevents the pattern: project Gen 2:1 → immediately correct to Gen 2:8.
-        const explicitCommands = referenceCommands.filter((command) =>
-          hasExplicitVerse(text, command.arguments?.verse_start ?? 1),
-        );
-        if (!explicitCommands.length) {
-          console.log(`[AudioSocket] QC59b: Partial verse-1 default suppressed — waiting for explicit verse in: "${text.slice(0, 60)}"`);
-          // Still update progressive state so we track book+chapter
-          const stage = FastBibleParser.parseStage(text);
-          if (stage?.type === "book_chapter") {
-            partialState.book = stage.book;
-            partialState.chapter = stage.chapter;
-            if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
-          }
-          return;
-        }
-        if (strictMode && !hasStrictCommandCue(text)) {
-          console.log(
-            `[AudioSocket] Strict mode: explicit command cue not yet present`,
-          );
-          return;
-        }
-        const candidateKey = referenceCommands.map(buildDedupKey).join("|");
-        const candidateNow = Date.now();
-        const sameCandidate = interimCandidate.key === candidateKey &&
-          candidateNow - interimCandidate.lastSeenAt < 1500;
-        interimCandidate = {
-          key: candidateKey,
-          count: sameCandidate ? interimCandidate.count + 1 : 1,
-          firstSeenAt: sameCandidate ? interimCandidate.firstSeenAt : candidateNow,
-          lastSeenAt: candidateNow,
-        };
-        const requiredResults =
-          confidence >= INTERIM_HIGH_CONFIDENCE ? 1 : 2;
-        if (interimCandidate.count < requiredResults) {
-          console.log(
-            `[AudioSocket] Holding interim ${candidateKey}: ` +
-            `${interimCandidate.count}/${requiredResults} at confidence ${confidence?.toFixed(2)}`,
-          );
-          return;
-        }
-        // Execute every newly detected reference in spoken order. Per-reference
-        // dedup prevents partial/EOT/final confirmations from replaying them.
-        for (const command of explicitCommands) {
-          await executeCommand(command, "Partial");
-        }
+      if (await executeTranscriptCommands(text, "Partial", confidence, false)) {
         resetPartialState();
-        return;
-      }
-
-      const fullCmd = deterministicCommand;
-
-      // Handle navigation/version commands immediately
-      if (fullCmd && fullCmd.name !== "project_bible_reference") {
-        await executeCommand(fullCmd, "Partial");
         return;
       }
 
@@ -507,18 +581,13 @@ export function setupAudioSocket(server: Server) {
     const handleEOT = async (label: string) => {
       const textToFlush = currentPartialText;
       if (!textToFlush) return;
+      currentPartialText = "";
 
       console.log(`[AudioSocket] ${label} — flushing: "${textToFlush}"`);
 
-      // Try full parse on the accumulated text
-      const references = FastBibleParser.scanForReferences(
-        FastBibleParser.normalizeNumbers(textToFlush.toLowerCase()),
-      );
-      if (references.length) {
-        for (const command of references) await executeCommand(command, label);
-      } else {
+      if (!await executeTranscriptCommands(textToFlush, label, 1, true)) {
         const cmd = FastBibleParser.parse(textToFlush);
-        if (cmd) await executeCommand(cmd, label);
+        if (cmd && cmd.name === "switch_bible_version") await enqueueCommand(cmd, label);
       }
 
       resetPartialState();
@@ -543,21 +612,17 @@ export function setupAudioSocket(server: Server) {
 
       const deterministicCommand = FastBibleParser.parse(textToParse);
 
-      if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
+      if (confidence != null && confidence < 0.5) {
         if (!isDeterministicContextNavigation(deterministicCommand) || confidence < 0.4) {
           console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
           return;
         }
       }
 
-      const references = FastBibleParser.scanForReferences(
-        FastBibleParser.normalizeNumbers(textToParse.toLowerCase()),
-      );
-      if (references.length) {
-        for (const command of references) await executeCommand(command, "Final");
-      } else {
-        const cmd = deterministicCommand;
-        if (cmd) await executeCommand(cmd, "Final");
+      if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true)) {
+        if (deterministicCommand?.name === "switch_bible_version") {
+          await enqueueCommand(deterministicCommand, "Final");
+        }
       }
     });
 
@@ -611,7 +676,7 @@ export function setupAudioSocket(server: Server) {
             audioChunkCount = 0;
             audioByteCount = 0;
             currentPartialText = "";
-            resetPartialState();
+            resetUtteranceTracking();
             transcriptionService.resetTranscriptContext();
             console.log("[HFB Trace] Session started", {
               traceId,

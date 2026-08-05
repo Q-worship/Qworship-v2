@@ -110,7 +110,8 @@ interface HFBStore {
   addHfbTranscriptLine: (line: HFBTranscriptLine) => void;
   clearHfbTranscript: () => void;
   hfbCurrentPartial: string;
-  setHfbCurrentPartial: (text: string) => void;
+  hfbCurrentPartialReferences: Array<{ book: string; chapter: number; verse: number; formatted: string }>;
+  setHfbCurrentPartial: (text: string, references?: Array<{ book: string; chapter: number; verse: number; formatted: string }>) => void;
 
   // Detected verses
   hfbDetectedVerses: HFBDetectedVerse[];
@@ -195,9 +196,14 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
   clearHfbTranscript: () => set({
     hfbTranscriptLines: [],
     hfbCurrentPartial: '',
+    hfbCurrentPartialReferences: [],
   }),
   hfbCurrentPartial: '',
-  setHfbCurrentPartial: (text) => set({ hfbCurrentPartial: text }),
+  hfbCurrentPartialReferences: [],
+  setHfbCurrentPartial: (text, references) => set({
+    hfbCurrentPartial: text,
+    hfbCurrentPartialReferences: references || [],
+  }),
 
   hfbDetectedVerses: [],
   setHfbDetectedVerses: (verses) => set((state) => ({
