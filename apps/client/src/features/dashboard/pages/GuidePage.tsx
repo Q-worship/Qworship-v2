@@ -82,7 +82,7 @@ export function GuidePage() {
       {/* Body */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <aside className="w-64 bg-[#61459D] p-4 overflow-y-auto flex-shrink-0">
+        <aside className="w-64 bg-[#61459D] pt-8 px-4 pb-4 overflow-y-auto flex-shrink-0">
           <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3">
             Guide Topics
           </h3>
