@@ -1,5 +1,6 @@
 import React from "react";
 import { IntegrationsModal } from "@/features/dashboard/components/modals/IntegrationsModal";
+import { GuideModal } from "@/features/dashboard/components/modals/GuideModal";
 import { PreferencesModal } from "@/features/dashboard/components/modals/PreferencesModal";
 import { DisplaySettingsModal } from "@/features/dashboard/components/modals/DisplaySettingsModal";
 import { AccountSettingsModal } from "@/features/dashboard/components/modals/AccountSettingsModal";
@@ -58,6 +59,10 @@ interface ModalsContainerProps {
   // Integrations Settings Modal
   isIntegrationsModalOpen: boolean;
   setIsIntegrationsModalOpen: (open: boolean) => void;
+
+  // Guide Modal
+  isGuideModalOpen: boolean;
+  setIsGuideModalOpen: (open: boolean) => void;
 
   // Preferences Modal
   isPreferencesModalOpen: boolean;
@@ -156,6 +161,12 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
       <IntegrationsModal
         isOpen={props.isIntegrationsModalOpen}
         onClose={() => props.setIsIntegrationsModalOpen(false)}
+      />
+
+      {/* Guide Modal */}
+      <GuideModal
+        isOpen={props.isGuideModalOpen}
+        onClose={() => props.setIsGuideModalOpen(false)}
       />
 
       {/* Preferences Modal */}

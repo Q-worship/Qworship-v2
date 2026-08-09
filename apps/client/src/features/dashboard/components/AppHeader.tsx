@@ -119,6 +119,7 @@ export interface AppHeaderProps {
   setIsSubscriptionOpen: (open: boolean) => void;
   setIsNotificationsModalOpen: (open: boolean) => void;
   handleLogout: () => void;
+  setIsGuideModalOpen: (open: boolean) => void;
 }
 
 export function AppHeader({
@@ -186,6 +187,7 @@ export function AppHeader({
   setIsSubscriptionOpen,
   setIsNotificationsModalOpen,
   handleLogout,
+  setIsGuideModalOpen,
 }: AppHeaderProps) {
   return (
     <div
@@ -269,7 +271,7 @@ export function AppHeader({
                     setLocation("/dashboard-help");
                     setActiveDropdown(null);
                   } else if (item.name === "Guide") {
-                    setLocation("/guides");
+                    setIsGuideModalOpen(true);
                     setActiveDropdown(null);
                   } else {
                     setActiveDropdown(null);
