@@ -77,7 +77,7 @@ export function GuidePage() {
         </p>
       </div>
 
-      <div className="h-px bg-white/10 flex-shrink-0" />
+      <div className="h-px bg-white/20 flex-shrink-0" />
 
       {/* Body */}
       <div className="flex flex-1 min-h-0">
