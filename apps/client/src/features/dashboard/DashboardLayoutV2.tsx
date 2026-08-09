@@ -270,8 +270,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     setIsNewPresentationModalOpen,
     isIntegrationsModalOpen,
     setIsIntegrationsModalOpen,
-    isGuideModalOpen,
-    setIsGuideModalOpen,
     isPreferencesModalOpen,
     setIsPreferencesModalOpen,
     isDisplaySettingsModalOpen,
@@ -4545,7 +4543,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         setHoveredSubmenu={setHoveredSubmenu}
         setLocation={setLocation}
         setIsSongbookOpen={setIsSongbookOpen}
-        setIsGuideModalOpen={setIsGuideModalOpen}
         projectMenuItems={projectMenuItems}
         insertItemMenuItems={insertItemMenuItems}
         settingsMenuItems={settingsMenuItems}
@@ -5702,8 +5699,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         deletePresentationMutation={deletePresentationMutation}
         isIntegrationsModalOpen={isIntegrationsModalOpen}
         setIsIntegrationsModalOpen={setIsIntegrationsModalOpen}
-        isGuideModalOpen={isGuideModalOpen}
-        setIsGuideModalOpen={setIsGuideModalOpen}
         isPreferencesModalOpen={isPreferencesModalOpen}
         setIsPreferencesModalOpen={setIsPreferencesModalOpen}
         isDisplaySettingsModalOpen={isDisplaySettingsModalOpen}

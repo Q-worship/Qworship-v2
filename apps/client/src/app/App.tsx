@@ -33,6 +33,7 @@ import { Layout } from "@/components/layout/Layout";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
 import DesktopAuthRemote from "@/features/auth/pages/DesktopAuthRemote";
 const LivePresentationV2 = lazy(() => import("@/features/dashboard/live/LivePresentationV2").then(m => ({ default: m.LivePresentationV2 })));
+const GuidePage = lazy(() => import("@/features/dashboard/pages/GuidePage").then(m => ({ default: m.GuidePage })));
 const QworshipHomeV2Wrapper = lazy(() => import("@/features/dashboard/DashboardLayoutV2").then(m => ({ default: m.QworshipHomeV2Wrapper })));
 
 import { AppLayout } from "./Layout";
@@ -207,6 +208,13 @@ export const AppRouter = () => {
           <Route path="/live">
             <AuthGuard>
               <LivePresentationV2 />
+            </AuthGuard>
+          </Route>
+
+          {/* Guide (NDI Bridge configuration, etc.) */}
+          <Route path="/dashboard-guide">
+            <AuthGuard>
+              <GuidePage />
             </AuthGuard>
           </Route>
 

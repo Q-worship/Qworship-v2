@@ -19,7 +19,6 @@ export interface DashboardModalContextType {
   isBackgroundAssetsModalOpen: boolean; setIsBackgroundAssetsModalOpen: (val: boolean) => void;
   isNewPresentationModalOpen: boolean; setIsNewPresentationModalOpen: (val: boolean) => void;
   isIntegrationsModalOpen: boolean; setIsIntegrationsModalOpen: (val: boolean) => void;
-  isGuideModalOpen: boolean; setIsGuideModalOpen: (val: boolean) => void;
   isPreferencesModalOpen: boolean; setIsPreferencesModalOpen: (val: boolean) => void;
   isDisplaySettingsModalOpen: boolean; setIsDisplaySettingsModalOpen: (val: boolean) => void;
   isAccountSettingsModalOpen: boolean; setIsAccountSettingsModalOpen: (val: boolean) => void;
@@ -54,7 +53,6 @@ export const DashboardModalProvider = ({ children }: { children: ReactNode }) =>
   const [isBackgroundAssetsModalOpen, setIsBackgroundAssetsModalOpen] = useState(false);
   const [isNewPresentationModalOpen, setIsNewPresentationModalOpen] = useState(false);
   const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
-  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [isPreferencesModalOpen, setIsPreferencesModalOpen] = useState(false);
   const [isDisplaySettingsModalOpen, setIsDisplaySettingsModalOpen] = useState(false);
   const [isAccountSettingsModalOpen, setIsAccountSettingsModalOpen] = useState(false);
@@ -88,7 +86,6 @@ export const DashboardModalProvider = ({ children }: { children: ReactNode }) =>
         isBackgroundAssetsModalOpen, setIsBackgroundAssetsModalOpen,
         isNewPresentationModalOpen, setIsNewPresentationModalOpen,
         isIntegrationsModalOpen, setIsIntegrationsModalOpen,
-        isGuideModalOpen, setIsGuideModalOpen,
         isPreferencesModalOpen, setIsPreferencesModalOpen,
         isDisplaySettingsModalOpen, setIsDisplaySettingsModalOpen,
         isAccountSettingsModalOpen, setIsAccountSettingsModalOpen,
