@@ -82,8 +82,8 @@ export function GuidePage() {
       {/* Body */}
       <div className="flex flex-1 min-h-0 gap-6 pt-6 px-8 pb-8">
         {/* Sidebar */}
-        <aside className="w-64 bg-[#61459D] p-6 overflow-y-auto flex-shrink-0">
-          <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3">
+        <aside className="w-80 bg-[#61459D] py-6 overflow-y-auto flex-shrink-0">
+          <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3 px-6">
             Guide Topics
           </h3>
           <div className="space-y-1">
@@ -92,7 +92,7 @@ export function GuidePage() {
                 key={topic.id}
                 type="button"
                 onClick={() => setActiveTopic(topic.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`w-full text-left px-6 py-2.5 text-sm font-medium transition-colors ${
                   activeTopic === topic.id
                     ? "bg-[#CEA2FD] text-[#3a2260]"
                     : "text-white/90 hover:bg-white/10"
@@ -116,7 +116,7 @@ export function GuidePage() {
                 and broadcast overlays.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-10 mb-8">
                 {/* Browser Source Links */}
                 <div className="bg-[#1E182D66] rounded-lg p-6">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
