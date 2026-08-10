@@ -125,12 +125,16 @@ function buildDedupKey(cmd: any, context?: any): string {
   return `${cmd.name}:${JSON.stringify(cmd.arguments)}`;
 }
 
-function isDeterministicContextNavigation(cmd: any): boolean {
-  return cmd?.name === "navigate_bible" &&
-    cmd.arguments?.direction === "goto" &&
-    cmd.arguments?.scope === "chapter_verse" &&
-    Number(cmd.arguments?.chapter) > 0 &&
-    Number(cmd.arguments?.verse) > 0;
+function isDeterministicNavigation(cmd: any): boolean {
+  if (cmd?.name !== "navigate_bible") return false;
+  const { direction, scope, chapter, verse } = cmd.arguments || {};
+  if (!['next', 'prev', 'goto'].includes(direction)) return false;
+  if (!['verse', 'chapter', 'chapter_verse'].includes(scope)) return false;
+  if (direction === 'goto' && scope === 'verse') return Number(verse) > 0;
+  if (direction === 'goto' && scope === 'chapter_verse') {
+    return Number(chapter) > 0 && Number(verse) > 0;
+  }
+  return direction !== 'goto';
 }
 
 export function setupAudioSocket(server: Server) {
@@ -150,6 +154,8 @@ export function setupAudioSocket(server: Server) {
     let traceId: string | null = null;
     let clientClickAt: number | null = null;
     let projectionSequence = 0;
+    let utteranceSequence = 0;
+    let utteranceOpen = false;
     let commandQueue: Promise<void> = Promise.resolve();
     const executedOccurrences = new Map<string, number>();
     const interimOccurrences = new Map<string, { count: number; lastSeenAt: number }>();
@@ -215,7 +221,11 @@ export function setupAudioSocket(server: Server) {
       // from the previous turn remain harmless because they retain their seen
       // occurrences until this explicit new-speech boundary.
       currentPartialText = "";
-      resetUtteranceTracking();
+      if (!utteranceOpen) {
+        utteranceSequence += 1;
+        utteranceOpen = true;
+        resetUtteranceTracking();
+      }
     });
 
     // ── Command execution ──────────────────────────────────────────────────
@@ -291,6 +301,7 @@ export function setupAudioSocket(server: Server) {
         if (currentContext?.book) {
           let chapter = currentContext.chapter;
           let verse = currentContext.verseStart;
+          let result = null;
           if (direction === "goto" && scope === "chapter_verse") {
             chapter = Number(targetChapter);
             verse = Number(targetVerse);
@@ -300,25 +311,15 @@ export function setupAudioSocket(server: Server) {
             chapter = Math.max(1, chapter + (direction === "next" ? 1 : -1));
             verse = 1;
           } else if (scope === "verse") {
-            if (direction === "prev" && verse <= 1 && chapter > 1) {
-              chapter -= 1;
-              verse = (await BibleService.getChapterMaxVerse(currentContext.book, chapter)) || 1;
-            } else {
-              verse = Math.max(1, verse + (direction === "next" ? 1 : -1));
-            }
+            result = await BibleService.navigateAdjacentVerse({
+              book: currentContext.book,
+              chapter,
+              verseStart: verse,
+              version: activeVersion as any,
+            }, direction === "next" ? "next" : "previous");
           }
 
-          let result = await BibleService.searchBible({
-            book: currentContext.book,
-            chapter,
-            verseStart: verse,
-            version: activeVersion as any,
-          });
-
-          // Cross chapter boundaries for next/previous verse navigation.
-          if (!result && scope === "verse" && direction === "next") {
-            chapter += 1;
-            verse = 1;
+          if (!result && scope !== "verse") {
             result = await BibleService.searchBible({
               book: currentContext.book, chapter, verseStart: verse,
               version: activeVersion as any,
@@ -402,13 +403,13 @@ export function setupAudioSocket(server: Server) {
       return scheduled;
     };
 
-    const commandOccurrenceEntries = (commands: any[]) => {
+    const commandOccurrenceEntries = (commands: any[], turnSequence: number) => {
       const counts = new Map<string, number>();
       return commands.map((command) => {
         const base = `${command.name}:${JSON.stringify(command.arguments)}`;
         const occurrence = (counts.get(base) || 0) + 1;
         counts.set(base, occurrence);
-        return { command, occurrenceKey: `${base}#${occurrence}` };
+        return { command, occurrenceKey: `${turnSequence}:${base}#${occurrence}` };
       });
     };
 
@@ -417,13 +418,14 @@ export function setupAudioSocket(server: Server) {
       source: string,
       confidence: number,
       isFinal: boolean,
+      turnSequence = utteranceSequence,
     ) => {
       const commands = FastBibleParser.scanForCommands(text);
       if (!commands.length) return false;
 
       let acceptedAny = false;
       const now = Date.now();
-      for (const { command, occurrenceKey } of commandOccurrenceEntries(commands)) {
+      for (const { command, occurrenceKey } of commandOccurrenceEntries(commands, turnSequence)) {
         const lastExecuted = executedOccurrences.get(occurrenceKey);
         if (lastExecuted && now - lastExecuted < EXECUTED_OCCURRENCE_TTL_MS) continue;
         if (
@@ -447,8 +449,13 @@ export function setupAudioSocket(server: Server) {
           const deterministicNavigation = command.name === "navigate_bible";
           const structurallyCompleteReference =
             command.name === "project_bible_reference" && command._confidence >= 0.88;
-          // Deterministic navigation commands execute immediately on first partial (requiredResults = 1)
-          const requiredResults = (deterministicNavigation || confidence >= INTERIM_HIGH_CONFIDENCE)
+          // Short navigation phrases are especially prone to interim revisions
+          // ("next" -> "next chapter", "verse ten" -> a full reference).
+          // References may project predictively, but navigation waits for an
+          // end-of-turn/final result so one utterance produces one movement.
+          const requiredResults = deterministicNavigation
+            ? Infinity
+            : confidence >= INTERIM_HIGH_CONFIDENCE
             ? 1
             : confidence >= 0.5 && structurallyCompleteReference
               ? 2
@@ -478,6 +485,14 @@ export function setupAudioSocket(server: Server) {
       confidence: number,
       displayText = text,
     ) => {
+      // Some providers deliver the first transcript result before their VAD
+      // SpeechStarted event. Open the turn here as a fallback so partial and
+      // final command occurrences retain one stable namespace.
+      if (!utteranceOpen) {
+        utteranceSequence += 1;
+        utteranceOpen = true;
+        resetUtteranceTracking();
+      }
       // Scan for any Bible references in partial text to provide live UI highlighting metadata
       const scannedCmds = FastBibleParser.scanForCommands(text);
       const detectedReferences = scannedCmds
@@ -502,7 +517,7 @@ export function setupAudioSocket(server: Server) {
 
       const versionCommand = FastBibleParser.parse(text);
       if (versionCommand?.name === "switch_bible_version") {
-        const occurrenceKey = `${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
+        const occurrenceKey = `${utteranceSequence}:${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
         if (!executedOccurrences.has(occurrenceKey) && confidence >= 0.5) {
           executedOccurrences.set(occurrenceKey, Date.now());
           await enqueueCommand(versionCommand, "Partial");
@@ -580,12 +595,18 @@ export function setupAudioSocket(server: Server) {
     // ── Tier 2: End-of-turn flush ──────────────────────────────────────────
     const handleEOT = async (label: string) => {
       const textToFlush = currentPartialText;
-      if (!textToFlush) return;
+      const turnSequence = utteranceSequence;
+      // Seal the turn before awaiting lookup/projection. A new SpeechStarted
+      // event can now open its own namespace while this handler finishes.
+      utteranceOpen = false;
+      if (!textToFlush) {
+        return;
+      }
       currentPartialText = "";
 
       console.log(`[AudioSocket] ${label} — flushing: "${textToFlush}"`);
 
-      if (!await executeTranscriptCommands(textToFlush, label, 1, true)) {
+      if (!await executeTranscriptCommands(textToFlush, label, 1, true, turnSequence)) {
         const cmd = FastBibleParser.parse(textToFlush);
         if (cmd && cmd.name === "switch_bible_version") await enqueueCommand(cmd, label);
       }
@@ -604,6 +625,10 @@ export function setupAudioSocket(server: Server) {
       recognitionText?: string,
     ) => {
       const textToParse = recognitionText || displayText;
+      const turnSequence = utteranceSequence;
+      // Capture and close synchronously so rapid consecutive commands never
+      // share an occurrence namespace while this async handler is awaiting.
+      utteranceOpen = false;
       console.log(`[AudioSocket][${T()}] FINAL [conf:${confidence?.toFixed(2)}]: "${textToParse.slice(0,80)}"`);
       currentPartialText = "";
       resetPartialState();
@@ -613,13 +638,13 @@ export function setupAudioSocket(server: Server) {
       const deterministicCommand = FastBibleParser.parse(textToParse);
 
       if (confidence != null && confidence < 0.5) {
-        if (!isDeterministicContextNavigation(deterministicCommand) || confidence < 0.4) {
+        if (!isDeterministicNavigation(deterministicCommand) || confidence < 0.35) {
           console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
           return;
         }
       }
 
-      if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true)) {
+      if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true, turnSequence)) {
         if (deterministicCommand?.name === "switch_bible_version") {
           await enqueueCommand(deterministicCommand, "Final");
         }

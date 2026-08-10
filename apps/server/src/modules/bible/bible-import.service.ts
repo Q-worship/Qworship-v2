@@ -1,6 +1,7 @@
 import fs from "fs";
 import { BibleVerse } from "./bible.model.js";
 import { isBibleVersionCode } from "./bible-translations.js";
+import { normalizeBookName } from "./handsfreeBible/index.js";
 
 export class BibleImportService {
   /**
@@ -26,6 +27,7 @@ export class BibleImportService {
     for (const book of bibleData.books) {
       bookIndex++;
       const testament = bookIndex <= 39 ? "old" : "new";
+      const canonicalBookName = normalizeBookName(book.name)?.name || book.name;
 
       for (const chapter of book.chapters) {
         // Extract chapter number from format "GEN.1" -> 1
@@ -45,13 +47,13 @@ export class BibleImportService {
             operations.push({
               updateOne: {
                 filter: {
-                  bookName: book.name,
+                  bookName: canonicalBookName,
                   chapter: chapterNum,
                   verse: verseNum,
                 },
                 update: {
                   $set: {
-                    bookName: book.name,
+                    bookName: canonicalBookName,
                     testament,
                     chapter: chapterNum,
                     verse: verseNum,

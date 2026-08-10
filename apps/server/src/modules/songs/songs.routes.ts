@@ -19,6 +19,7 @@ const songUpload = multer({
 
 // Retrieve library
 songsRouter.get('/', songsController.getSongs);
+songsRouter.get('/revision', songsController.getSongsRevision);
 songsRouter.get('/:id', songsController.getSongById);
 
 // Creation and modification

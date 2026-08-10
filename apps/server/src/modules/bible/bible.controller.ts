@@ -8,6 +8,7 @@ import {
   isBibleVersionCode,
 } from './bible-translations.js';
 import { getCanonicalBibleCoordinates } from './bible-admin.service.js';
+import { normalizeBookName } from './handsfreeBible/index.js';
 
 export const searchBible = async (req: Request, res: Response) => {
   try {
@@ -137,16 +138,22 @@ export const handleVoiceCommand = async (req: Request, res: Response) => {
       const verse = parseInt(currentVerse);
       const version = ((currentVersion as string) || 'kjv').toLowerCase();
 
-      let newVerseStart: number;
-
       if (reqCommandType === 'verse_change') {
-        if (direction === 'next') {
-          newVerseStart = verse + 1;
-        } else {
-          // previous
-          newVerseStart = Math.max(1, verse - 1);
-        }
-      } else if (reqCommandType === 'jump_to_verse') {
+        const result = await BibleService.navigateAdjacentVerse({
+          book,
+          chapter,
+          verseStart: verse,
+          version: version as any,
+        }, direction === 'next' ? 'next' : 'previous');
+        return result
+          ? res.json({ success: true, result, commandType: reqCommandType })
+          : res.json({ success: false, error: 'No adjacent verse found', commandType: reqCommandType });
+      }
+
+      let newVerseStart: number;
+      let navigationChapter = chapter;
+
+      if (reqCommandType === 'jump_to_verse') {
         newVerseStart = parseInt(targetVerse) || verse;
       } else if (reqCommandType === 'jump_to_chapter_verse') {
         const newChapter = parseInt(targetChapter);
@@ -190,13 +197,13 @@ export const handleVoiceCommand = async (req: Request, res: Response) => {
 
       const ref: BibleReference = {
         book,
-        chapter,
+        chapter: navigationChapter,
         verseStart: newVerseStart,
         version: version as any,
       };
 
-      console.log(`[VoiceCommand] Navigation (${reqCommandType}/${direction}): ${book} ${chapter}:${newVerseStart} [${version}]`);
-      const result = await BibleService.searchBible(ref);
+      console.log(`[VoiceCommand] Navigation (${reqCommandType}/${direction}): ${book} ${navigationChapter}:${newVerseStart} [${version}]`);
+      let result = await BibleService.searchBible(ref);
       if (result && result.verses.length > 0) {
         return res.json({ success: true, result, commandType: reqCommandType });
       }
@@ -320,15 +327,20 @@ export const exportBibleVersion = async (req: Request, res: Response) => {
     ).sort({ bookName: 1, chapter: 1, verse: 1 }).lean();
 
     const canonical = getCanonicalBibleCoordinates();
-    const payload = verses
-      .filter((v: any) => canonical.has(`${v.bookName}|${v.chapter}|${v.verse}`))
-      .map((v: any) => ({
-        book: v.bookName,
+    const payloadByCoordinate = new Map<string, any>();
+    for (const v of verses as any[]) {
+      const book = normalizeBookName(v.bookName)?.name || v.bookName;
+      const coordinate = `${book}|${v.chapter}|${v.verse}`;
+      if (!canonical.has(coordinate)) continue;
+      payloadByCoordinate.set(coordinate, {
+        book,
         chapter: v.chapter,
         verse: v.verse,
         text: v[version] || '',
         version,
-      }));
+      });
+    }
+    const payload = [...payloadByCoordinate.values()];
 
     const translation = await BibleTranslation.findOne({ code: version }, { revision: 1 }).lean();
     return res.json({

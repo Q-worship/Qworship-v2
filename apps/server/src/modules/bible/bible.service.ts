@@ -164,6 +164,28 @@ export interface VoiceCommand {
 export class BibleService {
   private static bibleStore: BibleMemoryStore = {};
   private static isInitialized = false;
+  private static readonly LAZY_CHAPTER_CACHE_LIMIT = 256;
+  private static lazyChapterLru = new Map<string, true>();
+
+  private static touchLazyChapter(version: string, book: string, chapter: number) {
+    if (BUNDLED_BIBLE_VERSION_KEYS.includes(version as any)) return;
+    const key = `${version}|${book}|${chapter}`;
+    this.lazyChapterLru.delete(key);
+    this.lazyChapterLru.set(key, true);
+  }
+
+  private static enforceLazyChapterLimit() {
+    while (this.lazyChapterLru.size > this.LAZY_CHAPTER_CACHE_LIMIT) {
+      const oldest = this.lazyChapterLru.keys().next().value as string | undefined;
+      if (!oldest) return;
+      this.lazyChapterLru.delete(oldest);
+      const [version, book, chapterText] = oldest.split("|");
+      const chapters = this.bibleStore[version]?.[book];
+      if (!chapters) continue;
+      delete chapters[Number(chapterText)];
+      if (Object.keys(chapters).length === 0) delete this.bibleStore[version][book];
+    }
+  }
 
   static invalidateCache() {
     verseCache.clear();
@@ -250,21 +272,29 @@ export class BibleService {
     // MongoDB is authoritative. Overlay every populated DB translation onto
     // the bundled baseline so admin repairs are effective after every restart.
     const databaseVerses = await BibleVerse.find(
-      {},
+      {
+        $or: versions.map(version => ({
+          [version]: { $exists: true, $nin: ["", null] },
+        })),
+      },
       Object.fromEntries([
         ["bookName", 1], ["chapter", 1], ["verse", 1],
         ...versions.map(version => [version, 1]),
       ]),
     ).lean();
+    let appliedTexts = 0;
     for (const row of databaseVerses as any[]) {
       for (const version of versions) {
         const text = row[version];
         if (typeof text === "string" && text.trim()) {
           this.upsertMemoryVerse(version, row.bookName, row.chapter, row.verse, text.trim());
+          appliedTexts += 1;
         }
       }
     }
-    console.log(`[BibleService] Applied ${databaseVerses.length} authoritative database verse records`);
+    console.log(
+      `[BibleService] Applied ${appliedTexts} bundled translation texts from ${databaseVerses.length} authoritative database rows`,
+    );
 
     const duration = performance.now() - startTime;
     console.log(`\x1b[32m[BibleService] Authoritative memory overlay ready in ${duration.toFixed(2)}ms\x1b[0m`);
@@ -303,6 +333,7 @@ export class BibleService {
 
     const chapterVerses = bookData[ref.chapter];
     if (!chapterVerses) return null;
+    this.touchLazyChapter(version, ref.book, ref.chapter);
 
     const verseEnd = ref.verseEnd || ref.verseStart;
     const filtered = chapterVerses.filter(v => v.verse >= ref.verseStart && v.verse <= verseEnd);
@@ -2250,10 +2281,11 @@ export class BibleService {
 
       const version = reference.version || "kjv";
       const verseEnd = reference.verseEnd || reference.verseStart;
+      const usesLazyChapterCache = !BUNDLED_BIBLE_VERSION_KEYS.includes(version as any);
 
       // 1. Try In-Memory Store (0.01ms latency)
       if (this.isInitialized) {
-        const memoryResult = this.getFromMemory(reference);
+        const memoryResult = this.getFromMemory({ ...reference, book: normalizedBookName });
         if (memoryResult) {
           const duration = performance.now() - startTime;
           console.log(`🚀 [Memory Store HIT] ${cacheKey} in ${duration.toFixed(2)}ms`);
@@ -2262,11 +2294,16 @@ export class BibleService {
       }
 
       // 2. Fallback to Mongoose for verse query (Only if JSON store isn't ready/found)
+      const bookNameMatcher = normalizedBookName === "Psalms"
+        ? /^(?:Psalm|Psalms)$/i
+        : new RegExp(`^${normalizedBookName}$`, 'i');
       const databaseResults = await BibleVerse.find(
         {
-          bookName: new RegExp(`^${normalizedBookName}$`, 'i'),
+          bookName: bookNameMatcher,
           chapter: reference.chapter,
-          verse: { $gte: reference.verseStart, $lte: verseEnd },
+          verse: usesLazyChapterCache
+            ? { $gte: 1, $lte: 176 }
+            : { $gte: reference.verseStart, $lte: verseEnd },
         },
         { bookName: 1, chapter: 1, verse: 1, [version]: 1 },
       ).sort({ verse: 1 }).lean();
@@ -2274,9 +2311,13 @@ export class BibleService {
         (this.bibleStore.kjv?.[normalizedBookName]?.[reference.chapter] || [])
           .map(item => item.verse),
       );
-      const verseResults = canonicalVerseNumbers.size
+      const canonicalResults = canonicalVerseNumbers.size
         ? databaseResults.filter((item: any) => canonicalVerseNumbers.has(item.verse))
         : databaseResults;
+      const verseResults = usesLazyChapterCache
+        ? canonicalResults.filter((item: any) =>
+            item.verse >= reference.verseStart && item.verse <= verseEnd)
+        : canonicalResults;
 
       if (verseResults.length === 0) {
         console.error(
@@ -2296,16 +2337,21 @@ export class BibleService {
         [version]: typeof v[version] === "string" ? v[version] : null,
       }));
 
-      for (const item of verseResults as any[]) {
+      // A lazy miss loads the complete chapter in one indexed query. Contextual
+      // next/previous commands then remain memory hits instead of making one DB
+      // round-trip per verse.
+      for (const item of canonicalResults as any[]) {
         if (typeof item[version] === "string" && item[version].trim()) {
           this.upsertMemoryVerse(
-            version, item.bookName, item.chapter, item.verse, item[version].trim(),
+            version, normalizedBookName, item.chapter, item.verse, item[version].trim(),
           );
         }
       }
+      this.touchLazyChapter(version, normalizedBookName, reference.chapter);
+      this.enforceLazyChapterLimit();
 
       // Normalize the book name based on the actual DB result
-      const exactBookName = verseResults[0].bookName || normalizedBookName;
+      const exactBookName = normalizedBookName;
 
       const formattedReference =
         verseEnd > reference.verseStart
@@ -2343,14 +2389,25 @@ export class BibleService {
   static async getChapterMaxVerse(
     bookName: string,
     chapter: number,
+    version = "kjv",
   ): Promise<number | null> {
     try {
       const bookResult = normalizeBookName(bookName);
       const normalizedBookName = bookResult?.name || bookName;
+      const versionKey = version.toLowerCase();
+      const memoryChapter = this.bibleStore[versionKey]?.[normalizedBookName]?.[chapter];
+      if (memoryChapter?.length) {
+        const populated = memoryChapter.filter(item => item.text?.trim());
+        if (populated.length) return Math.max(...populated.map(item => item.verse));
+      }
+      const bookNameMatcher = normalizedBookName === "Psalms"
+        ? /^(?:Psalm|Psalms)$/i
+        : new RegExp(`^${normalizedBookName}$`, 'i');
 
       const highestVerse = await BibleVerse.findOne({
-        bookName: new RegExp(`^${normalizedBookName}$`, 'i'),
+        bookName: bookNameMatcher,
         chapter: chapter,
+        [versionKey]: { $exists: true, $nin: ["", null] },
       })
         .sort({ verse: -1 })
         .lean();
@@ -2360,6 +2417,66 @@ export class BibleService {
       console.error("Error fetching max verse:", error);
       return null;
     }
+  }
+
+  static async navigateAdjacentVerse(
+    reference: BibleReference,
+    direction: "next" | "previous",
+  ): Promise<BibleSearchResult | null> {
+    const bookResult = normalizeBookName(reference.book);
+    const book = bookResult?.name || reference.book;
+    const version = (reference.version || "kjv").toLowerCase();
+    const bookStore = this.bibleStore[version]?.[book];
+    if (bookStore) {
+      const chapters = Object.keys(bookStore).map(Number).sort((a, b) => a - b);
+      const orderedChapters = direction === "next" ? chapters : [...chapters].reverse();
+      for (const chapter of orderedChapters) {
+        if (direction === "next" && chapter < reference.chapter) continue;
+        if (direction === "previous" && chapter > reference.chapter) continue;
+        const populated = (bookStore[chapter] || [])
+          .filter(item => item.text?.trim())
+          .sort((a, b) => a.verse - b.verse);
+        const candidate = direction === "next"
+          ? populated.find(item => chapter > reference.chapter || item.verse > reference.verseStart)
+          : [...populated].reverse().find(item => chapter < reference.chapter || item.verse < reference.verseStart);
+        if (candidate) {
+          return this.searchBible({
+            book, chapter, verseStart: candidate.verse, version: version as BibleVersion,
+          });
+        }
+      }
+    }
+
+    const bookNameMatcher = book === "Psalms"
+      ? /^(?:Psalm|Psalms)$/i
+      : new RegExp(`^${book}$`, "i");
+    const coordinateFilter = direction === "next"
+      ? {
+          $or: [
+            { chapter: reference.chapter, verse: { $gt: reference.verseStart } },
+            { chapter: { $gt: reference.chapter } },
+          ],
+        }
+      : {
+          $or: [
+            { chapter: reference.chapter, verse: { $lt: reference.verseStart } },
+            { chapter: { $lt: reference.chapter } },
+          ],
+        };
+    const candidate = await BibleVerse.findOne({
+      bookName: bookNameMatcher,
+      [version]: { $exists: true, $nin: ["", null] },
+      ...coordinateFilter,
+    })
+      .sort(direction === "next" ? { chapter: 1, verse: 1 } : { chapter: -1, verse: -1 })
+      .lean();
+    if (!candidate) return null;
+    return this.searchBible({
+      book,
+      chapter: candidate.chapter,
+      verseStart: candidate.verse,
+      version: version as BibleVersion,
+    });
   }
 
   /**

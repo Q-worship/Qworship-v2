@@ -15,6 +15,7 @@ export interface SyncState {
   status: "downloading" | "synced" | "error";
   totalVerses?: number;
   revision?: number;
+  fingerprint?: string;
 }
 
 const db = new Dexie("QworshipLocalDB") as Dexie & {
@@ -46,6 +47,31 @@ db.version(4).stores({
   // before QC65 populated the server data. All other versions are unaffected.
   await tx.table("verses").where("version").anyOf(["amp", "msg"]).delete();
   console.log("[DB Migration v4] Cleared stale AMP and MSG verse cache.");
+});
+
+// v5 removes the old auto-increment verse store. Lazy chapter writes used
+// bulkPut without an id, so the compound coordinate index could accumulate
+// duplicate verses. Bible data is a disposable offline cache; dropping it is
+// safer than attempting to guess which duplicate is authoritative.
+db.version(5).stores({
+  verses: null,
+  syncState: "version",
+  songs: "++id, songId, title, [title+lyrics]",
+}).upgrade(async (tx) => {
+  const syncState = tx.table("syncState");
+  const states = await syncState.toArray();
+  await syncState.bulkDelete(
+    states.filter((state: SyncState) => state.version !== "songs").map((state: SyncState) => state.version),
+  );
+});
+
+// A verse coordinate is now the primary key. bulkPut therefore replaces the
+// same verse instead of creating another row.
+db.version(6).stores({
+  verses:
+    "[version+book+chapter+verse], version, book, chapter, [version+book], [version+book+chapter]",
+  syncState: "version",
+  songs: "++id, songId, title, [title+lyrics]",
 });
 
 export { db };

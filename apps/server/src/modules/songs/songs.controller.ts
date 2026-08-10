@@ -2,6 +2,20 @@ import { Request, Response } from 'express';
 import { Song, ISong } from './song.model.js';
 import { SongParser } from './songParser.js'; // The legacy parsing engine
 
+export const getSongsRevision = async (_req: Request, res: Response) => {
+  try {
+    const [count, latest] = await Promise.all([
+      Song.countDocuments(),
+      Song.findOne({}, { updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),
+    ]);
+    const latestUpdate = latest?.updatedAt ? new Date(latest.updatedAt).getTime() : 0;
+    res.json({ success: true, fingerprint: `${count}:${latestUpdate}`, count });
+  } catch (error) {
+    console.error("Songs revision error:", error);
+    res.status(500).json({ success: false, error: "Failed to inspect song library" });
+  }
+};
+
 // Get all songs for organization
 export const getSongs = async (req: any, res: Response) => {
   try {

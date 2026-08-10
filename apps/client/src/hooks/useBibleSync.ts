@@ -9,10 +9,19 @@ let revisionCheck: Promise<Record<string, number>> | null = null;
 let revisionCheckedAt = 0;
 let cachedRevisions: Record<string, number> = {};
 
+export interface BibleSyncProgress {
+  completed: number;
+  total: number;
+  version?: string;
+  status: "checking" | "downloading" | "ready";
+}
+
 export const checkBibleCacheRevisions = (
   force = false,
 ): Promise<Record<string, number>> => {
-  if (!force && revisionCheck) return revisionCheck;
+  // A forced refresh bypasses the five-minute cache, not an identical request
+  // already in flight. Sharing the active check prevents double invalidation.
+  if (revisionCheck) return revisionCheck;
   if (!force && revisionCheckedAt && Date.now() - revisionCheckedAt < REVISION_CHECK_INTERVAL_MS) {
     return Promise.resolve(cachedRevisions);
   }
@@ -84,6 +93,10 @@ export const ensureBibleVersionCached = (rawVersion: string): Promise<void> => {
       throw new Error("Invalid Bible export payload");
     }
     const verses = response.data.verses;
+    const exportedTotal = Number(response.data.total);
+    if (Number.isFinite(exportedTotal) && verses.length !== exportedTotal) {
+      throw new Error(`${version.toUpperCase()} export was truncated during download`);
+    }
     await db.transaction('rw', db.verses, db.syncState, async () => {
       await db.verses.where('version').equals(version).delete();
       await db.verses.bulkAdd(verses);
@@ -113,6 +126,32 @@ export const ensureBibleVersionCached = (rawVersion: string): Promise<void> => {
 
   versionHydrations.set(version, hydration);
   return hydration;
+};
+
+export const syncAllBibleVersions = async (
+  onProgress?: (progress: BibleSyncProgress) => void,
+): Promise<string[]> => {
+  onProgress?.({ completed: 0, total: 1, status: "checking" });
+  const [catalogResponse] = await Promise.all([
+    apiClient.get('/bible/translations'),
+    checkBibleCacheRevisions(true),
+  ]);
+  const translations = Array.isArray(catalogResponse.data?.translations)
+    ? catalogResponse.data.translations
+    : [];
+  const versions = translations
+    .filter((translation: any) => translation?.imported)
+    .map((translation: any) => String(translation.code || '').toLowerCase())
+    .filter(Boolean);
+  if (!versions.length) throw new Error("No imported Bible translations are available to synchronize");
+
+  for (let index = 0; index < versions.length; index += 1) {
+    const version = versions[index];
+    onProgress?.({ completed: index, total: versions.length, version, status: "downloading" });
+    await ensureBibleVersionCached(version);
+    onProgress?.({ completed: index + 1, total: versions.length, version, status: "ready" });
+  }
+  return versions;
 };
 
 export const useBibleSync = (enabled = true) => {
@@ -150,6 +189,21 @@ export const useBibleSync = (enabled = true) => {
     }
   }, [checkAndHydrateTargetVersion]);
 
+  const hydrateAllVersions = useCallback(async (
+    onProgress?: (progress: BibleSyncProgress) => void,
+  ) => {
+    setIsSyncing(true);
+    setError(null);
+    try {
+      return await syncAllBibleVersions(onProgress);
+    } catch (err: any) {
+      setError(err?.message || "Failed to sync offline bible");
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
   // Hook will auto-hydrate default versions if not found
   // DISABLED: Auto-sync on load causes significant startup lag due to massive 6-version payload.
   // Suggest moving this to a manual "Sync for Offline" button in Settings.
@@ -175,6 +229,7 @@ export const useBibleSync = (enabled = true) => {
     isSyncing,
     error,
     checkAndHydrateTargetVersion,
-    hydrateDefaultVersions
+    hydrateDefaultVersions,
+    hydrateAllVersions,
   };
 };

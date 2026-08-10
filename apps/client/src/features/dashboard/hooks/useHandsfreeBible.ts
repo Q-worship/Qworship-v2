@@ -40,7 +40,6 @@ export const useHandsfreeBible = ({
   const {
     currentVerse: projectedBibleVerse,
     setVerse: setZustandVerse,
-    setBibleVersion: setZustandBibleVersion,
     clearProjection: clearZustandProjection,
   } = useBibleProjectionStore();
 
@@ -130,8 +129,7 @@ export const useHandsfreeBible = ({
     if (selectedBibleVersionRef.current === normalized) return;
     selectedBibleVersionRef.current = normalized;
     setSelectedBibleVersion(normalized);
-    setZustandBibleVersion(normalized);
-  }, [hfbVersion, setZustandBibleVersion]);
+  }, [hfbVersion]);
 
   useEffect(() => {
     if (isHandsfreeBibleOpen || isPanelActive) {
@@ -522,7 +520,6 @@ export const useHandsfreeBible = ({
     selectedBibleVersionRef.current = normalized;
     setSelectedBibleVersion(normalized);
     useHFBStore.getState().setHfbVersion(normalized);
-    setZustandBibleVersion(normalized);
     setDetectedCommands(`Switched to ${normalized}`);
     const ctx = currentVerseContextRef.current;
     if (ctx?.book && ctx.chapter && ctx.verse) {
@@ -531,9 +528,13 @@ export const useHandsfreeBible = ({
     }
   };
 
-  const processContextNavigationLocally = (text: string): boolean => {
+  const processContextNavigationLocally = (text: string, commit = false): boolean => {
     const navigation = parseHFBContextNavigation(text);
     if (!navigation) return false;
+    // Interim transcripts often expose "chapter X verse Y" before the book
+    // name settles. Treat it as a candidate, but only let a final transcript
+    // navigate using the current book context.
+    if (!commit) return true;
     const current = useBibleProjectionStore.getState().currentVerse ||
       currentVerseContextRef.current;
     if (!current?.book) return false;
@@ -592,7 +593,6 @@ export const useHandsfreeBible = ({
       useHFBStore.getState().setHfbCurrentPartial(""); // Clear partial when final arrives
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
-      processContextNavigationLocally(text);
       if (text.trim()) {
         useHFBStore.getState().addHfbTranscriptLine({
           id: Date.now(),

@@ -585,6 +585,10 @@ export const migrateBibleBookNames = async (req: Request, res: Response) => {
     console.log(
       `[Bible Migration] ✅ Renamed ${totalRenamed} documents across ${results.length} book name fixes`,
     );
+    if (totalRenamed > 0) {
+      await BibleTranslation.updateMany({}, { $inc: { revision: 1 } });
+      BibleService.invalidateCache();
+    }
     res.json({ success: true, totalRenamed, results });
   } catch (error: any) {
     console.error("[Bible Migration] Error:", error);

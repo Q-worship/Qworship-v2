@@ -6,6 +6,8 @@ import { apiRequest } from '@/lib/queryClient'
 import { images } from '@/lib/theme'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { syncAllBibleVersions } from '@/hooks/useBibleSync'
+import { syncSongsForProject } from '@/hooks/useSongSync'
 
 interface ProjectSummary {
   id: string
@@ -56,6 +58,10 @@ export function ProjectSelectionView() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
+  const [projectToPrepare, setProjectToPrepare] = useState<ProjectSummary | null>(null)
+  const [preparationProgress, setPreparationProgress] = useState(0)
+  const [preparationStatus, setPreparationStatus] = useState('Preparing your workspace')
+  const [preparationError, setPreparationError] = useState('')
   const [error, setError] = useState('')
   const user = getStoredAuthUser()
   const firstName = user?.firstName ?? 'there'
@@ -80,7 +86,7 @@ export function ProjectSelectionView() {
     return query ? projects.filter(project => project.name.toLowerCase().includes(query)) : projects
   }, [projects, searchQuery])
 
-  const enterProject = (project: ProjectSummary) => {
+  const finishEnteringProject = (project: ProjectSummary) => {
     sessionStorage.setItem('qworship_current_presentation_id', project.id)
     sessionStorage.setItem('qworship_current_presentation_name', project.name)
     sessionStorage.setItem(
@@ -88,6 +94,34 @@ export function ProjectSelectionView() {
       JSON.stringify({ id: project.id, name: project.name, presentationDate: project.presentationDate }),
     )
     navigate('/dashboard')
+  }
+
+  const prepareAndEnterProject = async (project: ProjectSummary, retry = false) => {
+    if (projectToPrepare && !retry) return
+    setProjectToPrepare(project)
+    setPreparationError('')
+    setPreparationProgress(3)
+    setPreparationStatus('Checking your offline Bible data')
+    try {
+      await syncAllBibleVersions(({ completed, total, version, status }) => {
+        const ratio = total > 0 ? completed / total : 1
+        setPreparationProgress(Math.max(5, Math.round(5 + ratio * 78)))
+        setPreparationStatus(
+          status === 'checking'
+            ? 'Checking your offline Bible data'
+            : `Loading ${version?.toUpperCase() || 'Bible'} data for optimal latency`,
+        )
+      })
+      setPreparationProgress(88)
+      setPreparationStatus('Loading your songbook data')
+      await syncSongsForProject()
+      setPreparationProgress(100)
+      setPreparationStatus('Your workspace is ready')
+      finishEnteringProject(project)
+    } catch (reason) {
+      setPreparationError(reason instanceof Error ? reason.message : 'Unable to prepare your offline workspace')
+      setPreparationStatus('Workspace preparation was interrupted')
+    }
   }
 
   const createProject = async (event: FormEvent) => {
@@ -102,7 +136,7 @@ export function ProjectSelectionView() {
         presentationDate: toLocalDateKey(selectedDate),
       })
       const data = await response.json()
-      enterProject(data.presentation)
+      await prepareAndEnterProject(data.presentation)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to create project')
       setIsCreating(false)
@@ -121,6 +155,39 @@ export function ProjectSelectionView() {
 
   return (
     <div className="project-selection">
+      {projectToPrepare ? (
+        <div className="workspace-preparation" role="dialog" aria-modal="true" aria-labelledby="workspace-preparation-title">
+          <div className="workspace-preparation__content">
+            <img src={images.logo} alt="" className="workspace-preparation__logo" />
+            <h1 id="workspace-preparation-title" className="workspace-preparation__title">Preparing your Qworship Workspace</h1>
+            <div
+              className="workspace-preparation__progress"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={preparationProgress}
+            >
+              <span style={{ width: `${preparationProgress}%` }} />
+            </div>
+            <p className="workspace-preparation__status" aria-live="polite">{preparationStatus}</p>
+            {preparationError ? (
+              <div className="workspace-preparation__error" role="alert">
+                <p>{preparationError}</p>
+                <div className="workspace-preparation__actions">
+                  <button type="button" onClick={() => {
+                    const project = projectToPrepare
+                    void prepareAndEnterProject(project, true)
+                  }}>Try again</button>
+                  <button type="button" onClick={() => {
+                    setProjectToPrepare(null)
+                    setIsCreating(false)
+                  }}>Back to projects</button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <header className="project-selection__header">
         <div className="project-selection__header-left">
           <img src={images.logo} alt="Q-Worship" className="project-selection__logo" />
@@ -184,7 +251,7 @@ export function ProjectSelectionView() {
             {isLoading ? <p className="project-selection__card-subtitle" role="status">Loading your projects…</p> : null}
             {!isLoading && filteredPresentations.length === 0 ? <p className="project-selection__card-subtitle">{searchQuery ? 'No projects match your search.' : 'You have no projects yet. Create your first presentation.'}</p> : null}
             <ul className="project-selection__list">
-              {filteredPresentations.map(project => <li key={project.id}><button type="button" className="project-selection__list-item" onClick={() => enterProject(project)}><div className="project-selection__list-top"><strong>{project.name}</strong><span>{project.description || 'Presentation project'}</span></div><div className="project-selection__list-meta"><span>{formatDate(project.presentationDate)}</span><span>Updated {formatDate(project.updatedAt)}</span><span>{project.slideCount || 0} slides</span></div></button></li>)}
+              {filteredPresentations.map(project => <li key={project.id}><button type="button" className="project-selection__list-item" onClick={() => void prepareAndEnterProject(project)}><div className="project-selection__list-top"><strong>{project.name}</strong><span>{project.description || 'Presentation project'}</span></div><div className="project-selection__list-meta"><span>{formatDate(project.presentationDate)}</span><span>Updated {formatDate(project.updatedAt)}</span><span>{project.slideCount || 0} slides</span></div></button></li>)}
             </ul>
           </section>
         </div>

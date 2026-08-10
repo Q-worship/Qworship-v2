@@ -45,6 +45,25 @@ function runTests() {
   const repeatedNavigation = FastBibleParser.scanForCommands("next verse next verse");
   assert.equal(repeatedNavigation.length, 2, "Repeated next commands need distinct occurrences");
 
+  const navigationCases = [
+    { input: "chapter 4 verse 7", expected: { direction: "goto", scope: "chapter_verse", chapter: 4, verse: 7 } },
+    { input: "chapter four and verse seven", expected: { direction: "goto", scope: "chapter_verse", chapter: 4, verse: 7 } },
+    { input: "go to verse 10", expected: { direction: "goto", scope: "verse", verse: 10 } },
+    { input: "next verse", expected: { direction: "next", scope: "verse" } },
+    { input: "let's look at the next verse", expected: { direction: "next", scope: "verse" } },
+    { input: "let us look at the next verse", expected: { direction: "next", scope: "verse" } },
+    { input: "previous verse", expected: { direction: "prev", scope: "verse" } },
+    { input: "let's look at the previous verse", expected: { direction: "prev", scope: "verse" } },
+    { input: "next chapter", expected: { direction: "next", scope: "chapter" } },
+    { input: "go back a chapter", expected: { direction: "prev", scope: "chapter" } },
+  ];
+  for (const test of navigationCases) {
+    const commands = FastBibleParser.scanForCommands(test.input);
+    assert.equal(commands.length, 1, `${test.input} must produce exactly one navigation command`);
+    assert.equal(commands[0].name, "navigate_bible", test.input);
+    assert.deepEqual(commands[0].arguments, test.expected, test.input);
+  }
+
   const continuous = FastBibleParser.scanForCommands(
     "lets see Gen 6 10 show me Romans chapter 4 verse 3 " +
     "Leviticus chapter 6 verse 12 Exodus 2 verse 8",
@@ -101,7 +120,7 @@ function runTests() {
   assert.equal(multiCmd[1].arguments.chapter, 2);
   assert.equal(multiCmd[1].arguments.verse, 3);
 
-  console.log(`HFB parser regressions passed (${references.length + 10} groups).`);
+  console.log(`HFB parser regressions passed (${references.length + 11} groups).`);
 }
 
 runTests();

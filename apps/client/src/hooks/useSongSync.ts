@@ -1,7 +1,46 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { db } from "../lib/db";
 import { apiRequest } from "../lib/queryClient";
 import { useSongRAMCache } from "../features/dashboard/hooks/useSongRAMCache";
+
+export const syncSongsForProject = async (): Promise<void> => {
+  const revisionResponse = await apiRequest("GET", "/api/songs/revision");
+  const revisionData = await revisionResponse.json();
+  const fingerprint = String(revisionData?.fingerprint || "");
+  const state = await db.syncState.get("songs");
+  const songCount = await db.songs.count();
+  if (
+    state?.status === "synced" &&
+    state.fingerprint === fingerprint &&
+    songCount === Number(revisionData?.count || 0)
+  ) {
+    await useSongRAMCache.getState().loadFromDisk();
+    return;
+  }
+
+  await db.syncState.put({
+    version: "songs", status: "downloading", syncedAt: Date.now(), fingerprint,
+  });
+  const response = await apiRequest("GET", "/api/songs");
+  const data = await response.json();
+  const songs = Array.isArray(data) ? data : (data?.songs ?? []);
+  const mappedSongs = songs.map((song: any) => ({
+    ...song,
+    songId: song.id || song._id,
+  }));
+  await db.transaction('rw', db.songs, db.syncState, async () => {
+    await db.songs.clear();
+    if (mappedSongs.length) await db.songs.bulkAdd(mappedSongs);
+    await db.syncState.put({
+      version: "songs",
+      status: "synced",
+      syncedAt: Date.now(),
+      totalVerses: mappedSongs.length,
+      fingerprint,
+    });
+  });
+  await useSongRAMCache.getState().loadFromDisk(true);
+};
 
 export const useSongSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -9,19 +48,13 @@ export const useSongSync = () => {
 
   const syncSongsFromServer = useCallback(async (force = false) => {
     try {
-      // Check if songs are already synchronized securely
       if (!force) {
-        const state = await db.syncState.get("songs");
-        if (state && state.status === "synced") {
-          const songCount = await db.songs.count();
-          
-          // Verify we didn't just save a corrupted sync state or lose our IndexedDB
-          if (songCount > 0 && (!state.totalVerses || songCount === state.totalVerses)) {
-             return; // Already perfectly synced, avoid redundant network overhead
-          }
-        }
+        setIsSyncing(true);
+        setError(null);
+        await syncSongsForProject();
+        return;
       }
-
+      // Check if songs are already synchronized securely
       setIsSyncing(true);
       setError(null);
 
@@ -62,7 +95,7 @@ export const useSongSync = () => {
         console.log(`[Offline Songs] Synced successfully: ${songs.length} songs.`);
         
         // After syncing refresh the RAM cache to reload the newest list into memory
-        await useSongRAMCache.getState().loadFromDisk();
+        await useSongRAMCache.getState().loadFromDisk(true);
       } else {
         // If data is weirdly empty, we can just mark it synced to avoid endless retries
         await db.syncState.put({

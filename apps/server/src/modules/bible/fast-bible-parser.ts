@@ -531,6 +531,13 @@ export class FastBibleParser {
       const start = match.index;
       const end = start + match[0].length;
       if (overlapsReference(start, end)) return;
+      const overlappingIndexes = navigation
+        .map((command, index) => ({ command, index }))
+        .filter(({ command }) => start < command._end && end > command._start);
+      const matchLength = end - start;
+      if (overlappingIndexes.some(({ command }) =>
+        command._end - command._start >= matchLength)) return;
+      for (const { index } of overlappingIndexes.reverse()) navigation.splice(index, 1);
       navigation.push({
         name: "navigate_bible",
         arguments: args,
