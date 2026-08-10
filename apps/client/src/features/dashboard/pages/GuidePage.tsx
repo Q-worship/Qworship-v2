@@ -82,7 +82,7 @@ export function GuidePage() {
       {/* Body */}
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <aside className="w-64 bg-[#61459D] pt-8 px-4 pb-4 overflow-y-auto flex-shrink-0">
+        <aside className="w-64 bg-[#61459D] pt-8 px-6 pb-6 overflow-y-auto flex-shrink-0">
           <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3">
             Guide Topics
           </h3>
@@ -105,7 +105,7 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#1a0f2e] flex flex-col">
+        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#1a0f2e]">
           {activeTopic === "ndi-bridge" && (
             <>
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
@@ -116,7 +116,7 @@ export function GuidePage() {
                 and broadcast overlays.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6 flex-1 auto-rows-fr">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 {/* Browser Source Links */}
                 <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
