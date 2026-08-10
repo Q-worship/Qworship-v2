@@ -66,7 +66,7 @@ export function GuidePage() {
       </header>
 
       {/* Banner */}
-      <div className="px-8 py-6 bg-[#1a0f2e] flex-shrink-0">
+      <div className="px-8 pt-6 pb-8 bg-[#1a0f2e] flex-shrink-0">
         <h2 className="text-white text-2xl font-bold mb-1.5">
           Q-worship Guides, Resources &amp; Downloads
         </h2>
@@ -77,7 +77,7 @@ export function GuidePage() {
         </p>
       </div>
 
-      <div className="h-px bg-white/20 flex-shrink-0" />
+      <div className="h-px bg-white/20 flex-shrink-0 mx-8" />
 
       {/* Body */}
       <div className="flex flex-1 min-h-0">
@@ -105,7 +105,7 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#1a0f2e]">
+        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#1a0f2e] flex flex-col">
           {activeTopic === "ndi-bridge" && (
             <>
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
@@ -116,7 +116,7 @@ export function GuidePage() {
                 and broadcast overlays.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6 flex-1 auto-rows-fr">
                 {/* Browser Source Links */}
                 <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
