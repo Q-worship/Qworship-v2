@@ -80,9 +80,9 @@ export function GuidePage() {
       <div className="h-px bg-white/20 flex-shrink-0" />
 
       {/* Body */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 gap-6 pt-6 px-8 pb-8">
         {/* Sidebar */}
-        <aside className="w-64 bg-[#61459D] pt-8 px-4 pb-4 overflow-y-auto flex-shrink-0">
+        <aside className="w-64 bg-[#61459D] rounded-2xl p-6 overflow-y-auto flex-shrink-0">
           <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3">
             Guide Topics
           </h3>
@@ -105,7 +105,7 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-6">
           {activeTopic === "ndi-bridge" && (
             <>
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
