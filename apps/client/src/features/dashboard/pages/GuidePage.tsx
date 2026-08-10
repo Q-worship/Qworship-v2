@@ -105,7 +105,7 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#0a0a0a]">
+        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#1a0f2e]">
           {activeTopic === "ndi-bridge" && (
             <>
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
@@ -118,7 +118,7 @@ export function GuidePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 {/* Browser Source Links */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
                     <LinkIcon className="w-4 h-4 text-[#8B5CF6]" />
                     Browser Source Links
@@ -168,7 +168,7 @@ export function GuidePage() {
                 </div>
 
                 {/* Download Plugins */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
                     <Download className="w-4 h-4 text-[#8B5CF6]" />
                     Download Plugins
@@ -190,7 +190,7 @@ export function GuidePage() {
                 </div>
 
                 {/* Output Parameters */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
                     <SlidersHorizontal className="w-4 h-4 text-[#8B5CF6]" />
                     Output Parameters
@@ -235,7 +235,7 @@ export function GuidePage() {
                 </div>
 
                 {/* Installation Guide */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
                   <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-[#8B5CF6]" />
                     Installation Guide
