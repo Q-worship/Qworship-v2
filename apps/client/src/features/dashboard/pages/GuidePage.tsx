@@ -49,7 +49,7 @@ export function GuidePage() {
   const goBack = () => setLocation("/dashboard");
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-[#131419]">
+    <div className="min-h-screen w-full flex flex-col bg-[#1a0f2e]">
       {/* Navbar */}
       <header className="flex items-center justify-between px-6 py-3 bg-[#8B5CF6] flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -66,7 +66,7 @@ export function GuidePage() {
       </header>
 
       {/* Banner */}
-      <div className="px-8 py-6 bg-[#131419] flex-shrink-0">
+      <div className="px-8 py-6 bg-[#1a0f2e] flex-shrink-0">
         <h2 className="text-white text-2xl font-bold mb-1.5">
           Q-worship Guides, Resources &amp; Downloads
         </h2>
@@ -80,9 +80,9 @@ export function GuidePage() {
       <div className="h-px bg-white/20 flex-shrink-0" />
 
       {/* Body */}
-      <div className="flex flex-1 min-h-0 gap-6 pt-6 px-8 pb-8">
+      <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <aside className="w-64 bg-[#61459D] rounded-2xl p-6 overflow-y-auto flex-shrink-0">
+        <aside className="w-64 bg-[#61459D] pt-8 px-4 pb-4 overflow-y-auto flex-shrink-0">
           <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3">
             Guide Topics
           </h3>
@@ -105,7 +105,7 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#0a0a0a]">
           {activeTopic === "ndi-bridge" && (
             <>
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
