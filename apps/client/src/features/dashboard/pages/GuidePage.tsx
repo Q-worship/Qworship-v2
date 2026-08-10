@@ -105,9 +105,9 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[#1a0f2e]">
+        <main className="flex-1 overflow-y-auto p-6 bg-[#1a0f2e] flex flex-col">
           {activeTopic === "ndi-bridge" && (
-            <>
+            <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5 flex-1 flex flex-col">
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
                 Q-worship NDI Bridge Configuration
               </h1>
@@ -116,8 +116,7 @@ export function GuidePage() {
                 and broadcast overlays.
               </p>
 
-              <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5 mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 {/* Browser Source Links */}
                 <div>
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
@@ -311,16 +310,15 @@ export function GuidePage() {
                   </Link>
                 </div>
               </div>
-              </div>
 
-              <div className="flex items-start gap-2.5 bg-[#8B5CF6]/10 border border-[#8B5CF6]/25 rounded-lg px-4 py-3">
+              <div className="flex items-start gap-2.5 bg-[#8B5CF6]/10 border border-[#8B5CF6]/25 rounded-lg px-4 py-3 mt-auto">
                 <Info className="w-4 h-4 text-[#CEA2FD] mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Please note that the Qworship NDI Bridge is only for Qworship Cloud users. If
                   you are using the Qworship Live Console you do not need the NDI Bridge.
                 </p>
               </div>
-            </>
+            </div>
           )}
         </main>
       </div>
