@@ -80,7 +80,7 @@ export function GuidePage() {
       <div className="h-px bg-white/20 flex-shrink-0 mx-8" />
 
       {/* Body */}
-      <div className="flex flex-1 min-h-0 gap-6 pt-6 px-8 pb-8">
+      <div className="flex flex-1 min-h-0 gap-6 pt-16 px-8 pb-8">
         {/* Sidebar */}
         <aside className="w-96 bg-[#61459D] py-6 overflow-y-auto flex-shrink-0">
           <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3 px-6">
