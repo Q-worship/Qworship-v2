@@ -80,9 +80,9 @@ export function GuidePage() {
       <div className="h-px bg-white/20 flex-shrink-0 mx-8" />
 
       {/* Body */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 gap-6 pt-6 px-8 pb-8">
         {/* Sidebar */}
-        <aside className="w-64 bg-[#61459D] pt-8 px-6 pb-6 overflow-y-auto flex-shrink-0">
+        <aside className="w-64 bg-[#61459D] p-6 overflow-y-auto flex-shrink-0">
           <h3 className="text-white font-semibold text-xs uppercase tracking-wide mb-3">
             Guide Topics
           </h3>
@@ -105,7 +105,7 @@ export function GuidePage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto pt-8 px-8 pb-8 bg-[#1a0f2e]">
+        <main className="flex-1 overflow-y-auto p-6 bg-[#1a0f2e]">
           {activeTopic === "ndi-bridge" && (
             <>
               <h1 className="text-[#8B5CF6] text-2xl font-bold mb-1.5">
@@ -116,9 +116,10 @@ export function GuidePage() {
                 and broadcast overlays.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Browser Source Links */}
-                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
+                <div>
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
                     <LinkIcon className="w-4 h-4 text-[#8B5CF6]" />
                     Browser Source Links
@@ -168,7 +169,7 @@ export function GuidePage() {
                 </div>
 
                 {/* Download Plugins */}
-                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
+                <div>
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
                     <Download className="w-4 h-4 text-[#8B5CF6]" />
                     Download Plugins
@@ -190,7 +191,7 @@ export function GuidePage() {
                 </div>
 
                 {/* Output Parameters */}
-                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
+                <div className="border-t border-white/10 pt-5">
                   <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
                     <SlidersHorizontal className="w-4 h-4 text-[#8B5CF6]" />
                     Output Parameters
@@ -235,7 +236,7 @@ export function GuidePage() {
                 </div>
 
                 {/* Installation Guide */}
-                <div className="bg-[#0d0d0d] border border-white/10 rounded-xl p-5">
+                <div className="border-t border-white/10 pt-5">
                   <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-[#8B5CF6]" />
                     Installation Guide
@@ -309,6 +310,7 @@ export function GuidePage() {
                     View full documentation →
                   </Link>
                 </div>
+              </div>
               </div>
 
               <div className="flex items-start gap-2.5 bg-[#8B5CF6]/10 border border-[#8B5CF6]/25 rounded-lg px-4 py-3">
