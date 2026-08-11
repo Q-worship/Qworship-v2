@@ -23,7 +23,37 @@ import instagramIcon from "@assets/1658586823instagram-logo-transparent_17567334
 import { SongProjectionWidget } from "@/features/dashboard/components/SongProjectionWidget";
 import { BibleProjectionWidget } from "@/features/dashboard/components/BibleProjectionWidget";
 import { OBSControlPanel } from "@/features/dashboard/components/OBSControlPanel";
-import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+import { buildUrl, resolveMediaUrl, queryClient } from "@/lib/queryClient";
+
+// Persists a locally-picked file to the user's Media library (same endpoint the
+// "Browse My Assets" picker's upload flow uses) so it shows up under My Media,
+// rather than keeping it as a local-only data/blob URL that dies on refresh.
+async function uploadToMyMedia(
+  file: File,
+): Promise<{ id: string; fileType: string; fileUrl: string } | null> {
+  try {
+    const formData = new FormData();
+    formData.append("files", file);
+    const token = localStorage.getItem("token");
+    const res = await fetch(buildUrl("/api/user-media-assets/upload"), {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const asset = data?.assets?.[0];
+    if (!asset) return null;
+    queryClient.invalidateQueries({ queryKey: ["/api/user-media-assets"] });
+    return {
+      id: asset.id ?? asset._id,
+      fileType: asset.fileType,
+      fileUrl: buildUrl(`/api/user-media-assets/${asset.id ?? asset._id}/file`),
+    };
+  } catch {
+    return null;
+  }
+}
 
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
@@ -689,14 +719,15 @@ export const LivePresentationV2 = (): JSX.Element => {
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          setBackgroundImage(event.target?.result as string);
-                        };
-                        reader.readAsDataURL(file);
+                        const uploaded = await uploadToMyMedia(file);
+                        if (uploaded) {
+                          setBackgroundImage(uploaded.fileUrl);
+                        } else {
+                          console.error("Failed to upload background image to My Media");
+                        }
                       }
                     }}
                     className="w-full px-3 py-2 bg-purple-900/30 border border-purple-500/30 rounded text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-gradient-to-r file:from-purple-600 file:to-purple-700 file:text-white file:cursor-pointer hover:border-purple-400 transition-all"
@@ -753,11 +784,15 @@ export const LivePresentationV2 = (): JSX.Element => {
                   <input
                     type="file"
                     accept="video/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const url = URL.createObjectURL(file);
-                        setBackgroundVideo(url);
+                        const uploaded = await uploadToMyMedia(file);
+                        if (uploaded) {
+                          setBackgroundVideo(uploaded.fileUrl);
+                        } else {
+                          console.error("Failed to upload background video to My Media");
+                        }
                       }
                     }}
                     className="w-full px-3 py-2 bg-purple-900/30 border border-purple-500/30 rounded text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-gradient-to-r file:from-purple-600 file:to-purple-700 file:text-white file:cursor-pointer hover:border-purple-400 transition-all"
@@ -1113,11 +1148,15 @@ export const LivePresentationV2 = (): JSX.Element => {
                   <input
                     type="file"
                     accept="image/png"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const url = URL.createObjectURL(file);
-                        setCustomLogo(url);
+                        const uploaded = await uploadToMyMedia(file);
+                        if (uploaded) {
+                          setCustomLogo(uploaded.fileUrl);
+                        } else {
+                          console.error("Failed to upload custom logo to My Media");
+                        }
                       }
                     }}
                     className="w-full px-3 py-3 bg-gray-800/80 border border-purple-400/50 rounded-lg text-white text-base font-medium file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-600 file:to-purple-700 file:text-white file:cursor-pointer focus:border-purple-300 focus:bg-gray-700/80 hover:border-purple-400 transition-all shadow-lg"
