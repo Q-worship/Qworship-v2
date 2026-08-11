@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useSongRAMCache } from "@/features/dashboard/hooks/useSongRAMCache";
 
 export interface Song {
   id: string;
@@ -52,9 +53,13 @@ export const useCreateSong = () => {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.removeQueries({ queryKey: ["/api/songs"] });
       queryClient.refetchQueries({ queryKey: ["/api/songs"] });
+      // Keep the live console's offline song search (backed by IndexedDB/RAM,
+      // not this query cache) in sync so newly-added songs show up in it
+      // immediately instead of only after the next project-selection sync.
+      if (data?.song) useSongRAMCache.getState().invalidate(data.song);
     },
   });
 };
@@ -69,10 +74,11 @@ export const useUpdateSong = () => {
       }
       return response.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.removeQueries({ queryKey: ["/api/songs"] });
       queryClient.removeQueries({ queryKey: ["/api/songs", variables.id] });
       queryClient.refetchQueries({ queryKey: ["/api/songs"] });
+      if (data?.song) useSongRAMCache.getState().invalidate(data.song);
     },
   });
 };
@@ -110,11 +116,12 @@ export const useImportSong = () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Import failed');
       }
-      
+
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/songs"] });
+      if (data?.song) useSongRAMCache.getState().invalidate(data.song);
     },
   });
 };
