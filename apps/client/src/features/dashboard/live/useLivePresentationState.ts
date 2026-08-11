@@ -19,6 +19,8 @@ function readLiveConsoleSeed(): {
   video: string | null;
   hasLiveSettings: boolean;
   slidesTransparent?: boolean;
+  fontFamily?: string;
+  fontColor?: string;
 } | null {
   try {
     const raw = localStorage.getItem(LIVE_CONSOLE_SEED_KEY);
@@ -163,6 +165,16 @@ export function useLivePresentationState() {
   >("main");
   const [slidesTransparent, setSlidesTransparent] = useState(
     () => readLiveConsoleSeed()?.slidesTransparent ?? false,
+  );
+  // Dashboard-configured Live Presentation Settings typography defaults -
+  // used as the fallback font family/colour wherever a slide doesn't
+  // specify its own (editorState/titleEditorState from the per-slide rich
+  // text editor still take priority when set).
+  const [liveConsoleFontFamily] = useState(
+    () => readLiveConsoleSeed()?.fontFamily || "Lufgord",
+  );
+  const [liveConsoleFontColor] = useState(
+    () => readLiveConsoleSeed()?.fontColor || "#ffffff",
   );
   const [slideTextSize, setSlideTextSize] = useState<
     | "small"
@@ -2621,6 +2633,8 @@ export function useLivePresentationState() {
     projectSong,
     serviceTitleSize,
     slidesTransparent,
+    liveConsoleFontFamily,
+    liveConsoleFontColor,
     showSlideCounter,
     showCopyrightInfo,
     setCurrentTime,

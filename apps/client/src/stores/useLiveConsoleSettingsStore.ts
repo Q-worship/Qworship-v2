@@ -56,6 +56,8 @@ interface LiveWindowSeed {
   video: string | null;
   hasLiveSettings: boolean;
   slidesTransparent: boolean;
+  fontFamily: string;
+  fontColor: string;
 }
 
 function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
@@ -63,22 +65,24 @@ function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
   // visible text box either - a fully see-through console for compositing.
   const slidesTransparent =
     settings.hideTextBox || settings.backgroundType === "transparent";
+  const fontFamily = settings.fontFamily;
+  const fontColor = settings.fontColor;
 
   switch (settings.backgroundType) {
     case "transparent":
-      return { type: "color", color: "transparent", image: null, video: null, hasLiveSettings: true, slidesTransparent };
+      return { type: "color", color: "transparent", image: null, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
     case "media":
       if (settings.backgroundMediaType === "video") {
-        return { type: "video", color: "#000000", image: null, video: settings.backgroundValue, hasLiveSettings: true, slidesTransparent };
+        return { type: "video", color: "#000000", image: null, video: settings.backgroundValue, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
       }
-      return { type: "image", color: "#000000", image: settings.backgroundValue, video: null, hasLiveSettings: true, slidesTransparent };
+      return { type: "image", color: "#000000", image: settings.backgroundValue, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
     case "gradient":
       // getBackgroundStyle() treats a "color" value starting with
       // "linear-gradient" as a backgroundImage instead of backgroundColor.
-      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent };
+      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
     case "solid":
     default:
-      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent };
+      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
   }
 }
 

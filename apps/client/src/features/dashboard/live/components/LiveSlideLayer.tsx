@@ -21,7 +21,9 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     animationKey,
     titleEditorState,
     totalSlides,
-    pacingLineIdx
+    pacingLineIdx,
+    liveConsoleFontFamily,
+    liveConsoleFontColor,
   } = props;
 
   return (
@@ -63,11 +65,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   fontFamily:
                     editorState.styleFontFamily ||
                     editorState.selectedFont ||
-                    "Lufgord",
+                    liveConsoleFontFamily,
                   color:
                     editorState.styleColor ||
                     editorState.textColor ||
-                    "#ffffff",
+                    liveConsoleFontColor,
                   fontWeight: editorState.isBold ? "bold" : "normal",
                   fontStyle: editorState.isItalic ? "italic" : "normal",
                   textDecoration:
@@ -87,7 +89,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                           ? "transparent"
                           : lineIdx <= pacingLineIdx
                             ? "#fbbf24" // Amber highlight color
-                            : (editorState.styleColor || editorState.textColor || "#ffffff"),
+                            : (editorState.styleColor || editorState.textColor || liveConsoleFontColor),
                         minHeight: "1.2em",
                         transition: "color 0.15s ease",
                       }}
@@ -123,11 +125,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   fontFamily:
                     editorState.styleFontFamily ||
                     editorState.selectedFont ||
-                    "Lufgord",
+                    liveConsoleFontFamily,
                   color:
                     editorState.styleColor ||
                     editorState.textColor ||
-                    "#ffffff",
+                    liveConsoleFontColor,
                   fontWeight: editorState.isBold ? "bold" : "normal",
                   fontStyle: editorState.isItalic ? "italic" : "normal",
                   textDecoration:
@@ -237,8 +239,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   <h1
                     className={`text-white mb-6 ${getTextSizeClass()}`}
                     style={{
-                      fontFamily: titleEditorState.selectedFont || "Lufgord",
-                      color: titleEditorState.textColor || "#ffffff",
+                      fontFamily: titleEditorState.selectedFont || liveConsoleFontFamily,
+                      color: titleEditorState.textColor || liveConsoleFontColor,
                       textAlign: slideAlignment,
                       fontWeight: titleEditorState.isBold ? "bold" : "normal",
                       fontStyle: titleEditorState.isItalic
@@ -265,11 +267,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       fontFamily:
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
-                        "Lufgord",
+                        liveConsoleFontFamily,
                       color:
                         editorState.styleColor ||
                         editorState.textColor ||
-                        "#ffffff",
+                        liveConsoleFontColor,
                       fontWeight: editorState.isBold ? "bold" : "normal",
                       fontStyle: editorState.isItalic ? "italic" : "normal",
                       textDecoration:
@@ -301,11 +303,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       fontFamily:
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
-                        "Lufgord",
+                        liveConsoleFontFamily,
                       color:
                         editorState.styleColor ||
                         editorState.textColor ||
-                        "#ffffff",
+                        liveConsoleFontColor,
                       fontWeight: editorState.isBold ? "bold" : "normal",
                       fontStyle: editorState.isItalic ? "italic" : "normal",
                       textDecoration:
@@ -361,11 +363,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       fontFamily:
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
-                        "Lufgord",
+                        liveConsoleFontFamily,
                       color:
                         editorState.styleColor ||
                         editorState.textColor ||
-                        "#ffffff",
+                        liveConsoleFontColor,
                       fontWeight: editorState.isBold ? "bold" : "normal",
                       fontStyle: editorState.isItalic ? "italic" : "normal",
                       textDecoration:
@@ -397,11 +399,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       fontFamily:
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
-                        "Lufgord",
+                        liveConsoleFontFamily,
                       color:
                         editorState.styleColor ||
                         editorState.textColor ||
-                        "#ffffff",
+                        liveConsoleFontColor,
                       fontWeight: editorState.isBold ? "bold" : "normal",
                       fontStyle: editorState.isItalic ? "italic" : "normal",
                       textDecoration:
