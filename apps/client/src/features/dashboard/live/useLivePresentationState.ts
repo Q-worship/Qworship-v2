@@ -4,6 +4,28 @@ import { useToast } from "@/hooks/use-toast";
 import { useBibleProjectionStore, requestSyncFromOtherWindows } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore, requestDisplayModeSync } from "@/stores/useDisplayModeStore";
 
+// Written by the dashboard's Live Presentation Settings page
+// (stores/useLiveConsoleSettingsStore.ts). Unlike "qworship-live-background"
+// (which goLive() clears on every press so a session never inherits stale
+// per-session state), this key is NOT cleared, so it seeds the *default*
+// background for a fresh live session while leaving the existing
+// per-session override behaviour below untouched.
+const LIVE_CONSOLE_SEED_KEY = "qworship-live-console-seed";
+
+function readLiveConsoleSeed(): {
+  type: "color" | "image" | "video";
+  color: string;
+  image: string | null;
+  video: string | null;
+  hasLiveSettings: boolean;
+} | null {
+  try {
+    const raw = localStorage.getItem(LIVE_CONSOLE_SEED_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
 export function useLivePresentationState() {
   const { toast } = useToast();
   const [currentSlide, setCurrentSlide] = useState(1);
@@ -59,7 +81,9 @@ export function useLivePresentationState() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundVideo, setBackgroundVideo] = useState<string | null>(null);
 
-  // Applied background state - initialize from localStorage if available
+  // Applied background state - initialize from localStorage if available,
+  // falling back to the dashboard-configured Live Presentation Settings seed
+  // when there's no per-session background yet.
   const [appliedBackgroundType, setAppliedBackgroundType] = useState<
     "color" | "image" | "video"
   >(() => {
@@ -70,7 +94,7 @@ export function useLivePresentationState() {
         return parsed.type || "color";
       }
     } catch (e) {}
-    return "color";
+    return readLiveConsoleSeed()?.type || "color";
   });
   const [appliedBackgroundColor, setAppliedBackgroundColor] = useState(() => {
     try {
@@ -80,7 +104,7 @@ export function useLivePresentationState() {
         return parsed.color || "#000000";
       }
     } catch (e) {}
-    return "#000000";
+    return readLiveConsoleSeed()?.color || "#000000";
   });
   const [appliedBackgroundImage, setAppliedBackgroundImage] = useState<
     string | null
@@ -92,7 +116,7 @@ export function useLivePresentationState() {
         return parsed.image || null;
       }
     } catch (e) {}
-    return null;
+    return readLiveConsoleSeed()?.image || null;
   });
   const [appliedBackgroundVideo, setAppliedBackgroundVideo] = useState<
     string | null
@@ -104,7 +128,7 @@ export function useLivePresentationState() {
         return parsed.video || null;
       }
     } catch (e) {}
-    return null;
+    return readLiveConsoleSeed()?.video || null;
   });
 
   // Track if Live Settings background is active (overrides slide backgrounds)
@@ -127,7 +151,7 @@ export function useLivePresentationState() {
             : false;
         }
       } catch (e) {}
-      return false;
+      return readLiveConsoleSeed()?.hasLiveSettings ?? false;
     },
   );
 
@@ -459,7 +483,12 @@ export function useLivePresentationState() {
   const getBackgroundStyle = (): React.CSSProperties => {
     switch (appliedBackgroundType) {
       case "color":
-        return { backgroundColor: appliedBackgroundColor };
+        // Live Presentation Settings can seed a CSS gradient string into the
+        // colour slot (see stores/useLiveConsoleSettingsStore.ts) - render it
+        // as a backgroundImage instead of an (invalid) backgroundColor.
+        return appliedBackgroundColor?.startsWith("linear-gradient")
+          ? { backgroundImage: appliedBackgroundColor }
+          : { backgroundColor: appliedBackgroundColor };
       case "image":
         return appliedBackgroundImage
           ? {

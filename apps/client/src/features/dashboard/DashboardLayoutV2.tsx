@@ -2022,6 +2022,15 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         setActiveDropdown(null);
       },
     },
+    {
+      name: "Live Presentation Settings",
+      shortcut: "",
+      hasSubmenu: false,
+      action: () => {
+        setLocation("/live-presentation-settings");
+        setActiveDropdown(null);
+      },
+    },
   ];
 
   // Insert item functions

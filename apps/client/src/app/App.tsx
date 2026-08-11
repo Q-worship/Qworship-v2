@@ -45,6 +45,7 @@ const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSuppor
 const SuperAdminSidebar = lazy(() => import("@/features/super-admin/components/SuperAdminSidebar"));
 import { LowerThirdEditorPage, LowerThirdSettingsPage } from "@/features/lowerThird";
 import { MainPresentationSettingsPage } from "@/features/mainPresentation";
+const LivePresentationSettingsPage = lazy(() => import("@/features/dashboard/live/LivePresentationSettingsPage").then(m => ({ default: m.LivePresentationSettingsPage })));
 
 const DashboardMock = () => (
   <div className="flex flex-col gap-4">
@@ -163,6 +164,10 @@ function MainPresentationSettingsRoute() {
   const [, navigate] = useLocation();
   return <MainPresentationSettingsPage onClose={() => navigate("/dashboard")} />;
 }
+function LivePresentationSettingsRoute() {
+  const [, navigate] = useLocation();
+  return <LivePresentationSettingsPage onClose={() => navigate("/dashboard")} />;
+}
 
 export const AppRouter = () => {
   return (
@@ -232,6 +237,7 @@ export const AppRouter = () => {
                   <Route path="/lower-third-settings" component={LowerThirdSettingsRoute} />
                   <Route path="/lower-third-editor/:templateId" component={LowerThirdEditorPage} />
                   <Route path="/main-presentation-settings" component={MainPresentationSettingsRoute} />
+                  <Route path="/live-presentation-settings" component={LivePresentationSettingsRoute} />
 
                   <Route>
                     <div className="text-center py-20 text-muted-foreground flex items-center justify-center font-bold text-2xl h-full">
