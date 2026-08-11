@@ -151,17 +151,19 @@ export const getMediaThumbnail = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Media not found' });
     }
 
-    if (media.cloudKey) {
+    if (media.type === 'video') {
+      // The browser frontend robustly handles video meta extraction itself.
+      // Do NOT send the massive RAW mp4 file down as a thumbnail (which is
+      // what the media.cloudKey redirect below would otherwise do, since
+      // uploaded videos have a cloudKey same as images) - just 404,
+      // instructing the frontend video component to use its own engine.
+      return res.status(404).json({ message: 'Video thumbnail extraction handled by client' });
+    } else if (media.cloudKey) {
       const signedUrl = await objectStorage.getSignedDownloadUrl(media.cloudKey, 3600);
       return res.redirect(signedUrl);
     } else if (media.thumbnail && fs.existsSync(media.thumbnail)) {
       // 1) explicitly generated local thumbnail
       return res.sendFile(path.resolve(media.thumbnail));
-    } else if (media.type === 'video') {
-      // 2) The browser Frontend is now robustly handling video meta extraction
-      // Do NOT send the massive RAW mp4 file down as a thumbnail,
-      // Just 404, instructing the frontend video component to use its own engine
-      return res.status(404).json({ message: 'Video thumbnail extraction handled by client' });
     } else if (media.filePath && fs.existsSync(media.filePath)) {
       // 3) it's an image, so the file itself serves as the perfect thumbnail
       return res.sendFile(path.resolve(media.filePath));
@@ -246,7 +248,13 @@ export const getCloudMediaThumbnail = async (req: Request, res: Response) => {
       }
       return res.status(404).json({ message: 'Not found' });
     }
-    
+
+    if (asset.type === 'video') {
+      // Same as getMediaThumbnail: don't send the raw video file down as a
+      // thumbnail, let the client's <video> element handle its own preview.
+      return res.status(404).json({ message: 'Video thumbnail extraction handled by client' });
+    }
+
     // Generate secure pre-signed URL on demand
     const signedUrl = await objectStorage.getSignedDownloadUrl(asset.cloudKey, 3600);
     res.redirect(signedUrl);

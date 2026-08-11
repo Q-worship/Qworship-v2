@@ -133,7 +133,7 @@ function AuthedImg({
 
   if (!objectUrl) return <div className={className} />;
 
-  return <img src={objectUrl} alt={alt} className={className} />;
+  return <img src={objectUrl} alt={alt} className={className} onError={onError} />;
 }
 
 const ImageThumbnail = ({ asset, activeTab }: { asset: MediaAsset; activeTab: string }) => {
