@@ -86,6 +86,56 @@ interface DynamicMediaSectionsProps {
   recentlyUploadedMediaId?: number | null;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+// "My Media" thumbnails live behind the `protect` auth middleware, so a plain
+// <img src> (which can't attach an Authorization header) 401s and falls
+// through to the error state below. Fetch the bytes with auth and render as
+// an object URL instead. Cloud Media thumbnails are public and unaffected.
+function AuthedImg({
+  src,
+  alt,
+  className,
+  onError,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  onError: () => void;
+}) {
+  const [objectUrl, setObjectUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    let url: string | null = null;
+
+    fetch(src, { headers: getAuthHeaders() })
+      .then((res) => (res.ok ? res.blob() : Promise.reject(res)))
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setObjectUrl(url);
+      })
+      .catch(() => onError());
+
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [src]);
+
+  if (!objectUrl) return <div className={className} />;
+
+  return <img src={objectUrl} alt={alt} className={className} />;
+}
+
 const ImageThumbnail = ({ asset, activeTab }: { asset: MediaAsset; activeTab: string }) => {
   const [hasError, setHasError] = React.useState(false);
   const isVideo = asset.type?.toLowerCase().startsWith('video');
@@ -113,6 +163,19 @@ const ImageThumbnail = ({ asset, activeTab }: { asset: MediaAsset; activeTab: st
           {isVideo ? 'Video asset' : 'Media preview'}
         </div>
       </div>
+    );
+  }
+
+  if (activeTab === 'my-media') {
+    return (
+      <AuthedImg
+        src={asset.thumbnail}
+        alt="Media preview"
+        className="w-full h-48 object-cover rounded-t pointer-events-none"
+        onError={() => {
+          if (!hasError) setHasError(true);
+        }}
+      />
     );
   }
 

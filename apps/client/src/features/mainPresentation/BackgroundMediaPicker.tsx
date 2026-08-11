@@ -91,6 +91,47 @@ function mapMimeToFileType(mime: string): "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMEN
   return "DOCUMENT";
 }
 
+// ── Authenticated thumbnail ───────────────────────────────────────────────────
+// User-uploaded thumbnails live behind the `protect` auth middleware, so a plain
+// <img src> (which can't attach an Authorization header) 401s. Fetch the bytes
+// ourselves and render them as an object URL instead.
+function AuthedThumbnail({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let url: string | null = null;
+
+    fetch(src, { headers: getAuthHeaders() })
+      .then((res) => (res.ok ? res.blob() : Promise.reject(res)))
+      .then((blob) => {
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setObjectUrl(url);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [src]);
+
+  if (!objectUrl) {
+    return <div className={className} />;
+  }
+
+  return <img src={objectUrl} alt={alt} className={className} loading="lazy" />;
+}
+
 // ── Component ───────────────────────────────────────────────────────────────────
 
 export function BackgroundMediaPicker({
@@ -465,6 +506,12 @@ export function BackgroundMediaPicker({
                         onLoadedData={(e) => {
                           (e.target as HTMLVideoElement).currentTime = 0.1;
                         }}
+                      />
+                    ) : isUserAsset ? (
+                      <AuthedThumbnail
+                        src={thumbnailUrl}
+                        alt={asset.title}
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <img
