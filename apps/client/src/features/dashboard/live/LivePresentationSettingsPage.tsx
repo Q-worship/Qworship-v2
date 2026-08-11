@@ -426,6 +426,26 @@ export function LivePresentationSettingsPage({
                 )}
               </div>
 
+              {/* Text box */}
+              <label className="flex items-start gap-3 pt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.hideTextBox}
+                  onChange={(e) => handleUpdate({ hideTextBox: e.target.checked })}
+                  className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer"
+                />
+                <span>
+                  <span className="block text-sm text-gray-200 font-medium">
+                    Remove background box around text
+                  </span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Strips the dark rounded panel (fill and border) that
+                    normally wraps projected slide text, leaving bare text
+                    over the background.
+                  </span>
+                </span>
+              </label>
+
               {/* Solid colour picker */}
               {bgType === "solid" && (
                 <ColorPickerField

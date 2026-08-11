@@ -18,6 +18,7 @@ function readLiveConsoleSeed(): {
   image: string | null;
   video: string | null;
   hasLiveSettings: boolean;
+  slidesTransparent?: boolean;
 } | null {
   try {
     const raw = localStorage.getItem(LIVE_CONSOLE_SEED_KEY);
@@ -160,7 +161,9 @@ export function useLivePresentationState() {
   const [settingsScreen, setSettingsScreen] = useState<
     "main" | "slide" | "customization" | "display"
   >("main");
-  const [slidesTransparent, setSlidesTransparent] = useState(false);
+  const [slidesTransparent, setSlidesTransparent] = useState(
+    () => readLiveConsoleSeed()?.slidesTransparent ?? false,
+  );
   const [slideTextSize, setSlideTextSize] = useState<
     | "small"
     | "medium"

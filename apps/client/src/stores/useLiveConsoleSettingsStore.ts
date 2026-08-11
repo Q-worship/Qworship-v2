@@ -6,6 +6,11 @@ export interface LiveConsoleSettings {
   backgroundMediaType?: "image" | "video";
   backgroundMediaId?: string;
   backgroundMediaSource?: "user" | "cloud";
+  // Removes the dark rounded box (fill + border) that normally wraps the
+  // projected slide text, leaving bare text. Same flag the live console's
+  // own in-session Live Settings panel calls "slidesTransparent"
+  // (features/dashboard/live/components/LiveSlideLayer.tsx).
+  hideTextBox: boolean;
   fontColor: string;
   fontFamily: string;
   fontWeight: string;
@@ -21,6 +26,7 @@ export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
   backgroundMediaType: undefined,
   backgroundMediaId: undefined,
   backgroundMediaSource: undefined,
+  hideTextBox: false,
   fontColor: "#ffffff",
   fontFamily: "Inter, sans-serif",
   fontWeight: "700",
@@ -49,24 +55,30 @@ interface LiveWindowSeed {
   image: string | null;
   video: string | null;
   hasLiveSettings: boolean;
+  slidesTransparent: boolean;
 }
 
 function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
+  // "Transparent" background implies no visible page background AND no
+  // visible text box either - a fully see-through console for compositing.
+  const slidesTransparent =
+    settings.hideTextBox || settings.backgroundType === "transparent";
+
   switch (settings.backgroundType) {
     case "transparent":
-      return { type: "color", color: "transparent", image: null, video: null, hasLiveSettings: true };
+      return { type: "color", color: "transparent", image: null, video: null, hasLiveSettings: true, slidesTransparent };
     case "media":
       if (settings.backgroundMediaType === "video") {
-        return { type: "video", color: "#000000", image: null, video: settings.backgroundValue, hasLiveSettings: true };
+        return { type: "video", color: "#000000", image: null, video: settings.backgroundValue, hasLiveSettings: true, slidesTransparent };
       }
-      return { type: "image", color: "#000000", image: settings.backgroundValue, video: null, hasLiveSettings: true };
+      return { type: "image", color: "#000000", image: settings.backgroundValue, video: null, hasLiveSettings: true, slidesTransparent };
     case "gradient":
       // getBackgroundStyle() treats a "color" value starting with
       // "linear-gradient" as a backgroundImage instead of backgroundColor.
-      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true };
+      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent };
     case "solid":
     default:
-      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true };
+      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent };
   }
 }
 
