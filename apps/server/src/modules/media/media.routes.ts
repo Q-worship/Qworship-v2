@@ -75,8 +75,13 @@ mediaRouter.get('/user-media-assets/resolve-r2', async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 });
-mediaRouter.get('/user-media-assets/:id/file', protect, requireProductAccess, getMediaFile);
-mediaRouter.get('/user-media-assets/:id/thumbnail', protect, requireProductAccess, getMediaThumbnail);
+// Unauthenticated, same as the cloud-media equivalents below: these URLs get
+// consumed as raw <img>/<video> src and CSS background-image values, and as
+// the OBS/NDI browser-source URL rendered by the external lower-third
+// service - none of which can attach an Authorization header. Protection is
+// via the unguessable Mongo _id, matching the existing cloud-media pattern.
+mediaRouter.get('/user-media-assets/:id/file', getMediaFile);
+mediaRouter.get('/user-media-assets/:id/thumbnail', getMediaThumbnail);
 mediaRouter.delete('/user-media-assets/:id', protect, requireProductAccess, deleteMedia);
 
 // Cloud Media Routes -> /api/cloud-media
