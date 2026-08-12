@@ -612,7 +612,17 @@ export function AppHeader({
                           if (menuItem.action) menuItem.action();
                         }}
                         data-testid={`settings-menu-${menuItem.name.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <span className="flex-shrink-0">{menuItem.name}</span>
+                        <span className="flex items-center gap-2 flex-shrink-0">
+                          {menuItem.name}
+                          {menuItem.badge && (
+                            <span
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white tracking-wide"
+                              style={{ backgroundColor: "#C400E8" }}
+                            >
+                              {menuItem.badge}
+                            </span>
+                          )}
+                        </span>
                         {menuItem.shortcut && (
                           <span className={`text-xs text-gray-500 font-mono ml-4 ${menuItem.shortcut === 'coming soon' ? 'font-bold' : ''}`}>
                             {menuItem.shortcut}

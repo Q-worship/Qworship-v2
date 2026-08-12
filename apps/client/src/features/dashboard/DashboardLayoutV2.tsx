@@ -2016,6 +2016,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     {
       name: "Main Presentation Settings",
       shortcut: "",
+      badge: "NDI",
       hasSubmenu: false,
       action: () => {
         setLocation("/main-presentation-settings");
@@ -2025,6 +2026,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     {
       name: "Live Presentation Settings",
       shortcut: "",
+      badge: "WEB",
       hasSubmenu: false,
       action: () => {
         setLocation("/live-presentation-settings");
