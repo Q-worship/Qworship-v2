@@ -580,7 +580,7 @@ export function LivePresentationSettingsPage({
 
             <div
               className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-600 shadow-2xl flex items-center justify-center"
-              style={{ background: previewBg, padding: "6% 10%" }}
+              style={{ background: previewBg, padding: "6% 10%", containerType: "inline-size" }}
             >
               {bgType === "media" &&
                 settings.backgroundValue &&
@@ -603,18 +603,22 @@ export function LivePresentationSettingsPage({
                 ))}
 
               <div
-                className={`relative z-10 ${
+                className={`relative z-10 max-w-full max-h-full overflow-hidden ${
                   settings.hideTextBox
                     ? ""
                     : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
                 }`}
               >
                 <div
-                  className="text-center whitespace-pre-wrap leading-relaxed"
+                  className="text-center whitespace-pre-wrap leading-relaxed break-words"
                   style={{
                     color: settings.fontColor,
                     fontFamily: settings.fontFamily,
-                    fontSize: `${activeSize.previewRem * 0.4}rem`,
+                    // clamp() so the preview mirrors the live console's own
+                    // scaling behaviour: it grows with the (small) preview
+                    // box instead of a size meant for a full 1080p screen,
+                    // so large presets wrap and fit instead of overflowing.
+                    fontSize: `clamp(0.7rem, ${activeSize.previewRem * 1.1}cqw, ${activeSize.previewRem * 0.45}rem)`,
                     fontWeight: settings.bold ? 700 : 300,
                     fontStyle: settings.italic ? "italic" : "normal",
                   }}
