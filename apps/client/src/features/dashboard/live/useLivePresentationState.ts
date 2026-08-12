@@ -181,6 +181,12 @@ export function useLivePresentationState() {
     | "5x-extra-large"
     | "6x-extra-large"
   >(() => readLiveConsoleSeed()?.textSize || "large");
+  const [liveConsoleBold, setLiveConsoleBold] = useState(
+    () => readLiveConsoleSeed()?.bold ?? false,
+  );
+  const [liveConsoleItalic, setLiveConsoleItalic] = useState(
+    () => readLiveConsoleSeed()?.italic ?? false,
+  );
 
   // Apply Live Presentation Settings changes instantly to an already-open
   // console, not just to a fresh GO LIVE press. Both this window and the
@@ -198,6 +204,8 @@ export function useLivePresentationState() {
         setLiveConsoleFontFamily(seed.fontFamily);
         setLiveConsoleFontColor(seed.fontColor);
         setSlideTextSize(seed.textSize);
+        setLiveConsoleBold(seed.bold);
+        setLiveConsoleItalic(seed.italic);
         setAppliedBackgroundType(seed.backgroundType);
         setAppliedBackgroundColor(seed.backgroundColor);
         setAppliedBackgroundImage(seed.backgroundImage);
@@ -720,28 +728,33 @@ export function useLivePresentationState() {
   };
 
   // Get text size class based on setting
+  // clamp(min, viewport-relative preferred, max) instead of a fixed rem/px
+  // size for every tier: the "max" here is the same size the old fixed
+  // Tailwind classes used (text-2xl..text-9xl, 10rem), so short text on a
+  // large screen looks identical to before, but the size now scales down on
+  // smaller screens instead of being able to push past the viewport edge.
   const getTextSizeClass = () => {
     switch (slideTextSize) {
       case "small":
-        return "text-2xl";
+        return "text-[clamp(1.25rem,2.5vw,1.5rem)]";
       case "medium":
-        return "text-3xl";
+        return "text-[clamp(1.5rem,3vw,1.875rem)]";
       case "large":
-        return "text-4xl";
+        return "text-[clamp(1.75rem,3.5vw,2.25rem)]";
       case "extra-large":
-        return "text-5xl";
+        return "text-[clamp(2rem,4.5vw,3rem)]";
       case "2x-extra-large":
-        return "text-6xl";
+        return "text-[clamp(2.25rem,5.5vw,3.75rem)]";
       case "3x-extra-large":
-        return "text-7xl";
+        return "text-[clamp(2.5rem,6.5vw,4.5rem)]";
       case "4x-extra-large":
-        return "text-8xl";
+        return "text-[clamp(2.75rem,8vw,6rem)]";
       case "5x-extra-large":
-        return "text-9xl";
+        return "text-[clamp(3rem,9.5vw,8rem)]";
       case "6x-extra-large":
-        return "text-[10rem]"; // Custom size for very large text
+        return "text-[clamp(3.25rem,11vw,10rem)]"; // Custom size for very large text
       default:
-        return "text-4xl";
+        return "text-[clamp(1.75rem,3.5vw,2.25rem)]";
     }
   };
 
@@ -2656,6 +2669,8 @@ export function useLivePresentationState() {
     slidesTransparent,
     liveConsoleFontFamily,
     liveConsoleFontColor,
+    liveConsoleBold,
+    liveConsoleItalic,
     showSlideCounter,
     showCopyrightInfo,
     setCurrentTime,

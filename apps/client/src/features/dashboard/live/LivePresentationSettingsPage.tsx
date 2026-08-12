@@ -454,9 +454,39 @@ export function LivePresentationSettingsPage({
 
             {/* Typography */}
             <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6 space-y-5">
-              <div className="flex items-center gap-2 pb-4 border-b border-gray-700/40">
-                <Type className="w-5 h-5 text-purple-400" />
-                <h2 className="text-lg font-semibold text-white">Typography</h2>
+              <div className="flex items-center justify-between gap-2 pb-4 border-b border-gray-700/40">
+                <div className="flex items-center gap-2">
+                  <Type className="w-5 h-5 text-purple-400" />
+                  <h2 className="text-lg font-semibold text-white">Typography</h2>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdate({ bold: !settings.bold })}
+                    aria-pressed={settings.bold}
+                    title="Bold"
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
+                      settings.bold
+                        ? "bg-purple-600/30 border-purple-500 text-purple-300"
+                        : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+                    }`}
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdate({ italic: !settings.italic })}
+                    aria-pressed={settings.italic}
+                    title="Italic"
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
+                      settings.italic
+                        ? "bg-purple-600/30 border-purple-500 text-purple-300"
+                        : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+                    }`}
+                  >
+                    I
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -585,7 +615,8 @@ export function LivePresentationSettingsPage({
                     color: settings.fontColor,
                     fontFamily: settings.fontFamily,
                     fontSize: `${activeSize.previewRem * 0.4}rem`,
-                    fontWeight: 300,
+                    fontWeight: settings.bold ? 700 : 300,
+                    fontStyle: settings.italic ? "italic" : "normal",
                   }}
                 >
                   For God so loved the world that he gave his one and only

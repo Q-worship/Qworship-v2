@@ -29,6 +29,8 @@ export interface LiveConsoleSettings {
   fontColor: string;
   fontFamily: string;
   textSize: LiveConsoleTextSize;
+  bold: boolean;
+  italic: boolean;
 }
 
 export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
@@ -41,6 +43,8 @@ export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
   fontColor: "#ffffff",
   fontFamily: "Inter, sans-serif",
   textSize: "large",
+  bold: false,
+  italic: false,
 };
 
 const STORAGE_KEY = "qworship-live-console-settings-page";
@@ -63,6 +67,8 @@ export interface LiveWindowSeed {
   fontFamily: string;
   fontColor: string;
   textSize: LiveConsoleTextSize;
+  bold: boolean;
+  italic: boolean;
 }
 
 export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
@@ -71,6 +77,8 @@ export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed 
     fontFamily: settings.fontFamily,
     fontColor: settings.fontColor,
     textSize: settings.textSize,
+    bold: settings.bold,
+    italic: settings.italic,
   };
 
   if (settings.backgroundType === "media") {

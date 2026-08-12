@@ -24,11 +24,13 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     pacingLineIdx,
     liveConsoleFontFamily,
     liveConsoleFontColor,
+    liveConsoleBold,
+    liveConsoleItalic,
   } = props;
 
   return (
     <div
-          className={`text-center max-w-6xl relative ${contentFixedArea ? "h-[85vh] max-h-[85vh] flex flex-col justify-center overflow-hidden" : ""}`}>
+          className={`text-center max-w-6xl max-h-[92vh] overflow-hidden flex flex-col justify-center relative ${contentFixedArea ? "h-[85vh]" : ""}`}>
           {/* Content is conditionally rendered based on activeMode from display mode store */}
           {/* Song/Bible Projection - only show when mode matches */}
           {currentSongProjection &&
@@ -39,7 +41,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             /* Live Song/Bible Projection for Congregation */
             <div
               key={`song-projection-${animationKey}`}
-              className={`${slidesTransparent ? "" : "bg-black/60 backdrop-blur-sm"} rounded-2xl p-12 ${slidesTransparent ? "" : "border border-white/10 shadow-2xl"} ${getSlideTransitionClass()} ${contentFixedArea ? "max-h-[75vh] overflow-hidden flex flex-col justify-center" : ""}`}
+              className={`${slidesTransparent ? "" : "bg-black/60 backdrop-blur-sm"} rounded-2xl p-12 ${slidesTransparent ? "" : "border border-white/10 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}
               style={
                 slidesTransparent
                   ? { backgroundColor: "transparent", backgroundImage: "none" }
@@ -70,8 +72,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     editorState.styleColor ||
                     editorState.textColor ||
                     liveConsoleFontColor,
-                  fontWeight: editorState.isBold ? "bold" : "normal",
-                  fontStyle: editorState.isItalic ? "italic" : "normal",
+                  fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                  fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                   textDecoration:
                     `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                     "none",
@@ -117,7 +119,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             /* Live Scripture Projection for Congregation - only when Bible mode is active */
             <div
               key={`scripture-projection-${animationKey}`}
-              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} ${contentFixedArea ? "max-h-[75vh] overflow-hidden flex flex-col justify-center" : ""}`}
+              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}
               style={getSlideStyle()}>
               <div
                 className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
@@ -130,8 +132,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     editorState.styleColor ||
                     editorState.textColor ||
                     liveConsoleFontColor,
-                  fontWeight: editorState.isBold ? "bold" : "normal",
-                  fontStyle: editorState.isItalic ? "italic" : "normal",
+                  fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                  fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                   textDecoration:
                     `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                     "none",
@@ -232,7 +234,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             /* Non-media slides use the normal padded container */
             <div
               key={`slide-${currentSlide}-${animationKey}`}
-              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} ${contentFixedArea ? "max-h-[75vh] overflow-hidden flex flex-col justify-center" : ""}`}>
+              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}>
               {slides[currentSlide - 1].type === "verse" ||
               slides[currentSlide - 1].type === "chorus" ? (
                 <>
@@ -242,8 +244,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       fontFamily: titleEditorState.selectedFont || liveConsoleFontFamily,
                       color: titleEditorState.textColor || liveConsoleFontColor,
                       textAlign: slideAlignment,
-                      fontWeight: titleEditorState.isBold ? "bold" : "normal",
-                      fontStyle: titleEditorState.isItalic
+                      fontWeight: (titleEditorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                      fontStyle: (titleEditorState.isItalic ?? liveConsoleItalic)
                         ? "italic"
                         : "normal",
                       textDecoration:
@@ -272,8 +274,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         editorState.styleColor ||
                         editorState.textColor ||
                         liveConsoleFontColor,
-                      fontWeight: editorState.isBold ? "bold" : "normal",
-                      fontStyle: editorState.isItalic ? "italic" : "normal",
+                      fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                      fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",
@@ -308,8 +310,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         editorState.styleColor ||
                         editorState.textColor ||
                         liveConsoleFontColor,
-                      fontWeight: editorState.isBold ? "bold" : "normal",
-                      fontStyle: editorState.isItalic ? "italic" : "normal",
+                      fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                      fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",
@@ -368,8 +370,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         editorState.styleColor ||
                         editorState.textColor ||
                         liveConsoleFontColor,
-                      fontWeight: editorState.isBold ? "bold" : "normal",
-                      fontStyle: editorState.isItalic ? "italic" : "normal",
+                      fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                      fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",
@@ -404,8 +406,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         editorState.styleColor ||
                         editorState.textColor ||
                         liveConsoleFontColor,
-                      fontWeight: editorState.isBold ? "bold" : "normal",
-                      fontStyle: editorState.isItalic ? "italic" : "normal",
+                      fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                      fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",
