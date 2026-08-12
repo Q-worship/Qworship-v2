@@ -5,23 +5,30 @@ import { useBibleProjectionStore, requestSyncFromOtherWindows } from "@/stores/u
 import { useDisplayModeStore, requestDisplayModeSync } from "@/stores/useDisplayModeStore";
 
 // Written by the dashboard's Live Presentation Settings page
-// (stores/useLiveConsoleSettingsStore.ts). Unlike "qworship-live-background"
-// (which goLive() clears on every press so a session never inherits stale
-// per-session state), this key is NOT cleared, so it seeds the *default*
-// background for a fresh live session while leaving the existing
-// per-session override behaviour below untouched.
+// (stores/useLiveConsoleSettingsStore.ts) on every change, and read here
+// twice: once at mount (below) to seed a freshly-opened live window
+// immediately, and continuously via the BroadcastChannel subscription
+// further down so changes apply live to an *already-open* console too.
 const LIVE_CONSOLE_SEED_KEY = "qworship-live-console-seed";
+const LIVE_CONSOLE_CHANNEL_NAME = "qworship-live-console-settings-sync";
 
-function readLiveConsoleSeed(): {
-  type: "color" | "image" | "video";
-  color: string;
-  image: string | null;
-  video: string | null;
-  hasLiveSettings: boolean;
-  slidesTransparent?: boolean;
-  fontFamily?: string;
-  fontColor?: string;
-} | null {
+interface LiveConsoleSeed {
+  hideTextBox: boolean;
+  fontFamily: string;
+  fontColor: string;
+  textSize:
+    | "small"
+    | "medium"
+    | "large"
+    | "extra-large"
+    | "2x-extra-large"
+    | "3x-extra-large"
+    | "4x-extra-large"
+    | "5x-extra-large"
+    | "6x-extra-large";
+}
+
+function readLiveConsoleSeed(): LiveConsoleSeed | null {
   try {
     const raw = localStorage.getItem(LIVE_CONSOLE_SEED_KEY);
     if (raw) return JSON.parse(raw);
@@ -84,9 +91,7 @@ export function useLivePresentationState() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundVideo, setBackgroundVideo] = useState<string | null>(null);
 
-  // Applied background state - initialize from localStorage if available,
-  // falling back to the dashboard-configured Live Presentation Settings seed
-  // when there's no per-session background yet.
+  // Applied background state - initialize from localStorage if available
   const [appliedBackgroundType, setAppliedBackgroundType] = useState<
     "color" | "image" | "video"
   >(() => {
@@ -97,7 +102,7 @@ export function useLivePresentationState() {
         return parsed.type || "color";
       }
     } catch (e) {}
-    return readLiveConsoleSeed()?.type || "color";
+    return "color";
   });
   const [appliedBackgroundColor, setAppliedBackgroundColor] = useState(() => {
     try {
@@ -107,7 +112,7 @@ export function useLivePresentationState() {
         return parsed.color || "#000000";
       }
     } catch (e) {}
-    return readLiveConsoleSeed()?.color || "#000000";
+    return "#000000";
   });
   const [appliedBackgroundImage, setAppliedBackgroundImage] = useState<
     string | null
@@ -119,7 +124,7 @@ export function useLivePresentationState() {
         return parsed.image || null;
       }
     } catch (e) {}
-    return readLiveConsoleSeed()?.image || null;
+    return null;
   });
   const [appliedBackgroundVideo, setAppliedBackgroundVideo] = useState<
     string | null
@@ -131,7 +136,7 @@ export function useLivePresentationState() {
         return parsed.video || null;
       }
     } catch (e) {}
-    return readLiveConsoleSeed()?.video || null;
+    return null;
   });
 
   // Track if Live Settings background is active (overrides slide backgrounds)
@@ -154,7 +159,7 @@ export function useLivePresentationState() {
             : false;
         }
       } catch (e) {}
-      return readLiveConsoleSeed()?.hasLiveSettings ?? false;
+      return false;
     },
   );
 
@@ -164,16 +169,18 @@ export function useLivePresentationState() {
     "main" | "slide" | "customization" | "display"
   >("main");
   const [slidesTransparent, setSlidesTransparent] = useState(
-    () => readLiveConsoleSeed()?.slidesTransparent ?? false,
+    () => readLiveConsoleSeed()?.hideTextBox ?? false,
   );
   // Dashboard-configured Live Presentation Settings typography defaults -
   // used as the fallback font family/colour wherever a slide doesn't
   // specify its own (editorState/titleEditorState from the per-slide rich
-  // text editor still take priority when set).
-  const [liveConsoleFontFamily] = useState(
+  // text editor still take priority when set). All four of these settings
+  // sync live from Live Presentation Settings via a BroadcastChannel
+  // subscription below, not just at mount.
+  const [liveConsoleFontFamily, setLiveConsoleFontFamily] = useState(
     () => readLiveConsoleSeed()?.fontFamily || "Lufgord",
   );
-  const [liveConsoleFontColor] = useState(
+  const [liveConsoleFontColor, setLiveConsoleFontColor] = useState(
     () => readLiveConsoleSeed()?.fontColor || "#ffffff",
   );
   const [slideTextSize, setSlideTextSize] = useState<
@@ -186,7 +193,29 @@ export function useLivePresentationState() {
     | "4x-extra-large"
     | "5x-extra-large"
     | "6x-extra-large"
-  >("large");
+  >(() => readLiveConsoleSeed()?.textSize || "large");
+
+  // Apply Live Presentation Settings changes instantly to an already-open
+  // console, not just to a fresh GO LIVE press. Both this window and the
+  // dashboard's settings page are same-origin tabs, so BroadcastChannel
+  // delivers updates without needing a window.opener relationship (the
+  // settings page is a separate routed page, not something GO LIVE opens).
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel(LIVE_CONSOLE_CHANNEL_NAME);
+      channel.onmessage = (event) => {
+        if (event.data?.type !== "LIVE_CONSOLE_SETTINGS_UPDATE") return;
+        const settings = event.data.settings as Partial<LiveConsoleSeed>;
+        if (settings.hideTextBox !== undefined) setSlidesTransparent(settings.hideTextBox);
+        if (settings.fontFamily !== undefined) setLiveConsoleFontFamily(settings.fontFamily);
+        if (settings.fontColor !== undefined) setLiveConsoleFontColor(settings.fontColor);
+        if (settings.textSize !== undefined) setSlideTextSize(settings.textSize);
+      };
+    } catch {}
+    return () => channel?.close();
+  }, []);
+
   const [slideAlignment, setSlideAlignment] = useState<
     "left" | "center" | "right"
   >("center");

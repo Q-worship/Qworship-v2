@@ -1,11 +1,21 @@
 import { create } from "zustand";
 
+// Matches the live console's own slideTextSize preset scale exactly
+// (features/dashboard/live/useLivePresentationState.ts's getTextSizeClass),
+// so a choice here maps 1:1 onto a real live-console size with no lossy
+// px-range conversion.
+export type LiveConsoleTextSize =
+  | "small"
+  | "medium"
+  | "large"
+  | "extra-large"
+  | "2x-extra-large"
+  | "3x-extra-large"
+  | "4x-extra-large"
+  | "5x-extra-large"
+  | "6x-extra-large";
+
 export interface LiveConsoleSettings {
-  backgroundType: "solid" | "gradient" | "media" | "transparent";
-  backgroundValue: string;
-  backgroundMediaType?: "image" | "video";
-  backgroundMediaId?: string;
-  backgroundMediaSource?: "user" | "cloud";
   // Removes the dark rounded box (fill + border) that normally wraps the
   // projected slide text, leaving bare text. Same flag the live console's
   // own in-session Live Settings panel calls "slidesTransparent"
@@ -13,82 +23,30 @@ export interface LiveConsoleSettings {
   hideTextBox: boolean;
   fontColor: string;
   fontFamily: string;
-  fontWeight: string;
-  fontSizeMin: number;
-  fontSizeMax: number;
-  textAlign: "left" | "center" | "right";
-  justifyContent: "flex-start" | "center" | "flex-end";
+  textSize: LiveConsoleTextSize;
 }
 
 export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
-  backgroundType: "solid",
-  backgroundValue: "#000000",
-  backgroundMediaType: undefined,
-  backgroundMediaId: undefined,
-  backgroundMediaSource: undefined,
   hideTextBox: false,
   fontColor: "#ffffff",
   fontFamily: "Inter, sans-serif",
-  fontWeight: "700",
-  fontSizeMin: 40,
-  fontSizeMax: 140,
-  textAlign: "center",
-  justifyContent: "center",
+  textSize: "large",
 };
 
 const STORAGE_KEY = "qworship-live-console-settings-page";
+// Live console windows (features/dashboard/live/useLivePresentationState.ts)
+// subscribe to this same channel directly, so a change here applies
+// instantly to any already-open live screen - not just the next GO LIVE.
 const CHANNEL_NAME = "qworship-live-console-settings-sync";
 
-// The live window (features/dashboard/live/useLivePresentationState.ts) seeds
-// its *initial* background from this key every time GO LIVE opens a fresh
-// window - it does NOT touch "qworship-live-background" (which the presenter's
-// in-window Live Settings panel owns and which goLive() clears on every press,
-// by design, so a live session never inherits stale per-session background
-// state). Writing our own key means dashboard-configured defaults survive
-// that clear, while anything the presenter changes in-window during a live
-// session still takes priority once they touch it, unchanged from before.
+// Also written on every change so a *freshly opened* live window (which
+// hasn't received any broadcast yet) starts with these values immediately,
+// without needing to wait for the dashboard tab to be open and broadcasting.
 const LIVE_WINDOW_SEED_KEY = "qworship-live-console-seed";
-
-interface LiveWindowSeed {
-  type: "color" | "image" | "video";
-  color: string;
-  image: string | null;
-  video: string | null;
-  hasLiveSettings: boolean;
-  slidesTransparent: boolean;
-  fontFamily: string;
-  fontColor: string;
-}
-
-function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
-  // "Transparent" background implies no visible page background AND no
-  // visible text box either - a fully see-through console for compositing.
-  const slidesTransparent =
-    settings.hideTextBox || settings.backgroundType === "transparent";
-  const fontFamily = settings.fontFamily;
-  const fontColor = settings.fontColor;
-
-  switch (settings.backgroundType) {
-    case "transparent":
-      return { type: "color", color: "transparent", image: null, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
-    case "media":
-      if (settings.backgroundMediaType === "video") {
-        return { type: "video", color: "#000000", image: null, video: settings.backgroundValue, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
-      }
-      return { type: "image", color: "#000000", image: settings.backgroundValue, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
-    case "gradient":
-      // getBackgroundStyle() treats a "color" value starting with
-      // "linear-gradient" as a backgroundImage instead of backgroundColor.
-      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
-    case "solid":
-    default:
-      return { type: "color", color: settings.backgroundValue, image: null, video: null, hasLiveSettings: true, slidesTransparent, fontFamily, fontColor };
-  }
-}
 
 function persistSeed(settings: LiveConsoleSettings) {
   try {
-    localStorage.setItem(LIVE_WINDOW_SEED_KEY, JSON.stringify(toLiveWindowSeed(settings)));
+    localStorage.setItem(LIVE_WINDOW_SEED_KEY, JSON.stringify(settings));
   } catch {}
 }
 
