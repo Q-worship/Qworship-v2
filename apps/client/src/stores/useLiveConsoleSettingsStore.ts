@@ -16,6 +16,11 @@ export type LiveConsoleTextSize =
   | "6x-extra-large";
 
 export interface LiveConsoleSettings {
+  backgroundType: "solid" | "gradient" | "media";
+  backgroundValue: string;
+  backgroundMediaType?: "image" | "video";
+  backgroundMediaId?: string;
+  backgroundMediaSource?: "user" | "cloud";
   // Removes the dark rounded box (fill + border) that normally wraps the
   // projected slide text, leaving bare text. Same flag the live console's
   // own in-session Live Settings panel calls "slidesTransparent"
@@ -27,6 +32,11 @@ export interface LiveConsoleSettings {
 }
 
 export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
+  backgroundType: "solid",
+  backgroundValue: "#000000",
+  backgroundMediaType: undefined,
+  backgroundMediaId: undefined,
+  backgroundMediaSource: undefined,
   hideTextBox: false,
   fontColor: "#ffffff",
   fontFamily: "Inter, sans-serif",
@@ -44,9 +54,40 @@ const CHANNEL_NAME = "qworship-live-console-settings-sync";
 // without needing to wait for the dashboard tab to be open and broadcasting.
 const LIVE_WINDOW_SEED_KEY = "qworship-live-console-seed";
 
+export interface LiveWindowSeed {
+  backgroundType: "color" | "image" | "video";
+  backgroundColor: string;
+  backgroundImage: string | null;
+  backgroundVideo: string | null;
+  hideTextBox: boolean;
+  fontFamily: string;
+  fontColor: string;
+  textSize: LiveConsoleTextSize;
+}
+
+export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
+  const base = {
+    hideTextBox: settings.hideTextBox,
+    fontFamily: settings.fontFamily,
+    fontColor: settings.fontColor,
+    textSize: settings.textSize,
+  };
+
+  if (settings.backgroundType === "media") {
+    return settings.backgroundMediaType === "video"
+      ? { ...base, backgroundType: "video", backgroundColor: "#000000", backgroundImage: null, backgroundVideo: settings.backgroundValue }
+      : { ...base, backgroundType: "image", backgroundColor: "#000000", backgroundImage: settings.backgroundValue, backgroundVideo: null };
+  }
+
+  // "solid" and "gradient" both flow through the live console's "color"
+  // slot - getBackgroundStyle() there renders a value starting with
+  // "linear-gradient" as a backgroundImage instead of a flat backgroundColor.
+  return { ...base, backgroundType: "color", backgroundColor: settings.backgroundValue, backgroundImage: null, backgroundVideo: null };
+}
+
 function persistSeed(settings: LiveConsoleSettings) {
   try {
-    localStorage.setItem(LIVE_WINDOW_SEED_KEY, JSON.stringify(settings));
+    localStorage.setItem(LIVE_WINDOW_SEED_KEY, JSON.stringify(toLiveWindowSeed(settings)));
   } catch {}
 }
 

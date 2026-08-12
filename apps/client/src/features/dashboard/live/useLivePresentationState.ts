@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useBibleProjectionStore, requestSyncFromOtherWindows } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore, requestDisplayModeSync } from "@/stores/useDisplayModeStore";
+import { toLiveWindowSeed, type LiveWindowSeed } from "@/stores/useLiveConsoleSettingsStore";
 
 // Written by the dashboard's Live Presentation Settings page
 // (stores/useLiveConsoleSettingsStore.ts) on every change, and read here
@@ -12,23 +13,7 @@ import { useDisplayModeStore, requestDisplayModeSync } from "@/stores/useDisplay
 const LIVE_CONSOLE_SEED_KEY = "qworship-live-console-seed";
 const LIVE_CONSOLE_CHANNEL_NAME = "qworship-live-console-settings-sync";
 
-interface LiveConsoleSeed {
-  hideTextBox: boolean;
-  fontFamily: string;
-  fontColor: string;
-  textSize:
-    | "small"
-    | "medium"
-    | "large"
-    | "extra-large"
-    | "2x-extra-large"
-    | "3x-extra-large"
-    | "4x-extra-large"
-    | "5x-extra-large"
-    | "6x-extra-large";
-}
-
-function readLiveConsoleSeed(): LiveConsoleSeed | null {
+function readLiveConsoleSeed(): LiveWindowSeed | null {
   try {
     const raw = localStorage.getItem(LIVE_CONSOLE_SEED_KEY);
     if (raw) return JSON.parse(raw);
@@ -91,7 +76,9 @@ export function useLivePresentationState() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundVideo, setBackgroundVideo] = useState<string | null>(null);
 
-  // Applied background state - initialize from localStorage if available
+  // Applied background state - initialize from localStorage if available,
+  // falling back to the dashboard-configured Live Presentation Settings seed
+  // when there's no per-session background yet.
   const [appliedBackgroundType, setAppliedBackgroundType] = useState<
     "color" | "image" | "video"
   >(() => {
@@ -102,7 +89,7 @@ export function useLivePresentationState() {
         return parsed.type || "color";
       }
     } catch (e) {}
-    return "color";
+    return readLiveConsoleSeed()?.backgroundType || "color";
   });
   const [appliedBackgroundColor, setAppliedBackgroundColor] = useState(() => {
     try {
@@ -112,7 +99,7 @@ export function useLivePresentationState() {
         return parsed.color || "#000000";
       }
     } catch (e) {}
-    return "#000000";
+    return readLiveConsoleSeed()?.backgroundColor || "#000000";
   });
   const [appliedBackgroundImage, setAppliedBackgroundImage] = useState<
     string | null
@@ -124,7 +111,7 @@ export function useLivePresentationState() {
         return parsed.image || null;
       }
     } catch (e) {}
-    return null;
+    return readLiveConsoleSeed()?.backgroundImage || null;
   });
   const [appliedBackgroundVideo, setAppliedBackgroundVideo] = useState<
     string | null
@@ -136,7 +123,7 @@ export function useLivePresentationState() {
         return parsed.video || null;
       }
     } catch (e) {}
-    return null;
+    return readLiveConsoleSeed()?.backgroundVideo || null;
   });
 
   // Track if Live Settings background is active (overrides slide backgrounds)
@@ -159,7 +146,7 @@ export function useLivePresentationState() {
             : false;
         }
       } catch (e) {}
-      return false;
+      return readLiveConsoleSeed() !== null;
     },
   );
 
@@ -206,11 +193,16 @@ export function useLivePresentationState() {
       channel = new BroadcastChannel(LIVE_CONSOLE_CHANNEL_NAME);
       channel.onmessage = (event) => {
         if (event.data?.type !== "LIVE_CONSOLE_SETTINGS_UPDATE") return;
-        const settings = event.data.settings as Partial<LiveConsoleSeed>;
-        if (settings.hideTextBox !== undefined) setSlidesTransparent(settings.hideTextBox);
-        if (settings.fontFamily !== undefined) setLiveConsoleFontFamily(settings.fontFamily);
-        if (settings.fontColor !== undefined) setLiveConsoleFontColor(settings.fontColor);
-        if (settings.textSize !== undefined) setSlideTextSize(settings.textSize);
+        const seed = toLiveWindowSeed(event.data.settings);
+        setSlidesTransparent(seed.hideTextBox);
+        setLiveConsoleFontFamily(seed.fontFamily);
+        setLiveConsoleFontColor(seed.fontColor);
+        setSlideTextSize(seed.textSize);
+        setAppliedBackgroundType(seed.backgroundType);
+        setAppliedBackgroundColor(seed.backgroundColor);
+        setAppliedBackgroundImage(seed.backgroundImage);
+        setAppliedBackgroundVideo(seed.backgroundVideo);
+        setHasLiveSettingsBackground(true);
       };
     } catch {}
     return () => channel?.close();
