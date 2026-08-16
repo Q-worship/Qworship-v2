@@ -99,10 +99,90 @@ function persistSeed(settings: LiveConsoleSettings) {
   } catch {}
 }
 
+// ── Default (idle) Web Screen — the "Live Service / Now presenting..."
+// screen shown on the GO LIVE console when no slide/song/verse is active.
+// Same shape as LiveConsoleSettings minus hideTextBox (the default screen
+// has no slide text box to strip).
+export interface DefaultScreenSettings {
+  backgroundType: "solid" | "gradient" | "media";
+  backgroundValue: string;
+  backgroundMediaType?: "image" | "video";
+  backgroundMediaId?: string;
+  backgroundMediaSource?: "user" | "cloud";
+  fontColor: string;
+  fontFamily: string;
+  textSize: LiveConsoleTextSize;
+  bold: boolean;
+  italic: boolean;
+}
+
+export const DEFAULT_DEFAULT_SCREEN_SETTINGS: DefaultScreenSettings = {
+  backgroundType: "solid",
+  backgroundValue: "#000000",
+  backgroundMediaType: undefined,
+  backgroundMediaId: undefined,
+  backgroundMediaSource: undefined,
+  fontColor: "#ffffff",
+  fontFamily: "Inter, sans-serif",
+  textSize: "6x-extra-large",
+  bold: true,
+  italic: false,
+};
+
+const DEFAULT_SCREEN_STORAGE_KEY = "qworship-default-screen-settings-page";
+const DEFAULT_SCREEN_SEED_KEY = "qworship-default-screen-seed";
+
+export interface DefaultScreenSeed {
+  backgroundType: "color" | "image" | "video";
+  backgroundColor: string;
+  backgroundImage: string | null;
+  backgroundVideo: string | null;
+  fontFamily: string;
+  fontColor: string;
+  textSize: LiveConsoleTextSize;
+  bold: boolean;
+  italic: boolean;
+}
+
+export function toDefaultScreenSeed(settings: DefaultScreenSettings): DefaultScreenSeed {
+  const base = {
+    fontFamily: settings.fontFamily,
+    fontColor: settings.fontColor,
+    textSize: settings.textSize,
+    bold: settings.bold,
+    italic: settings.italic,
+  };
+
+  if (settings.backgroundType === "media") {
+    return settings.backgroundMediaType === "video"
+      ? { ...base, backgroundType: "video", backgroundColor: "#000000", backgroundImage: null, backgroundVideo: settings.backgroundValue }
+      : { ...base, backgroundType: "image", backgroundColor: "#000000", backgroundImage: settings.backgroundValue, backgroundVideo: null };
+  }
+
+  return { ...base, backgroundType: "color", backgroundColor: settings.backgroundValue, backgroundImage: null, backgroundVideo: null };
+}
+
+function persistDefaultScreenSeed(settings: DefaultScreenSettings) {
+  try {
+    localStorage.setItem(DEFAULT_SCREEN_SEED_KEY, JSON.stringify(toDefaultScreenSeed(settings)));
+  } catch {}
+}
+
+function loadPersistedDefaultScreenSettings(): DefaultScreenSettings {
+  try {
+    const stored = localStorage.getItem(DEFAULT_SCREEN_STORAGE_KEY);
+    if (stored) return { ...DEFAULT_DEFAULT_SCREEN_SETTINGS, ...JSON.parse(stored) };
+  } catch {}
+  return DEFAULT_DEFAULT_SCREEN_SETTINGS;
+}
+
 interface LiveConsoleSettingsState {
   settings: LiveConsoleSettings;
   setSettings: (updates: Partial<LiveConsoleSettings>) => void;
   broadcastState: () => void;
+  defaultScreenSettings: DefaultScreenSettings;
+  setDefaultScreenSettings: (updates: Partial<DefaultScreenSettings>) => void;
+  broadcastDefaultScreenState: () => void;
 }
 
 function loadPersistedSettings(): LiveConsoleSettings {
@@ -123,6 +203,8 @@ export const useLiveConsoleSettingsStore = create<LiveConsoleSettingsState>((set
     broadcastChannel.onmessage = (event) => {
       if (event.data?.type === "LIVE_CONSOLE_SETTINGS_UPDATE") {
         set({ settings: event.data.settings });
+      } else if (event.data?.type === "DEFAULT_SCREEN_SETTINGS_UPDATE") {
+        set({ defaultScreenSettings: event.data.settings });
       }
     };
   }
@@ -145,6 +227,27 @@ export const useLiveConsoleSettingsStore = create<LiveConsoleSettingsState>((set
         broadcastChannel?.postMessage({
           type: "LIVE_CONSOLE_SETTINGS_UPDATE",
           settings: get().settings,
+        });
+      } catch {}
+    },
+
+    defaultScreenSettings: loadPersistedDefaultScreenSettings(),
+
+    setDefaultScreenSettings: (updates) => {
+      const updated = { ...get().defaultScreenSettings, ...updates };
+      set({ defaultScreenSettings: updated });
+      try {
+        localStorage.setItem(DEFAULT_SCREEN_STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+      persistDefaultScreenSeed(updated);
+      get().broadcastDefaultScreenState();
+    },
+
+    broadcastDefaultScreenState: () => {
+      try {
+        broadcastChannel?.postMessage({
+          type: "DEFAULT_SCREEN_SETTINGS_UPDATE",
+          settings: get().defaultScreenSettings,
         });
       } catch {}
     },

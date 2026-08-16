@@ -26,6 +26,12 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     liveConsoleFontColor,
     liveConsoleBold,
     liveConsoleItalic,
+    defaultScreenFontFamily,
+    defaultScreenFontColor,
+    defaultScreenBold,
+    defaultScreenItalic,
+    getDefaultScreenTextSizeClass,
+    getDefaultScreenSubtitleSizeClass,
   } = props;
 
   return (
@@ -429,10 +435,25 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             )) : (
             /* Default Live Service Display */
             <>
-              <h1 className="text-white text-8xl font-bold mb-12">
+              <h1
+                className={`mb-12 ${getDefaultScreenTextSizeClass()}`}
+                style={{
+                  fontFamily: defaultScreenFontFamily,
+                  color: defaultScreenFontColor,
+                  fontWeight: defaultScreenBold ? "bold" : "normal",
+                  fontStyle: defaultScreenItalic ? "italic" : "normal",
+                }}
+              >
                 Live Service
               </h1>
-              <p className="text-gray-300 text-4xl mb-8">
+              <p
+                className={`mb-8 opacity-80 ${getDefaultScreenSubtitleSizeClass()}`}
+                style={{
+                  fontFamily: defaultScreenFontFamily,
+                  color: defaultScreenFontColor,
+                  fontStyle: defaultScreenItalic ? "italic" : "normal",
+                }}
+              >
                 Now presenting live to congregation
               </p>
               <div className="flex items-center justify-center space-x-3">

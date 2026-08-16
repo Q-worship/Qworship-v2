@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useBibleProjectionStore, requestSyncFromOtherWindows } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore, requestDisplayModeSync } from "@/stores/useDisplayModeStore";
-import { toLiveWindowSeed, type LiveWindowSeed } from "@/stores/useLiveConsoleSettingsStore";
+import { toLiveWindowSeed, type LiveWindowSeed, toDefaultScreenSeed, type DefaultScreenSeed } from "@/stores/useLiveConsoleSettingsStore";
 
 // Written by the dashboard's Live Presentation Settings page
 // (stores/useLiveConsoleSettingsStore.ts) on every change, and read here
@@ -12,6 +12,9 @@ import { toLiveWindowSeed, type LiveWindowSeed } from "@/stores/useLiveConsoleSe
 // further down so changes apply live to an *already-open* console too.
 const LIVE_CONSOLE_SEED_KEY = "qworship-live-console-seed";
 const LIVE_CONSOLE_CHANNEL_NAME = "qworship-live-console-settings-sync";
+// Same pattern, for the idle "Default Web Screen" (shown when nothing is
+// actively projected - no slide, no song, no verse).
+const DEFAULT_SCREEN_SEED_KEY = "qworship-default-screen-seed";
 
 function readLiveConsoleSeed(): LiveWindowSeed | null {
   try {
@@ -20,6 +23,43 @@ function readLiveConsoleSeed(): LiveWindowSeed | null {
   } catch {}
   return null;
 }
+
+function readDefaultScreenSeed(): DefaultScreenSeed | null {
+  try {
+    const raw = localStorage.getItem(DEFAULT_SCREEN_SEED_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+// Shared by getTextSizeClass() (live slide text) and
+// getDefaultScreenTextSizeClass() (idle screen title) - same 9-tier scale
+// used throughout the Live/Default Presentation Settings pages.
+const TEXT_SIZE_CLAMP_CLASSES: Record<string, string> = {
+  small: "text-[clamp(1.25rem,2.5vw,1.5rem)]",
+  medium: "text-[clamp(1.5rem,3vw,1.875rem)]",
+  large: "text-[clamp(1.75rem,3.5vw,2.25rem)]",
+  "extra-large": "text-[clamp(2rem,4.5vw,3rem)]",
+  "2x-extra-large": "text-[clamp(2.25rem,5.5vw,3.75rem)]",
+  "3x-extra-large": "text-[clamp(2.5rem,6.5vw,4.5rem)]",
+  "4x-extra-large": "text-[clamp(2.75rem,8vw,6rem)]",
+  "5x-extra-large": "text-[clamp(3rem,9.5vw,8rem)]",
+  "6x-extra-large": "text-[clamp(3.25rem,11vw,10rem)]",
+};
+
+// Subtitle scale for the idle Default Web Screen (~0.4x the title tier,
+// matching the original fixed text-8xl/text-4xl title/subtitle ratio).
+const TEXT_SIZE_CLAMP_SUBTITLE_CLASSES: Record<string, string> = {
+  small: "text-[clamp(0.5rem,1vw,0.6rem)]",
+  medium: "text-[clamp(0.6rem,1.2vw,0.75rem)]",
+  large: "text-[clamp(0.7rem,1.4vw,0.9rem)]",
+  "extra-large": "text-[clamp(0.8rem,1.8vw,1.2rem)]",
+  "2x-extra-large": "text-[clamp(0.9rem,2.2vw,1.5rem)]",
+  "3x-extra-large": "text-[clamp(1rem,2.6vw,1.8rem)]",
+  "4x-extra-large": "text-[clamp(1.1rem,3.2vw,2.4rem)]",
+  "5x-extra-large": "text-[clamp(1.2rem,3.8vw,3.2rem)]",
+  "6x-extra-large": "text-[clamp(1.3rem,4.4vw,4rem)]",
+};
 
 export function useLivePresentationState() {
   const { toast } = useToast();
@@ -188,6 +228,46 @@ export function useLivePresentationState() {
     () => readLiveConsoleSeed()?.italic ?? false,
   );
 
+  // Dashboard-configured Default Web Screen settings - styles the idle
+  // "Live Service / Now presenting..." screen shown when nothing is
+  // actively projected. Same seed + BroadcastChannel pattern as the Live
+  // Web Screen settings above.
+  const [defaultScreenBackgroundType, setDefaultScreenBackgroundType] = useState<
+    "color" | "image" | "video"
+  >(() => readDefaultScreenSeed()?.backgroundType || "color");
+  const [defaultScreenBackgroundColor, setDefaultScreenBackgroundColor] = useState(
+    () => readDefaultScreenSeed()?.backgroundColor || "#000000",
+  );
+  const [defaultScreenBackgroundImage, setDefaultScreenBackgroundImage] = useState<
+    string | null
+  >(() => readDefaultScreenSeed()?.backgroundImage || null);
+  const [defaultScreenBackgroundVideo, setDefaultScreenBackgroundVideo] = useState<
+    string | null
+  >(() => readDefaultScreenSeed()?.backgroundVideo || null);
+  const [defaultScreenFontFamily, setDefaultScreenFontFamily] = useState(
+    () => readDefaultScreenSeed()?.fontFamily || "Inter, sans-serif",
+  );
+  const [defaultScreenFontColor, setDefaultScreenFontColor] = useState(
+    () => readDefaultScreenSeed()?.fontColor || "#ffffff",
+  );
+  const [defaultScreenTextSize, setDefaultScreenTextSize] = useState<
+    | "small"
+    | "medium"
+    | "large"
+    | "extra-large"
+    | "2x-extra-large"
+    | "3x-extra-large"
+    | "4x-extra-large"
+    | "5x-extra-large"
+    | "6x-extra-large"
+  >(() => readDefaultScreenSeed()?.textSize || "6x-extra-large");
+  const [defaultScreenBold, setDefaultScreenBold] = useState(
+    () => readDefaultScreenSeed()?.bold ?? true,
+  );
+  const [defaultScreenItalic, setDefaultScreenItalic] = useState(
+    () => readDefaultScreenSeed()?.italic ?? false,
+  );
+
   // Apply Live Presentation Settings changes instantly to an already-open
   // console, not just to a fresh GO LIVE press. Both this window and the
   // dashboard's settings page are same-origin tabs, so BroadcastChannel
@@ -198,19 +278,31 @@ export function useLivePresentationState() {
     try {
       channel = new BroadcastChannel(LIVE_CONSOLE_CHANNEL_NAME);
       channel.onmessage = (event) => {
-        if (event.data?.type !== "LIVE_CONSOLE_SETTINGS_UPDATE") return;
-        const seed = toLiveWindowSeed(event.data.settings);
-        setSlidesTransparent(seed.hideTextBox);
-        setLiveConsoleFontFamily(seed.fontFamily);
-        setLiveConsoleFontColor(seed.fontColor);
-        setSlideTextSize(seed.textSize);
-        setLiveConsoleBold(seed.bold);
-        setLiveConsoleItalic(seed.italic);
-        setAppliedBackgroundType(seed.backgroundType);
-        setAppliedBackgroundColor(seed.backgroundColor);
-        setAppliedBackgroundImage(seed.backgroundImage);
-        setAppliedBackgroundVideo(seed.backgroundVideo);
-        setHasLiveSettingsBackground(true);
+        if (event.data?.type === "LIVE_CONSOLE_SETTINGS_UPDATE") {
+          const seed = toLiveWindowSeed(event.data.settings);
+          setSlidesTransparent(seed.hideTextBox);
+          setLiveConsoleFontFamily(seed.fontFamily);
+          setLiveConsoleFontColor(seed.fontColor);
+          setSlideTextSize(seed.textSize);
+          setLiveConsoleBold(seed.bold);
+          setLiveConsoleItalic(seed.italic);
+          setAppliedBackgroundType(seed.backgroundType);
+          setAppliedBackgroundColor(seed.backgroundColor);
+          setAppliedBackgroundImage(seed.backgroundImage);
+          setAppliedBackgroundVideo(seed.backgroundVideo);
+          setHasLiveSettingsBackground(true);
+        } else if (event.data?.type === "DEFAULT_SCREEN_SETTINGS_UPDATE") {
+          const seed = toDefaultScreenSeed(event.data.settings);
+          setDefaultScreenFontFamily(seed.fontFamily);
+          setDefaultScreenFontColor(seed.fontColor);
+          setDefaultScreenTextSize(seed.textSize);
+          setDefaultScreenBold(seed.bold);
+          setDefaultScreenItalic(seed.italic);
+          setDefaultScreenBackgroundType(seed.backgroundType);
+          setDefaultScreenBackgroundColor(seed.backgroundColor);
+          setDefaultScreenBackgroundImage(seed.backgroundImage);
+          setDefaultScreenBackgroundVideo(seed.backgroundVideo);
+        }
       };
     } catch {}
     return () => channel?.close();
@@ -523,20 +615,50 @@ export function useLivePresentationState() {
     }
   };
 
+  // True when nothing is actively being projected - no slide, no song, no
+  // verse - i.e. the console is showing the idle "Live Service / Now
+  // presenting..." screen. Mirrors the exact same condition LiveSlideLayer
+  // uses to decide whether to render its "Default Live Service Display"
+  // fallback, so background/typography here always matches what's on screen.
+  const isDefaultScreenActive =
+    !(
+      currentSongProjection &&
+      ((activeMode === "song" && projectionType === "song") ||
+        (activeMode === "hfb-bible" && projectionType === "bible") ||
+        (activeMode === "on-screen-bible" && projectionType === "bible"))
+    ) &&
+    !(liveProjection && (activeMode === "hfb-bible" || activeMode === "on-screen-bible")) &&
+    !(slides.length > 0 && slides[currentSlide - 1] && activeMode === "slides");
+
+  // Effective background: the Default Web Screen's own configured
+  // background while idle, the Live Web Screen's while actively projecting.
+  const effectiveBackgroundType = isDefaultScreenActive
+    ? defaultScreenBackgroundType
+    : appliedBackgroundType;
+  const effectiveBackgroundColor = isDefaultScreenActive
+    ? defaultScreenBackgroundColor
+    : appliedBackgroundColor;
+  const effectiveBackgroundImage = isDefaultScreenActive
+    ? defaultScreenBackgroundImage
+    : appliedBackgroundImage;
+  const effectiveBackgroundVideo = isDefaultScreenActive
+    ? defaultScreenBackgroundVideo
+    : appliedBackgroundVideo;
+
   // Function to generate background style
   const getBackgroundStyle = (): React.CSSProperties => {
-    switch (appliedBackgroundType) {
+    switch (effectiveBackgroundType) {
       case "color":
         // Live Presentation Settings can seed a CSS gradient string into the
         // colour slot (see stores/useLiveConsoleSettingsStore.ts) - render it
         // as a backgroundImage instead of an (invalid) backgroundColor.
-        return appliedBackgroundColor?.startsWith("linear-gradient")
-          ? { backgroundImage: appliedBackgroundColor }
-          : { backgroundColor: appliedBackgroundColor };
+        return effectiveBackgroundColor?.startsWith("linear-gradient")
+          ? { backgroundImage: effectiveBackgroundColor }
+          : { backgroundColor: effectiveBackgroundColor };
       case "image":
-        return appliedBackgroundImage
+        return effectiveBackgroundImage
           ? {
-              backgroundImage: `url(${appliedBackgroundImage})`,
+              backgroundImage: `url(${effectiveBackgroundImage})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
@@ -733,30 +855,13 @@ export function useLivePresentationState() {
   // Tailwind classes used (text-2xl..text-9xl, 10rem), so short text on a
   // large screen looks identical to before, but the size now scales down on
   // smaller screens instead of being able to push past the viewport edge.
-  const getTextSizeClass = () => {
-    switch (slideTextSize) {
-      case "small":
-        return "text-[clamp(1.25rem,2.5vw,1.5rem)]";
-      case "medium":
-        return "text-[clamp(1.5rem,3vw,1.875rem)]";
-      case "large":
-        return "text-[clamp(1.75rem,3.5vw,2.25rem)]";
-      case "extra-large":
-        return "text-[clamp(2rem,4.5vw,3rem)]";
-      case "2x-extra-large":
-        return "text-[clamp(2.25rem,5.5vw,3.75rem)]";
-      case "3x-extra-large":
-        return "text-[clamp(2.5rem,6.5vw,4.5rem)]";
-      case "4x-extra-large":
-        return "text-[clamp(2.75rem,8vw,6rem)]";
-      case "5x-extra-large":
-        return "text-[clamp(3rem,9.5vw,8rem)]";
-      case "6x-extra-large":
-        return "text-[clamp(3.25rem,11vw,10rem)]"; // Custom size for very large text
-      default:
-        return "text-[clamp(1.75rem,3.5vw,2.25rem)]";
-    }
-  };
+  const getTextSizeClass = () => TEXT_SIZE_CLAMP_CLASSES[slideTextSize];
+
+  // Same clamp scale, for the idle Default Web Screen's title text.
+  const getDefaultScreenTextSizeClass = () =>
+    TEXT_SIZE_CLAMP_CLASSES[defaultScreenTextSize];
+  const getDefaultScreenSubtitleSizeClass = () =>
+    TEXT_SIZE_CLAMP_SUBTITLE_CLASSES[defaultScreenTextSize];
 
   // Get logo size class
   const getLogoSizeClass = () => {
@@ -2671,6 +2776,15 @@ export function useLivePresentationState() {
     liveConsoleFontColor,
     liveConsoleBold,
     liveConsoleItalic,
+    isDefaultScreenActive,
+    effectiveBackgroundType,
+    effectiveBackgroundVideo,
+    defaultScreenFontFamily,
+    defaultScreenFontColor,
+    defaultScreenBold,
+    defaultScreenItalic,
+    getDefaultScreenTextSizeClass,
+    getDefaultScreenSubtitleSizeClass,
     showSlideCounter,
     showCopyrightInfo,
     setCurrentTime,

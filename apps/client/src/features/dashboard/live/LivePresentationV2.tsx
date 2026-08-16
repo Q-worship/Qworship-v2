@@ -178,6 +178,8 @@ export const LivePresentationV2 = (): JSX.Element => {
     assetsModalFilter,
     appliedBackgroundColor,
     appliedBackgroundVideo,
+    effectiveBackgroundType,
+    effectiveBackgroundVideo,
     setSocialHandlesPosition,
     setIsInFullscreen,
     setIsLogoAssetsModalOpen,
@@ -296,7 +298,7 @@ export const LivePresentationV2 = (): JSX.Element => {
           }
         }
       }}>
-      <LiveBackgroundLayer appliedBackgroundType={appliedBackgroundType as any} appliedBackgroundVideo={appliedBackgroundVideo} />
+      <LiveBackgroundLayer appliedBackgroundType={effectiveBackgroundType as any} appliedBackgroundVideo={effectiveBackgroundVideo} />
       {/* Full Screen Content - What the audience sees */}
       <div className="w-full h-full flex items-center justify-center relative z-10">
         {/* Fullscreen Prompt - Shows only first time and when not in fullscreen */}

@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 import {
   useLiveConsoleSettingsStore,
   DEFAULT_LIVE_CONSOLE_SETTINGS,
+  DEFAULT_DEFAULT_SCREEN_SETTINGS,
   type LiveConsoleSettings,
+  type DefaultScreenSettings,
 } from "@/stores/useLiveConsoleSettingsStore";
 import { BackgroundMediaPicker } from "@/features/mainPresentation/BackgroundMediaPicker";
 import {
@@ -285,21 +287,33 @@ function ColorPickerField({
 export function LivePresentationSettingsPage({
   onClose,
 }: LivePresentationSettingsPageProps) {
-  const { settings, setSettings } = useLiveConsoleSettingsStore();
+  const { settings, setSettings, defaultScreenSettings, setDefaultScreenSettings } =
+    useLiveConsoleSettingsStore();
 
-  const handleUpdate = (updates: Partial<LiveConsoleSettings>) => {
-    setSettings(updates);
+  // Which screen Background + Typography below are currently editing: the
+  // active "Live Web Screen" (slide/song/verse content) or the idle
+  // "Default Web Screen" (the "Live Service" screen shown when nothing is
+  // being projected).
+  const [editTarget, setEditTarget] = useState<"live" | "default">("live");
+  const activeSettings: LiveConsoleSettings | DefaultScreenSettings =
+    editTarget === "live" ? settings : defaultScreenSettings;
+
+  const handleUpdate = (
+    updates: Partial<LiveConsoleSettings> & Partial<DefaultScreenSettings>,
+  ) => {
+    if (editTarget === "live") setSettings(updates);
+    else setDefaultScreenSettings(updates);
   };
 
-  const bgType = settings.backgroundType;
-  const activeSize = TEXT_SIZE_OPTIONS.find((o) => o.value === settings.textSize) ?? TEXT_SIZE_OPTIONS[2];
+  const bgType = activeSettings.backgroundType;
+  const activeSize = TEXT_SIZE_OPTIONS.find((o) => o.value === activeSettings.textSize) ?? TEXT_SIZE_OPTIONS[2];
 
   const previewBg =
     bgType === "gradient"
-      ? settings.backgroundValue
+      ? activeSettings.backgroundValue
       : bgType === "media"
         ? "#000000"
-        : settings.backgroundValue || "#000000";
+        : activeSettings.backgroundValue || "#000000";
 
   return (
     <div
@@ -348,9 +362,37 @@ export function LivePresentationSettingsPage({
           <div className="lg:col-span-5 space-y-6">
             {/* Background */}
             <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6 space-y-5">
-              <div className="flex items-center gap-2 pb-4 border-b border-gray-700/40">
-                <Palette className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-lg font-semibold text-white">Background</h2>
+              <div className="flex items-center justify-between gap-3 pb-4 border-b border-gray-700/40 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-indigo-400" />
+                  <h2 className="text-lg font-semibold text-white">Background</h2>
+                </div>
+                <div className="flex items-center bg-[#0a0614] border border-gray-700 rounded-full p-1 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditTarget("live")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                      editTarget === "live"
+                        ? "text-white"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                    style={editTarget === "live" ? { backgroundColor: "#C400E8" } : undefined}
+                  >
+                    Live Web Screen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditTarget("default")}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                      editTarget === "default"
+                        ? "text-white"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                    style={editTarget === "default" ? { backgroundColor: "#C400E8" } : undefined}
+                  >
+                    Default Web Screen
+                  </button>
+                </div>
               </div>
 
               {/* Type selector (solid / gradient / media) */}
@@ -414,7 +456,7 @@ export function LivePresentationSettingsPage({
               {bgType === "solid" && (
                 <ColorPickerField
                   label="Background Colour"
-                  value={settings.backgroundValue}
+                  value={activeSettings.backgroundValue}
                   onChange={(v) => handleUpdate({ backgroundValue: v })}
                 />
               )}
@@ -422,7 +464,7 @@ export function LivePresentationSettingsPage({
               {/* Gradient builder */}
               {bgType === "gradient" && (
                 <GradientBuilder
-                  value={settings.backgroundValue}
+                  value={activeSettings.backgroundValue}
                   onChange={(css) => handleUpdate({ backgroundValue: css })}
                 />
               )}
@@ -430,8 +472,8 @@ export function LivePresentationSettingsPage({
               {/* Media picker */}
               {bgType === "media" && (
                 <BackgroundMediaPicker
-                  selectedMediaId={settings.backgroundMediaId}
-                  selectedMediaSource={settings.backgroundMediaSource}
+                  selectedMediaId={activeSettings.backgroundMediaId}
+                  selectedMediaSource={activeSettings.backgroundMediaSource}
                   onSelect={({ id, url, mediaType, source }) =>
                     handleUpdate({
                       backgroundValue: url,
@@ -462,11 +504,11 @@ export function LivePresentationSettingsPage({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => handleUpdate({ bold: !settings.bold })}
-                    aria-pressed={settings.bold}
+                    onClick={() => handleUpdate({ bold: !activeSettings.bold })}
+                    aria-pressed={activeSettings.bold}
                     title="Bold"
                     className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
-                      settings.bold
+                      activeSettings.bold
                         ? "bg-purple-600/30 border-purple-500 text-purple-300"
                         : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
                     }`}
@@ -475,11 +517,11 @@ export function LivePresentationSettingsPage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdate({ italic: !settings.italic })}
-                    aria-pressed={settings.italic}
+                    onClick={() => handleUpdate({ italic: !activeSettings.italic })}
+                    aria-pressed={activeSettings.italic}
                     title="Italic"
                     className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
-                      settings.italic
+                      activeSettings.italic
                         ? "bg-purple-600/30 border-purple-500 text-purple-300"
                         : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
                     }`}
@@ -492,7 +534,7 @@ export function LivePresentationSettingsPage({
               <div className="space-y-2">
                 <Label className="text-sm text-gray-300">Font Family</Label>
                 <Select
-                  value={settings.fontFamily}
+                  value={activeSettings.fontFamily}
                   onValueChange={(val) => handleUpdate({ fontFamily: val })}
                 >
                   <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
@@ -516,14 +558,14 @@ export function LivePresentationSettingsPage({
 
               <ColorPickerField
                 label="Text Colour"
-                value={settings.fontColor}
+                value={activeSettings.fontColor}
                 onChange={(v) => handleUpdate({ fontColor: v })}
               />
 
               <div className="space-y-2">
                 <Label className="text-sm text-gray-300">Text Size</Label>
                 <Select
-                  value={settings.textSize}
+                  value={activeSettings.textSize}
                   onValueChange={(val: LiveConsoleSettings["textSize"]) =>
                     handleUpdate({ textSize: val })
                   }
@@ -546,27 +588,29 @@ export function LivePresentationSettingsPage({
               </div>
             </section>
 
-            {/* Text box */}
-            <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.hideTextBox}
-                  onChange={(e) => handleUpdate({ hideTextBox: e.target.checked })}
-                  className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer"
-                />
-                <span>
-                  <span className="block text-sm text-gray-200 font-medium">
-                    Remove background box around text
+            {/* Text box - Live Web Screen only; the idle Default Web Screen has no slide text box to strip */}
+            {editTarget === "live" && (
+              <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.hideTextBox}
+                    onChange={(e) => handleUpdate({ hideTextBox: e.target.checked })}
+                    className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer"
+                  />
+                  <span>
+                    <span className="block text-sm text-gray-200 font-medium">
+                      Remove background box around text
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Strips the dark rounded panel (fill and border) that
+                      normally wraps projected slide text, leaving bare text
+                      over the background.
+                    </span>
                   </span>
-                  <span className="block text-xs text-gray-500 mt-0.5">
-                    Strips the dark rounded panel (fill and border) that
-                    normally wraps projected slide text, leaving bare text
-                    over the background.
-                  </span>
-                </span>
-              </label>
-            </section>
+                </label>
+              </section>
+            )}
           </div>
 
           {/* ── Preview column ── */}
@@ -574,7 +618,7 @@ export function LivePresentationSettingsPage({
             <div className="flex items-center gap-2 pb-4 border-b border-gray-700/40">
               <Layout className="w-5 h-5 text-gray-400" />
               <h2 className="text-lg font-semibold text-white">
-                Live Console Preview
+                {editTarget === "live" ? "Live Console Preview" : "Default Web Screen Preview"}
               </h2>
             </div>
 
@@ -583,11 +627,11 @@ export function LivePresentationSettingsPage({
               style={{ background: previewBg, padding: "6% 10%", containerType: "inline-size" }}
             >
               {bgType === "media" &&
-                settings.backgroundValue &&
-                (settings.backgroundMediaType === "video" ? (
+                activeSettings.backgroundValue &&
+                (activeSettings.backgroundMediaType === "video" ? (
                   <video
-                    key={settings.backgroundValue}
-                    src={settings.backgroundValue}
+                    key={activeSettings.backgroundValue}
+                    src={activeSettings.backgroundValue}
                     autoPlay
                     loop
                     muted
@@ -596,47 +640,89 @@ export function LivePresentationSettingsPage({
                   />
                 ) : (
                   <img
-                    src={settings.backgroundValue}
+                    src={activeSettings.backgroundValue}
                     alt="Background"
                     className="absolute inset-0 w-full h-full object-cover z-0"
                   />
                 ))}
 
-              <div
-                className={`relative z-10 max-w-full max-h-full overflow-hidden ${
-                  settings.hideTextBox
-                    ? ""
-                    : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
-                }`}
-              >
+              {editTarget === "live" ? (
                 <div
-                  className="text-center whitespace-pre-wrap leading-relaxed break-words"
-                  style={{
-                    color: settings.fontColor,
-                    fontFamily: settings.fontFamily,
-                    // clamp() so the preview mirrors the live console's own
-                    // scaling behaviour: it grows with the (small) preview
-                    // box instead of a size meant for a full 1080p screen,
-                    // so large presets wrap and fit instead of overflowing.
-                    fontSize: `clamp(0.7rem, ${activeSize.previewRem * 1.1}cqw, ${activeSize.previewRem * 0.45}rem)`,
-                    fontWeight: settings.bold ? 700 : 300,
-                    fontStyle: settings.italic ? "italic" : "normal",
-                  }}
+                  className={`relative z-10 max-w-full max-h-full overflow-hidden ${
+                    settings.hideTextBox
+                      ? ""
+                      : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
+                  }`}
                 >
-                  For God so loved the world that he gave his one and only
-                  Son, that whoever believes in him shall not perish but have
-                  eternal life.
-                  <div className="text-[0.5em] opacity-80 mt-2 font-medium tracking-wide">
-                    John 3:16 — KJV
+                  <div
+                    className="text-center whitespace-pre-wrap leading-relaxed break-words"
+                    style={{
+                      color: activeSettings.fontColor,
+                      fontFamily: activeSettings.fontFamily,
+                      // clamp() so the preview mirrors the live console's own
+                      // scaling behaviour: it grows with the (small) preview
+                      // box instead of a size meant for a full 1080p screen,
+                      // so large presets wrap and fit instead of overflowing.
+                      fontSize: `clamp(0.7rem, ${activeSize.previewRem * 1.1}cqw, ${activeSize.previewRem * 0.45}rem)`,
+                      fontWeight: activeSettings.bold ? 700 : 300,
+                      fontStyle: activeSettings.italic ? "italic" : "normal",
+                    }}
+                  >
+                    For God so loved the world that he gave his one and only
+                    Son, that whoever believes in him shall not perish but have
+                    eternal life.
+                    <div className="text-[0.5em] opacity-80 mt-2 font-medium tracking-wide">
+                      John 3:16 — KJV
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="relative z-10 max-w-full max-h-full overflow-hidden text-center">
+                  <div
+                    className="whitespace-pre-wrap leading-relaxed break-words"
+                    style={{
+                      color: activeSettings.fontColor,
+                      fontFamily: activeSettings.fontFamily,
+                      fontSize: `clamp(0.9rem, ${activeSize.previewRem * 1.1}cqw, ${activeSize.previewRem * 0.45}rem)`,
+                      fontWeight: activeSettings.bold ? 700 : 300,
+                      fontStyle: activeSettings.italic ? "italic" : "normal",
+                    }}
+                  >
+                    Live Service
+                  </div>
+                  <div
+                    className="whitespace-pre-wrap break-words mt-2 opacity-80"
+                    style={{
+                      color: activeSettings.fontColor,
+                      fontFamily: activeSettings.fontFamily,
+                      fontSize: `clamp(0.5rem, ${activeSize.previewRem * 0.45}cqw, ${activeSize.previewRem * 0.18}rem)`,
+                      fontStyle: activeSettings.italic ? "italic" : "normal",
+                    }}
+                  >
+                    Now presenting live to congregation
+                  </div>
+                  <div className="flex items-center justify-center gap-2 mt-3">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-red-400 text-[0.5em] font-medium">LIVE</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-between items-center text-xs text-gray-500">
-              <span>Preview is scaled and applies instantly to the live console.</span>
+              <span>
+                {editTarget === "live"
+                  ? "Preview is scaled and applies instantly to the live console."
+                  : "Preview is scaled and applies instantly to the idle screen shown before anything is projected."}
+              </span>
               <button
-                onClick={() => handleUpdate(DEFAULT_LIVE_CONSOLE_SETTINGS)}
+                onClick={() =>
+                  handleUpdate(
+                    editTarget === "live"
+                      ? DEFAULT_LIVE_CONSOLE_SETTINGS
+                      : DEFAULT_DEFAULT_SCREEN_SETTINGS,
+                  )
+                }
                 className="text-red-400 hover:text-red-300 underline"
               >
                 Reset to Defaults

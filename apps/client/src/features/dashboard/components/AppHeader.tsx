@@ -601,13 +601,13 @@ export function AppHeader({
               {/* Settings Dropdown Menu */}
               {item.name === "Settings" && activeDropdown === "Settings" && (
                 <div
-                  className="absolute top-full left-0 mt-1 min-w-[220px] w-auto bg-[#2a1f4b] border border-gray-600 rounded-lg shadow-xl z-50"
+                  className="absolute top-full left-0 mt-1 min-w-[270px] w-max max-w-[340px] bg-[#2a1f4b] border border-gray-600 rounded-lg shadow-xl z-50"
                   onMouseLeave={() => setActiveDropdown(null)}
                   data-testid="dropdown-settings">
                   {settingsMenuItems.map((menuItem: any, index: number) => (
                     <div key={menuItem.name} className="relative">
                       <div
-                        className={`flex items-center justify-between px-5 py-3 text-sm text-gray-300 hover:bg-[#8356F3] hover:text-white cursor-pointer transition-colors min-w-0 ${index === 0 ? "rounded-t-lg" : ""} ${index === settingsMenuItems.length - 1 ? "rounded-b-lg" : ""}`}
+                        className={`flex items-center justify-between gap-4 pl-5 pr-6 py-3 text-sm text-gray-300 hover:bg-[#8356F3] hover:text-white cursor-pointer transition-colors min-w-0 ${index === 0 ? "rounded-t-lg" : ""} ${index === settingsMenuItems.length - 1 ? "rounded-b-lg" : ""}`}
                         onClick={() => {
                           if (menuItem.action) menuItem.action();
                         }}
