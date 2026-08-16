@@ -32,6 +32,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     defaultScreenItalic,
     getDefaultScreenTextSizeClass,
     getDefaultScreenSubtitleSizeClass,
+    defaultScreenTitle,
+    defaultScreenDescription,
   } = props;
 
   return (
@@ -444,7 +446,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   fontStyle: defaultScreenItalic ? "italic" : "normal",
                 }}
               >
-                Live Service
+                {defaultScreenTitle}
               </h1>
               <p
                 className={`mb-8 opacity-80 ${getDefaultScreenSubtitleSizeClass()}`}
@@ -454,7 +456,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   fontStyle: defaultScreenItalic ? "italic" : "normal",
                 }}
               >
-                Now presenting live to congregation
+                {defaultScreenDescription}
               </p>
               <div className="flex items-center justify-center space-x-3">
                 <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>

@@ -114,6 +114,10 @@ export interface DefaultScreenSettings {
   textSize: LiveConsoleTextSize;
   bold: boolean;
   italic: boolean;
+  // Editable directly in the preview panel (LivePresentationSettingsPage) -
+  // what actually renders as the idle screen's title/subtitle.
+  title: string;
+  description: string;
 }
 
 export const DEFAULT_DEFAULT_SCREEN_SETTINGS: DefaultScreenSettings = {
@@ -127,6 +131,8 @@ export const DEFAULT_DEFAULT_SCREEN_SETTINGS: DefaultScreenSettings = {
   textSize: "6x-extra-large",
   bold: true,
   italic: false,
+  title: "Live Service",
+  description: "Now presenting live to congregation",
 };
 
 const DEFAULT_SCREEN_STORAGE_KEY = "qworship-default-screen-settings-page";
@@ -142,6 +148,8 @@ export interface DefaultScreenSeed {
   textSize: LiveConsoleTextSize;
   bold: boolean;
   italic: boolean;
+  title: string;
+  description: string;
 }
 
 export function toDefaultScreenSeed(settings: DefaultScreenSettings): DefaultScreenSeed {
@@ -151,6 +159,8 @@ export function toDefaultScreenSeed(settings: DefaultScreenSettings): DefaultScr
     textSize: settings.textSize,
     bold: settings.bold,
     italic: settings.italic,
+    title: settings.title,
+    description: settings.description,
   };
 
   if (settings.backgroundType === "media") {

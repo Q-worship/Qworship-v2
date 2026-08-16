@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   useLiveConsoleSettingsStore,
   DEFAULT_LIVE_CONSOLE_SETTINGS,
@@ -283,6 +283,41 @@ function ColorPickerField({
   );
 }
 
+// ── Auto-fit scale ─────────────────────────────────────────────────────────────
+// Measures the natural (unscaled) size of `contentRef` against `containerRef`
+// and applies a uniform CSS transform: scale() so content never exceeds the
+// container on either axis - regardless of text length, font size preset, or
+// container size. Guarantees "everything is visible" at every tier instead of
+// guessing viewport-relative clamp() values that only account for width.
+function useAutoFitScale(
+  containerRef: React.RefObject<HTMLElement>,
+  contentRef: React.RefObject<HTMLElement>,
+  deps: unknown[],
+) {
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+
+    const fit = () => {
+      content.style.transform = "scale(1)";
+      const containerRect = container.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
+      if (contentRect.width === 0 || contentRect.height === 0) return;
+      const scaleX = containerRect.width / contentRect.width;
+      const scaleY = containerRect.height / contentRect.height;
+      const scale = Math.min(1, scaleX, scaleY);
+      content.style.transform = `scale(${scale})`;
+    };
+
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(container);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export function LivePresentationSettingsPage({
   onClose,
@@ -314,6 +349,29 @@ export function LivePresentationSettingsPage({
       : bgType === "media"
         ? "#000000"
         : activeSettings.backgroundValue || "#000000";
+
+  // Auto-fit: the rendered preview content is scaled to always stay inside
+  // the preview box, on both axes, at every text size preset.
+  const previewBoxRef = useRef<HTMLDivElement>(null);
+  const livePreviewContentRef = useRef<HTMLDivElement>(null);
+  const defaultPreviewContentRef = useRef<HTMLDivElement>(null);
+  useAutoFitScale(previewBoxRef, livePreviewContentRef, [
+    editTarget,
+    settings.hideTextBox,
+    activeSize.previewRem,
+    activeSettings.fontFamily,
+    activeSettings.bold,
+    activeSettings.italic,
+  ]);
+  useAutoFitScale(previewBoxRef, defaultPreviewContentRef, [
+    editTarget,
+    defaultScreenSettings.title,
+    defaultScreenSettings.description,
+    activeSize.previewRem,
+    activeSettings.fontFamily,
+    activeSettings.bold,
+    activeSettings.italic,
+  ]);
 
   return (
     <div
@@ -623,8 +681,9 @@ export function LivePresentationSettingsPage({
             </div>
 
             <div
+              ref={previewBoxRef}
               className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-600 shadow-2xl flex items-center justify-center"
-              style={{ background: previewBg, padding: "6% 10%", containerType: "inline-size" }}
+              style={{ background: previewBg, padding: "6% 10%" }}
             >
               {bgType === "media" &&
                 activeSettings.backgroundValue &&
@@ -648,22 +707,19 @@ export function LivePresentationSettingsPage({
 
               {editTarget === "live" ? (
                 <div
-                  className={`relative z-10 max-w-full max-h-full overflow-hidden ${
+                  ref={livePreviewContentRef}
+                  className={`relative z-10 ${
                     settings.hideTextBox
                       ? ""
                       : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
                   }`}
                 >
                   <div
-                    className="text-center whitespace-pre-wrap leading-relaxed break-words"
+                    className="text-center whitespace-pre-wrap leading-relaxed"
                     style={{
                       color: activeSettings.fontColor,
                       fontFamily: activeSettings.fontFamily,
-                      // clamp() so the preview mirrors the live console's own
-                      // scaling behaviour: it grows with the (small) preview
-                      // box instead of a size meant for a full 1080p screen,
-                      // so large presets wrap and fit instead of overflowing.
-                      fontSize: `clamp(0.7rem, ${activeSize.previewRem * 1.1}cqw, ${activeSize.previewRem * 0.45}rem)`,
+                      fontSize: `${activeSize.previewRem * 0.45}rem`,
                       fontWeight: activeSettings.bold ? 700 : 300,
                       fontStyle: activeSettings.italic ? "italic" : "normal",
                     }}
@@ -677,29 +733,59 @@ export function LivePresentationSettingsPage({
                   </div>
                 </div>
               ) : (
-                <div className="relative z-10 max-w-full max-h-full overflow-hidden text-center">
+                <div ref={defaultPreviewContentRef} className="relative z-10 text-center">
                   <div
-                    className="whitespace-pre-wrap leading-relaxed break-words"
+                    contentEditable
+                    suppressContentEditableWarning
+                    title="Click to edit the title"
+                    onBlur={(e) => {
+                      const val =
+                        e.currentTarget.textContent?.trim() ||
+                        DEFAULT_DEFAULT_SCREEN_SETTINGS.title;
+                      handleUpdate({ title: val });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).blur();
+                      }
+                    }}
+                    className="outline-none cursor-text whitespace-pre-wrap rounded-lg px-2 -mx-2 hover:bg-white/5 focus:bg-white/10 focus:ring-1 focus:ring-purple-400 transition-colors"
                     style={{
                       color: activeSettings.fontColor,
                       fontFamily: activeSettings.fontFamily,
-                      fontSize: `clamp(0.9rem, ${activeSize.previewRem * 1.1}cqw, ${activeSize.previewRem * 0.45}rem)`,
+                      fontSize: `${activeSize.previewRem * 0.45}rem`,
                       fontWeight: activeSettings.bold ? 700 : 300,
                       fontStyle: activeSettings.italic ? "italic" : "normal",
                     }}
                   >
-                    Live Service
+                    {defaultScreenSettings.title}
                   </div>
                   <div
-                    className="whitespace-pre-wrap break-words mt-2 opacity-80"
+                    contentEditable
+                    suppressContentEditableWarning
+                    title="Click to edit the description"
+                    onBlur={(e) => {
+                      const val =
+                        e.currentTarget.textContent?.trim() ||
+                        DEFAULT_DEFAULT_SCREEN_SETTINGS.description;
+                      handleUpdate({ description: val });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).blur();
+                      }
+                    }}
+                    className="outline-none cursor-text whitespace-pre-wrap rounded-lg px-2 -mx-2 mt-2 opacity-80 hover:bg-white/5 hover:opacity-100 focus:bg-white/10 focus:opacity-100 focus:ring-1 focus:ring-purple-400 transition-colors"
                     style={{
                       color: activeSettings.fontColor,
                       fontFamily: activeSettings.fontFamily,
-                      fontSize: `clamp(0.5rem, ${activeSize.previewRem * 0.45}cqw, ${activeSize.previewRem * 0.18}rem)`,
+                      fontSize: `${activeSize.previewRem * 0.18}rem`,
                       fontStyle: activeSettings.italic ? "italic" : "normal",
                     }}
                   >
-                    Now presenting live to congregation
+                    {defaultScreenSettings.description}
                   </div>
                   <div className="flex items-center justify-center gap-2 mt-3">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -713,7 +799,7 @@ export function LivePresentationSettingsPage({
               <span>
                 {editTarget === "live"
                   ? "Preview is scaled and applies instantly to the live console."
-                  : "Preview is scaled and applies instantly to the idle screen shown before anything is projected."}
+                  : "Click the title or description above to edit them directly. Changes apply instantly to the idle screen shown before anything is projected."}
               </span>
               <button
                 onClick={() =>

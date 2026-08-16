@@ -267,6 +267,12 @@ export function useLivePresentationState() {
   const [defaultScreenItalic, setDefaultScreenItalic] = useState(
     () => readDefaultScreenSeed()?.italic ?? false,
   );
+  const [defaultScreenTitle, setDefaultScreenTitle] = useState(
+    () => readDefaultScreenSeed()?.title || "Live Service",
+  );
+  const [defaultScreenDescription, setDefaultScreenDescription] = useState(
+    () => readDefaultScreenSeed()?.description || "Now presenting live to congregation",
+  );
 
   // Apply Live Presentation Settings changes instantly to an already-open
   // console, not just to a fresh GO LIVE press. Both this window and the
@@ -302,6 +308,8 @@ export function useLivePresentationState() {
           setDefaultScreenBackgroundColor(seed.backgroundColor);
           setDefaultScreenBackgroundImage(seed.backgroundImage);
           setDefaultScreenBackgroundVideo(seed.backgroundVideo);
+          setDefaultScreenTitle(seed.title || "Live Service");
+          setDefaultScreenDescription(seed.description || "Now presenting live to congregation");
         }
       };
     } catch {}
@@ -2785,6 +2793,8 @@ export function useLivePresentationState() {
     defaultScreenItalic,
     getDefaultScreenTextSizeClass,
     getDefaultScreenSubtitleSizeClass,
+    defaultScreenTitle,
+    defaultScreenDescription,
     showSlideCounter,
     showCopyrightInfo,
     setCurrentTime,
