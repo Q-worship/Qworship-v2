@@ -118,6 +118,22 @@ export interface DefaultScreenSettings {
   // what actually renders as the idle screen's title/subtitle.
   title: string;
   description: string;
+  // Per-element visibility - hidden elements render nowhere (preview or
+  // live), not just visually dimmed. Restorable from the preview's "reveal
+  // hidden" eye toggle.
+  titleHidden: boolean;
+  descriptionHidden: boolean;
+  liveBadgeHidden: boolean;
+  // Manual box size overrides, as a % of the preview/live screen's own
+  // width/height, set by dragging the resize handles in the preview.
+  // Undefined = natural/auto sizing.
+  titleBoxWidthPct?: number;
+  titleBoxHeightPct?: number;
+  descriptionBoxWidthPct?: number;
+  descriptionBoxHeightPct?: number;
+  // Which quick preset is currently applied - drives the Presets dropdown's
+  // displayed value; purely a UI convenience, doesn't affect rendering.
+  preset: "default" | "blank";
 }
 
 export const DEFAULT_DEFAULT_SCREEN_SETTINGS: DefaultScreenSettings = {
@@ -133,6 +149,29 @@ export const DEFAULT_DEFAULT_SCREEN_SETTINGS: DefaultScreenSettings = {
   italic: false,
   title: "Live Service",
   description: "Now presenting live to congregation",
+  titleHidden: false,
+  descriptionHidden: false,
+  liveBadgeHidden: false,
+  titleBoxWidthPct: undefined,
+  titleBoxHeightPct: undefined,
+  descriptionBoxWidthPct: undefined,
+  descriptionBoxHeightPct: undefined,
+  preset: "default",
+};
+
+// The "Blank Canvas" preset - a bare black screen with the default text and
+// LIVE badge hidden, ready to be built on from scratch.
+export const BLANK_CANVAS_SCREEN_SETTINGS: DefaultScreenSettings = {
+  ...DEFAULT_DEFAULT_SCREEN_SETTINGS,
+  backgroundType: "solid",
+  backgroundValue: "#000000",
+  backgroundMediaType: undefined,
+  backgroundMediaId: undefined,
+  backgroundMediaSource: undefined,
+  titleHidden: true,
+  descriptionHidden: true,
+  liveBadgeHidden: true,
+  preset: "blank",
 };
 
 const DEFAULT_SCREEN_STORAGE_KEY = "qworship-default-screen-settings-page";
@@ -150,6 +189,13 @@ export interface DefaultScreenSeed {
   italic: boolean;
   title: string;
   description: string;
+  titleHidden: boolean;
+  descriptionHidden: boolean;
+  liveBadgeHidden: boolean;
+  titleBoxWidthPct?: number;
+  titleBoxHeightPct?: number;
+  descriptionBoxWidthPct?: number;
+  descriptionBoxHeightPct?: number;
 }
 
 export function toDefaultScreenSeed(settings: DefaultScreenSettings): DefaultScreenSeed {
@@ -161,6 +207,13 @@ export function toDefaultScreenSeed(settings: DefaultScreenSettings): DefaultScr
     italic: settings.italic,
     title: settings.title,
     description: settings.description,
+    titleHidden: settings.titleHidden,
+    descriptionHidden: settings.descriptionHidden,
+    liveBadgeHidden: settings.liveBadgeHidden,
+    titleBoxWidthPct: settings.titleBoxWidthPct,
+    titleBoxHeightPct: settings.titleBoxHeightPct,
+    descriptionBoxWidthPct: settings.descriptionBoxWidthPct,
+    descriptionBoxHeightPct: settings.descriptionBoxHeightPct,
   };
 
   if (settings.backgroundType === "media") {

@@ -34,6 +34,13 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     getDefaultScreenSubtitleSizeClass,
     defaultScreenTitle,
     defaultScreenDescription,
+    defaultScreenTitleHidden,
+    defaultScreenDescriptionHidden,
+    defaultScreenLiveBadgeHidden,
+    defaultScreenTitleBoxWidthPct,
+    defaultScreenTitleBoxHeightPct,
+    defaultScreenDescriptionBoxWidthPct,
+    defaultScreenDescriptionBoxHeightPct,
   } = props;
 
   return (
@@ -435,33 +442,65 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               )}
             </div>
             )) : (
-            /* Default Live Service Display */
+            /* Default Live Service Display - mirrors exactly what's visible
+               (not hidden) in the settings page's Default Web Screen
+               preview, at the same manually-resized box sizes if set. */
             <>
-              <h1
-                className={`mb-12 ${getDefaultScreenTextSizeClass()}`}
-                style={{
-                  fontFamily: defaultScreenFontFamily,
-                  color: defaultScreenFontColor,
-                  fontWeight: defaultScreenBold ? "bold" : "normal",
-                  fontStyle: defaultScreenItalic ? "italic" : "normal",
-                }}
-              >
-                {defaultScreenTitle}
-              </h1>
-              <p
-                className={`mb-8 opacity-80 ${getDefaultScreenSubtitleSizeClass()}`}
-                style={{
-                  fontFamily: defaultScreenFontFamily,
-                  color: defaultScreenFontColor,
-                  fontStyle: defaultScreenItalic ? "italic" : "normal",
-                }}
-              >
-                {defaultScreenDescription}
-              </p>
-              <div className="flex items-center justify-center space-x-3">
-                <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-red-400 text-2xl font-medium">LIVE</span>
-              </div>
+              {!defaultScreenTitleHidden && (
+                <div
+                  className="mx-auto overflow-hidden mb-12"
+                  style={{
+                    maxWidth: defaultScreenTitleBoxWidthPct
+                      ? `${defaultScreenTitleBoxWidthPct}%`
+                      : undefined,
+                    maxHeight: defaultScreenTitleBoxHeightPct
+                      ? `${defaultScreenTitleBoxHeightPct}%`
+                      : undefined,
+                  }}
+                >
+                  <h1
+                    className={getDefaultScreenTextSizeClass()}
+                    style={{
+                      fontFamily: defaultScreenFontFamily,
+                      color: defaultScreenFontColor,
+                      fontWeight: defaultScreenBold ? "bold" : "normal",
+                      fontStyle: defaultScreenItalic ? "italic" : "normal",
+                    }}
+                  >
+                    {defaultScreenTitle}
+                  </h1>
+                </div>
+              )}
+              {!defaultScreenDescriptionHidden && (
+                <div
+                  className="mx-auto overflow-hidden mb-8"
+                  style={{
+                    maxWidth: defaultScreenDescriptionBoxWidthPct
+                      ? `${defaultScreenDescriptionBoxWidthPct}%`
+                      : undefined,
+                    maxHeight: defaultScreenDescriptionBoxHeightPct
+                      ? `${defaultScreenDescriptionBoxHeightPct}%`
+                      : undefined,
+                  }}
+                >
+                  <p
+                    className={`opacity-80 ${getDefaultScreenSubtitleSizeClass()}`}
+                    style={{
+                      fontFamily: defaultScreenFontFamily,
+                      color: defaultScreenFontColor,
+                      fontStyle: defaultScreenItalic ? "italic" : "normal",
+                    }}
+                  >
+                    {defaultScreenDescription}
+                  </p>
+                </div>
+              )}
+              {!defaultScreenLiveBadgeHidden && (
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-red-400 text-2xl font-medium">LIVE</span>
+                </div>
+              )}
               <div className="mt-8 text-gray-400 text-lg">
                 Slide {currentSlide} of {totalSlides}
               </div>

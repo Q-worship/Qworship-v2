@@ -3,6 +3,7 @@ import {
   useLiveConsoleSettingsStore,
   DEFAULT_LIVE_CONSOLE_SETTINGS,
   DEFAULT_DEFAULT_SCREEN_SETTINGS,
+  BLANK_CANVAS_SCREEN_SETTINGS,
   type LiveConsoleSettings,
   type DefaultScreenSettings,
 } from "@/stores/useLiveConsoleSettingsStore";
@@ -24,6 +25,8 @@ import {
   Trash2,
   GripVertical,
   Radio,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -283,39 +286,136 @@ function ColorPickerField({
   );
 }
 
-// ── Auto-fit scale ─────────────────────────────────────────────────────────────
-// Measures the natural (unscaled) size of `contentRef` against `containerRef`
-// and applies a uniform CSS transform: scale() so content never exceeds the
-// container on either axis - regardless of text length, font size preset, or
-// container size. Guarantees "everything is visible" at every tier instead of
-// guessing viewport-relative clamp() values that only account for width.
-function useAutoFitScale(
+// ── Auto-fit text size ─────────────────────────────────────────────────────────
+// Iteratively reduces genuine font-size (not a CSS transform - transform:
+// scale() blurs/garbles bold-italic serif text when scaled to extreme
+// ratios, since the browser rasterizes at the original size and scales the
+// bitmap down instead of re-rendering crisp glyphs at the target size) on
+// whatever `applySize` controls, until `measureRef`'s rendered box fits
+// inside `containerRef` on both axes. Re-measures on container resize and
+// whenever `deps` change (text content, tier, font, box size...).
+function useAutoFitTextSize(
   containerRef: React.RefObject<HTMLElement>,
-  contentRef: React.RefObject<HTMLElement>,
+  measureRef: React.RefObject<HTMLElement>,
+  applySize: (factor: number) => void,
   deps: unknown[],
 ) {
   useLayoutEffect(() => {
     const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return;
+    const measure = measureRef.current;
+    if (!container || !measure) return;
 
-    const fit = () => {
-      content.style.transform = "scale(1)";
-      const containerRect = container.getBoundingClientRect();
-      const contentRect = content.getBoundingClientRect();
-      if (contentRect.width === 0 || contentRect.height === 0) return;
-      const scaleX = containerRect.width / contentRect.width;
-      const scaleY = containerRect.height / contentRect.height;
-      const scale = Math.min(1, scaleX, scaleY);
-      content.style.transform = `scale(${scale})`;
+    const fits = () => {
+      const c = container.getBoundingClientRect();
+      const m = measure.getBoundingClientRect();
+      return m.width <= c.width + 0.5 && m.height <= c.height + 0.5;
     };
 
-    fit();
-    const observer = new ResizeObserver(fit);
+    const run = () => {
+      let factor = 1;
+      applySize(factor);
+      let guard = 0;
+      while (!fits() && factor > 0.15 && guard < 60) {
+        factor = Math.max(0.15, factor - 0.03);
+        applySize(factor);
+        guard++;
+      }
+    };
+
+    run();
+    const observer = new ResizeObserver(run);
     observer.observe(container);
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+}
+
+// ── ResizableBox ─────────────────────────────────────────────────────────────
+// A box sized as a % of `previewBoxRef`, draggable from all 8 edges/corners.
+// Drag updates the box's live DOM size directly (so ResizeObserver-driven
+// auto-fit reflows text in real time as the user drags), then commits the
+// final size back as a % via onResizeEnd on release.
+function ResizableBox({
+  boxRef,
+  widthPct,
+  heightPct,
+  previewBoxRef,
+  onResizeEnd,
+  className,
+  children,
+}: {
+  boxRef: React.RefObject<HTMLDivElement>;
+  widthPct: number;
+  heightPct: number;
+  previewBoxRef: React.RefObject<HTMLElement>;
+  onResizeEnd: (widthPct: number, heightPct: number) => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const startResize = (edge: string) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const previewBox = previewBoxRef.current;
+    const box = boxRef.current;
+    if (!previewBox || !box) return;
+    const previewRect = previewBox.getBoundingClientRect();
+    const startRect = box.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let finalW = startRect.width;
+    let finalH = startRect.height;
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let w = startRect.width;
+      let h = startRect.height;
+      if (edge.includes("e")) w = startRect.width + dx;
+      if (edge.includes("w")) w = startRect.width - dx;
+      if (edge.includes("s")) h = startRect.height + dy;
+      if (edge.includes("n")) h = startRect.height - dy;
+      w = Math.max(previewRect.width * 0.15, Math.min(previewRect.width, w));
+      h = Math.max(previewRect.height * 0.08, Math.min(previewRect.height, h));
+      finalW = w;
+      finalH = h;
+      box.style.width = `${w}px`;
+      box.style.height = `${h}px`;
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      const r = previewBoxRef.current?.getBoundingClientRect();
+      if (r) {
+        onResizeEnd(
+          Math.round((finalW / r.width) * 1000) / 10,
+          Math.round((finalH / r.height) * 1000) / 10,
+        );
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  const handleBase =
+    "absolute bg-purple-500 border border-white/70 rounded-sm opacity-0 group-hover:opacity-90 transition-opacity z-20";
+
+  return (
+    <div
+      ref={boxRef}
+      className={`group relative mx-auto ${className ?? ""}`}
+      style={{ width: `${widthPct}%`, height: `${heightPct}%` }}
+    >
+      {children}
+      <div onPointerDown={startResize("n")} className={`${handleBase} top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-2 cursor-ns-resize`} />
+      <div onPointerDown={startResize("s")} className={`${handleBase} bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-6 h-2 cursor-ns-resize`} />
+      <div onPointerDown={startResize("e")} className={`${handleBase} right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-2 h-6 cursor-ew-resize`} />
+      <div onPointerDown={startResize("w")} className={`${handleBase} left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-6 cursor-ew-resize`} />
+      <div onPointerDown={startResize("ne")} className={`${handleBase} top-0 right-0 -translate-y-1/2 translate-x-1/2 w-3 h-3 cursor-nesw-resize`} />
+      <div onPointerDown={startResize("nw")} className={`${handleBase} top-0 left-0 -translate-y-1/2 -translate-x-1/2 w-3 h-3 cursor-nwse-resize`} />
+      <div onPointerDown={startResize("se")} className={`${handleBase} bottom-0 right-0 translate-y-1/2 translate-x-1/2 w-3 h-3 cursor-nwse-resize`} />
+      <div onPointerDown={startResize("sw")} className={`${handleBase} bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-3 h-3 cursor-nesw-resize`} />
+    </div>
+  );
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -350,28 +450,74 @@ export function LivePresentationSettingsPage({
         ? "#000000"
         : activeSettings.backgroundValue || "#000000";
 
-  // Auto-fit: the rendered preview content is scaled to always stay inside
-  // the preview box, on both axes, at every text size preset.
+  // Shows hidden Default Web Screen elements as restorable ghosts instead of
+  // rendering nothing - toggled by the eye icon on the preview box itself.
+  const [revealHidden, setRevealHidden] = useState(false);
+  const anythingHidden =
+    defaultScreenSettings.titleHidden ||
+    defaultScreenSettings.descriptionHidden ||
+    defaultScreenSettings.liveBadgeHidden;
+
+  // Auto-fit: preview text is genuinely re-sized (never CSS-transform-scaled)
+  // to always stay inside its box, on both axes, at every size preset.
   const previewBoxRef = useRef<HTMLDivElement>(null);
-  const livePreviewContentRef = useRef<HTMLDivElement>(null);
-  const defaultPreviewContentRef = useRef<HTMLDivElement>(null);
-  useAutoFitScale(previewBoxRef, livePreviewContentRef, [
-    editTarget,
-    settings.hideTextBox,
-    activeSize.previewRem,
-    activeSettings.fontFamily,
-    activeSettings.bold,
-    activeSettings.italic,
-  ]);
-  useAutoFitScale(previewBoxRef, defaultPreviewContentRef, [
-    editTarget,
-    defaultScreenSettings.title,
-    defaultScreenSettings.description,
-    activeSize.previewRem,
-    activeSettings.fontFamily,
-    activeSettings.bold,
-    activeSettings.italic,
-  ]);
+  const liveCardRef = useRef<HTMLDivElement>(null);
+  const liveTextRef = useRef<HTMLDivElement>(null);
+  const titleBoxRef = useRef<HTMLDivElement>(null);
+  const titleTextRef = useRef<HTMLDivElement>(null);
+  const descBoxRef = useRef<HTMLDivElement>(null);
+  const descTextRef = useRef<HTMLDivElement>(null);
+
+  const liveBaseRem = activeSize.previewRem * 0.45;
+  useAutoFitTextSize(
+    previewBoxRef,
+    liveCardRef,
+    (factor) => {
+      if (liveTextRef.current) liveTextRef.current.style.fontSize = `${liveBaseRem * factor}rem`;
+    },
+    [editTarget, settings.hideTextBox, liveBaseRem, activeSettings.fontFamily, activeSettings.bold, activeSettings.italic],
+  );
+
+  const titleBaseRem = activeSize.previewRem * 0.45;
+  useAutoFitTextSize(
+    titleBoxRef,
+    titleTextRef,
+    (factor) => {
+      if (titleTextRef.current) titleTextRef.current.style.fontSize = `${titleBaseRem * factor}rem`;
+    },
+    [
+      editTarget,
+      defaultScreenSettings.title,
+      defaultScreenSettings.titleHidden,
+      defaultScreenSettings.titleBoxWidthPct,
+      defaultScreenSettings.titleBoxHeightPct,
+      revealHidden,
+      titleBaseRem,
+      activeSettings.fontFamily,
+      activeSettings.bold,
+      activeSettings.italic,
+    ],
+  );
+
+  const descBaseRem = activeSize.previewRem * 0.18;
+  useAutoFitTextSize(
+    descBoxRef,
+    descTextRef,
+    (factor) => {
+      if (descTextRef.current) descTextRef.current.style.fontSize = `${descBaseRem * factor}rem`;
+    },
+    [
+      editTarget,
+      defaultScreenSettings.description,
+      defaultScreenSettings.descriptionHidden,
+      defaultScreenSettings.descriptionBoxWidthPct,
+      defaultScreenSettings.descriptionBoxHeightPct,
+      revealHidden,
+      descBaseRem,
+      activeSettings.fontFamily,
+      activeSettings.italic,
+    ],
+  );
 
   return (
     <div
@@ -589,6 +735,29 @@ export function LivePresentationSettingsPage({
                 </div>
               </div>
 
+              {editTarget === "default" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Title</Label>
+                    <Input
+                      value={defaultScreenSettings.title}
+                      onChange={(e) => handleUpdate({ title: e.target.value })}
+                      className="bg-[#0a0614] border-gray-700 text-white"
+                      placeholder="Live Service"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Subtitle</Label>
+                    <Input
+                      value={defaultScreenSettings.description}
+                      onChange={(e) => handleUpdate({ description: e.target.value })}
+                      className="bg-[#0a0614] border-gray-700 text-white"
+                      placeholder="Now presenting live to congregation"
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="space-y-2">
                 <Label className="text-sm text-gray-300">Font Family</Label>
                 <Select
@@ -673,11 +842,31 @@ export function LivePresentationSettingsPage({
 
           {/* ── Preview column ── */}
           <section className="lg:col-span-7 sticky top-0 bg-[#120a26] border border-gray-700/40 rounded-xl p-6 space-y-4">
-            <div className="flex items-center gap-2 pb-4 border-b border-gray-700/40">
-              <Layout className="w-5 h-5 text-gray-400" />
-              <h2 className="text-lg font-semibold text-white">
-                {editTarget === "live" ? "Live Console Preview" : "Default Web Screen Preview"}
-              </h2>
+            <div className="flex items-center justify-between gap-3 pb-4 border-b border-gray-700/40 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Layout className="w-5 h-5 text-gray-400" />
+                <h2 className="text-lg font-semibold text-white">
+                  {editTarget === "live" ? "Live Console Preview" : "Default Web Screen Preview"}
+                </h2>
+              </div>
+              {editTarget === "default" && (
+                <Select
+                  value={defaultScreenSettings.preset}
+                  onValueChange={(val: "default" | "blank") =>
+                    handleUpdate(
+                      val === "blank" ? BLANK_CANVAS_SCREEN_SETTINGS : DEFAULT_DEFAULT_SCREEN_SETTINGS,
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-[168px] h-8 text-xs bg-[#0a0614] border-gray-700 text-white">
+                    <SelectValue placeholder="Presets" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
+                    <SelectItem value="default">Default System</SelectItem>
+                    <SelectItem value="blank">Blank Canvas</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div
@@ -705,9 +894,30 @@ export function LivePresentationSettingsPage({
                   />
                 ))}
 
+              {editTarget === "default" && (
+                <button
+                  type="button"
+                  onClick={() => setRevealHidden((v) => !v)}
+                  title={
+                    revealHidden
+                      ? "Hide the restore overlay"
+                      : anythingHidden
+                        ? "Show hidden elements so you can restore them"
+                        : "Nothing is hidden right now"
+                  }
+                  className={`absolute top-2 right-2 z-30 p-1.5 rounded-full transition-colors ${
+                    revealHidden
+                      ? "bg-purple-600 text-white"
+                      : "bg-black/50 text-white/70 hover:text-white hover:bg-black/70"
+                  } ${anythingHidden && !revealHidden ? "ring-1 ring-purple-400" : ""}`}
+                >
+                  {revealHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              )}
+
               {editTarget === "live" ? (
                 <div
-                  ref={livePreviewContentRef}
+                  ref={liveCardRef}
                   className={`relative z-10 ${
                     settings.hideTextBox
                       ? ""
@@ -715,11 +925,11 @@ export function LivePresentationSettingsPage({
                   }`}
                 >
                   <div
+                    ref={liveTextRef}
                     className="text-center whitespace-pre-wrap leading-relaxed"
                     style={{
                       color: activeSettings.fontColor,
                       fontFamily: activeSettings.fontFamily,
-                      fontSize: `${activeSize.previewRem * 0.45}rem`,
                       fontWeight: activeSettings.bold ? 700 : 300,
                       fontStyle: activeSettings.italic ? "italic" : "normal",
                     }}
@@ -733,73 +943,195 @@ export function LivePresentationSettingsPage({
                   </div>
                 </div>
               ) : (
-                <div ref={defaultPreviewContentRef} className="relative z-10 text-center">
-                  <div
-                    contentEditable
-                    suppressContentEditableWarning
-                    title="Click to edit the title"
-                    onBlur={(e) => {
-                      const val =
-                        e.currentTarget.textContent?.trim() ||
-                        DEFAULT_DEFAULT_SCREEN_SETTINGS.title;
-                      handleUpdate({ title: val });
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        (e.currentTarget as HTMLElement).blur();
+                <div className="relative z-10 w-full h-full flex flex-col items-center justify-center gap-2">
+                  {(!defaultScreenSettings.titleHidden || revealHidden) && (
+                    <ResizableBox
+                      boxRef={titleBoxRef}
+                      widthPct={defaultScreenSettings.titleBoxWidthPct ?? 90}
+                      heightPct={defaultScreenSettings.titleBoxHeightPct ?? 38}
+                      previewBoxRef={previewBoxRef}
+                      onResizeEnd={(w, h) =>
+                        handleUpdate({ titleBoxWidthPct: w, titleBoxHeightPct: h })
                       }
-                    }}
-                    className="outline-none cursor-text whitespace-pre-wrap rounded-lg px-2 -mx-2 hover:bg-white/5 focus:bg-white/10 focus:ring-1 focus:ring-purple-400 transition-colors"
-                    style={{
-                      color: activeSettings.fontColor,
-                      fontFamily: activeSettings.fontFamily,
-                      fontSize: `${activeSize.previewRem * 0.45}rem`,
-                      fontWeight: activeSettings.bold ? 700 : 300,
-                      fontStyle: activeSettings.italic ? "italic" : "normal",
-                    }}
-                  >
-                    {defaultScreenSettings.title}
-                  </div>
-                  <div
-                    contentEditable
-                    suppressContentEditableWarning
-                    title="Click to edit the description"
-                    onBlur={(e) => {
-                      const val =
-                        e.currentTarget.textContent?.trim() ||
-                        DEFAULT_DEFAULT_SCREEN_SETTINGS.description;
-                      handleUpdate({ description: val });
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        (e.currentTarget as HTMLElement).blur();
+                    >
+                      <div
+                        className={`w-full h-full flex items-center justify-center rounded-lg ${
+                          defaultScreenSettings.titleHidden
+                            ? "opacity-40 border-2 border-dashed border-purple-400"
+                            : ""
+                        }`}
+                      >
+                        <div
+                          ref={titleTextRef}
+                          contentEditable={!defaultScreenSettings.titleHidden}
+                          suppressContentEditableWarning
+                          title="Click to edit the title"
+                          onBlur={(e) => {
+                            const val =
+                              e.currentTarget.textContent?.trim() ||
+                              DEFAULT_DEFAULT_SCREEN_SETTINGS.title;
+                            handleUpdate({ title: val });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLElement).blur();
+                            }
+                          }}
+                          className={`outline-none whitespace-pre-wrap text-center rounded-lg px-2 transition-colors ${
+                            defaultScreenSettings.titleHidden
+                              ? "pointer-events-none"
+                              : "cursor-text hover:bg-white/5 focus:bg-white/10 focus:ring-1 focus:ring-purple-400"
+                          }`}
+                          style={{
+                            color: activeSettings.fontColor,
+                            fontFamily: activeSettings.fontFamily,
+                            fontWeight: activeSettings.bold ? 700 : 300,
+                            fontStyle: activeSettings.italic ? "italic" : "normal",
+                          }}
+                        >
+                          {defaultScreenSettings.title}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdate({ titleHidden: !defaultScreenSettings.titleHidden })
+                        }
+                        title={defaultScreenSettings.titleHidden ? "Restore title" : "Hide title"}
+                        className={`absolute -top-2 -right-2 z-20 p-1 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition-opacity ${
+                          defaultScreenSettings.titleHidden
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        {defaultScreenSettings.titleHidden ? (
+                          <Eye className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </ResizableBox>
+                  )}
+
+                  {(!defaultScreenSettings.descriptionHidden || revealHidden) && (
+                    <ResizableBox
+                      boxRef={descBoxRef}
+                      widthPct={defaultScreenSettings.descriptionBoxWidthPct ?? 85}
+                      heightPct={defaultScreenSettings.descriptionBoxHeightPct ?? 18}
+                      previewBoxRef={previewBoxRef}
+                      onResizeEnd={(w, h) =>
+                        handleUpdate({ descriptionBoxWidthPct: w, descriptionBoxHeightPct: h })
                       }
-                    }}
-                    className="outline-none cursor-text whitespace-pre-wrap rounded-lg px-2 -mx-2 mt-2 opacity-80 hover:bg-white/5 hover:opacity-100 focus:bg-white/10 focus:opacity-100 focus:ring-1 focus:ring-purple-400 transition-colors"
-                    style={{
-                      color: activeSettings.fontColor,
-                      fontFamily: activeSettings.fontFamily,
-                      fontSize: `${activeSize.previewRem * 0.18}rem`,
-                      fontStyle: activeSettings.italic ? "italic" : "normal",
-                    }}
-                  >
-                    {defaultScreenSettings.description}
-                  </div>
-                  <div className="flex items-center justify-center gap-2 mt-3">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-red-400 text-[0.5em] font-medium">LIVE</span>
-                  </div>
+                    >
+                      <div
+                        className={`w-full h-full flex items-center justify-center rounded-lg ${
+                          defaultScreenSettings.descriptionHidden
+                            ? "opacity-40 border-2 border-dashed border-purple-400"
+                            : ""
+                        }`}
+                      >
+                        <div
+                          ref={descTextRef}
+                          contentEditable={!defaultScreenSettings.descriptionHidden}
+                          suppressContentEditableWarning
+                          title="Click to edit the description"
+                          onBlur={(e) => {
+                            const val =
+                              e.currentTarget.textContent?.trim() ||
+                              DEFAULT_DEFAULT_SCREEN_SETTINGS.description;
+                            handleUpdate({ description: val });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLElement).blur();
+                            }
+                          }}
+                          className={`outline-none whitespace-pre-wrap text-center rounded-lg px-2 opacity-80 transition-colors ${
+                            defaultScreenSettings.descriptionHidden
+                              ? "pointer-events-none"
+                              : "cursor-text hover:bg-white/5 hover:opacity-100 focus:bg-white/10 focus:opacity-100 focus:ring-1 focus:ring-purple-400"
+                          }`}
+                          style={{
+                            color: activeSettings.fontColor,
+                            fontFamily: activeSettings.fontFamily,
+                            fontStyle: activeSettings.italic ? "italic" : "normal",
+                          }}
+                        >
+                          {defaultScreenSettings.description}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdate({
+                            descriptionHidden: !defaultScreenSettings.descriptionHidden,
+                          })
+                        }
+                        title={
+                          defaultScreenSettings.descriptionHidden
+                            ? "Restore description"
+                            : "Hide description"
+                        }
+                        className={`absolute -top-2 -right-2 z-20 p-1 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition-opacity ${
+                          defaultScreenSettings.descriptionHidden
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        {defaultScreenSettings.descriptionHidden ? (
+                          <Eye className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </ResizableBox>
+                  )}
+
+                  {(!defaultScreenSettings.liveBadgeHidden || revealHidden) && (
+                    <div
+                      className={`group relative flex items-center justify-center gap-2 mt-1 px-3 py-1 rounded-full ${
+                        defaultScreenSettings.liveBadgeHidden
+                          ? "opacity-40 border-2 border-dashed border-purple-400"
+                          : ""
+                      }`}
+                    >
+                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                      <span className="text-red-400 text-sm font-medium">LIVE</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdate({ liveBadgeHidden: !defaultScreenSettings.liveBadgeHidden })
+                        }
+                        title={
+                          defaultScreenSettings.liveBadgeHidden
+                            ? "Restore LIVE badge"
+                            : "Hide LIVE badge"
+                        }
+                        className={`absolute -top-2 -right-2 z-20 p-1 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition-opacity ${
+                          defaultScreenSettings.liveBadgeHidden
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        {defaultScreenSettings.liveBadgeHidden ? (
+                          <Eye className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            <div className="flex justify-between items-center text-xs text-gray-500">
+            <div className="flex justify-between items-center text-xs text-gray-500 flex-wrap gap-2">
               <span>
                 {editTarget === "live"
                   ? "Preview is scaled and applies instantly to the live console."
-                  : "Click the title or description above to edit them directly. Changes apply instantly to the idle screen shown before anything is projected."}
+                  : "Click text to edit, drag box edges to resize, hover for the hide icon. What's shown here is exactly what's shown live."}
               </span>
               <button
                 onClick={() =>

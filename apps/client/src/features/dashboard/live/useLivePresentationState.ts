@@ -273,6 +273,25 @@ export function useLivePresentationState() {
   const [defaultScreenDescription, setDefaultScreenDescription] = useState(
     () => readDefaultScreenSeed()?.description || "Now presenting live to congregation",
   );
+  const [defaultScreenTitleHidden, setDefaultScreenTitleHidden] = useState(
+    () => readDefaultScreenSeed()?.titleHidden ?? false,
+  );
+  const [defaultScreenDescriptionHidden, setDefaultScreenDescriptionHidden] = useState(
+    () => readDefaultScreenSeed()?.descriptionHidden ?? false,
+  );
+  const [defaultScreenLiveBadgeHidden, setDefaultScreenLiveBadgeHidden] = useState(
+    () => readDefaultScreenSeed()?.liveBadgeHidden ?? false,
+  );
+  const [defaultScreenTitleBoxWidthPct, setDefaultScreenTitleBoxWidthPct] = useState<
+    number | undefined
+  >(() => readDefaultScreenSeed()?.titleBoxWidthPct);
+  const [defaultScreenTitleBoxHeightPct, setDefaultScreenTitleBoxHeightPct] = useState<
+    number | undefined
+  >(() => readDefaultScreenSeed()?.titleBoxHeightPct);
+  const [defaultScreenDescriptionBoxWidthPct, setDefaultScreenDescriptionBoxWidthPct] =
+    useState<number | undefined>(() => readDefaultScreenSeed()?.descriptionBoxWidthPct);
+  const [defaultScreenDescriptionBoxHeightPct, setDefaultScreenDescriptionBoxHeightPct] =
+    useState<number | undefined>(() => readDefaultScreenSeed()?.descriptionBoxHeightPct);
 
   // Apply Live Presentation Settings changes instantly to an already-open
   // console, not just to a fresh GO LIVE press. Both this window and the
@@ -310,6 +329,13 @@ export function useLivePresentationState() {
           setDefaultScreenBackgroundVideo(seed.backgroundVideo);
           setDefaultScreenTitle(seed.title || "Live Service");
           setDefaultScreenDescription(seed.description || "Now presenting live to congregation");
+          setDefaultScreenTitleHidden(seed.titleHidden ?? false);
+          setDefaultScreenDescriptionHidden(seed.descriptionHidden ?? false);
+          setDefaultScreenLiveBadgeHidden(seed.liveBadgeHidden ?? false);
+          setDefaultScreenTitleBoxWidthPct(seed.titleBoxWidthPct);
+          setDefaultScreenTitleBoxHeightPct(seed.titleBoxHeightPct);
+          setDefaultScreenDescriptionBoxWidthPct(seed.descriptionBoxWidthPct);
+          setDefaultScreenDescriptionBoxHeightPct(seed.descriptionBoxHeightPct);
         }
       };
     } catch {}
@@ -2795,6 +2821,13 @@ export function useLivePresentationState() {
     getDefaultScreenSubtitleSizeClass,
     defaultScreenTitle,
     defaultScreenDescription,
+    defaultScreenTitleHidden,
+    defaultScreenDescriptionHidden,
+    defaultScreenLiveBadgeHidden,
+    defaultScreenTitleBoxWidthPct,
+    defaultScreenTitleBoxHeightPct,
+    defaultScreenDescriptionBoxWidthPct,
+    defaultScreenDescriptionBoxHeightPct,
     showSlideCounter,
     showCopyrightInfo,
     setCurrentTime,
