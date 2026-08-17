@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   useLiveConsoleSettingsStore,
   DEFAULT_LIVE_CONSOLE_SETTINGS,
@@ -7,6 +7,7 @@ import {
   type LiveConsoleSettings,
   type DefaultScreenSettings,
 } from "@/stores/useLiveConsoleSettingsStore";
+import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 import { BackgroundMediaPicker } from "@/features/mainPresentation/BackgroundMediaPicker";
 import {
   Select,
@@ -286,50 +287,6 @@ function ColorPickerField({
   );
 }
 
-// ── Auto-fit text size ─────────────────────────────────────────────────────────
-// Iteratively reduces genuine font-size (not a CSS transform - transform:
-// scale() blurs/garbles bold-italic serif text when scaled to extreme
-// ratios, since the browser rasterizes at the original size and scales the
-// bitmap down instead of re-rendering crisp glyphs at the target size) on
-// whatever `applySize` controls, until `measureRef`'s rendered box fits
-// inside `containerRef` on both axes. Re-measures on container resize and
-// whenever `deps` change (text content, tier, font, box size...).
-function useAutoFitTextSize(
-  containerRef: React.RefObject<HTMLElement>,
-  measureRef: React.RefObject<HTMLElement>,
-  applySize: (factor: number) => void,
-  deps: unknown[],
-) {
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const measure = measureRef.current;
-    if (!container || !measure) return;
-
-    const fits = () => {
-      const c = container.getBoundingClientRect();
-      const m = measure.getBoundingClientRect();
-      return m.width <= c.width + 0.5 && m.height <= c.height + 0.5;
-    };
-
-    const run = () => {
-      let factor = 1;
-      applySize(factor);
-      let guard = 0;
-      while (!fits() && factor > 0.15 && guard < 60) {
-        factor = Math.max(0.15, factor - 0.03);
-        applySize(factor);
-        guard++;
-      }
-    };
-
-    run();
-    const observer = new ResizeObserver(run);
-    observer.observe(container);
-    return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
-
 // ── ResizableBox ─────────────────────────────────────────────────────────────
 // A box sized as a % of `previewBoxRef`, draggable from all 8 edges/corners.
 // Drag updates the box's live DOM size directly (so ResizeObserver-driven
@@ -396,8 +353,10 @@ function ResizableBox({
     window.addEventListener("pointerup", onUp);
   };
 
+  // Thin pill-shaped edge handles only - no corner dots, kept subtle until
+  // hovered so the box doesn't look cluttered at rest.
   const handleBase =
-    "absolute bg-purple-500 border border-white/70 rounded-sm opacity-0 group-hover:opacity-90 transition-opacity z-20";
+    "absolute bg-purple-400/80 hover:bg-purple-400 rounded-full opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity z-20";
 
   return (
     <div
@@ -406,14 +365,10 @@ function ResizableBox({
       style={{ width: `${widthPct}%`, height: `${heightPct}%` }}
     >
       {children}
-      <div onPointerDown={startResize("n")} className={`${handleBase} top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-2 cursor-ns-resize`} />
-      <div onPointerDown={startResize("s")} className={`${handleBase} bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-6 h-2 cursor-ns-resize`} />
-      <div onPointerDown={startResize("e")} className={`${handleBase} right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-2 h-6 cursor-ew-resize`} />
-      <div onPointerDown={startResize("w")} className={`${handleBase} left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-6 cursor-ew-resize`} />
-      <div onPointerDown={startResize("ne")} className={`${handleBase} top-0 right-0 -translate-y-1/2 translate-x-1/2 w-3 h-3 cursor-nesw-resize`} />
-      <div onPointerDown={startResize("nw")} className={`${handleBase} top-0 left-0 -translate-y-1/2 -translate-x-1/2 w-3 h-3 cursor-nwse-resize`} />
-      <div onPointerDown={startResize("se")} className={`${handleBase} bottom-0 right-0 translate-y-1/2 translate-x-1/2 w-3 h-3 cursor-nwse-resize`} />
-      <div onPointerDown={startResize("sw")} className={`${handleBase} bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-3 h-3 cursor-nesw-resize`} />
+      <div onPointerDown={startResize("n")} className={`${handleBase} top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-[3px] cursor-ns-resize`} />
+      <div onPointerDown={startResize("s")} className={`${handleBase} bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-[3px] cursor-ns-resize`} />
+      <div onPointerDown={startResize("e")} className={`${handleBase} right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-[3px] h-8 cursor-ew-resize`} />
+      <div onPointerDown={startResize("w")} className={`${handleBase} left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-[3px] h-8 cursor-ew-resize`} />
     </div>
   );
 }
@@ -456,7 +411,8 @@ export function LivePresentationSettingsPage({
   const anythingHidden =
     defaultScreenSettings.titleHidden ||
     defaultScreenSettings.descriptionHidden ||
-    defaultScreenSettings.liveBadgeHidden;
+    defaultScreenSettings.liveBadgeHidden ||
+    defaultScreenSettings.slideCounterHidden;
 
   // Auto-fit: preview text is genuinely re-sized (never CSS-transform-scaled)
   // to always stay inside its box, on both axes, at every size preset.
@@ -1116,6 +1072,42 @@ export function LivePresentationSettingsPage({
                         }`}
                       >
                         {defaultScreenSettings.liveBadgeHidden ? (
+                          <Eye className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {(!defaultScreenSettings.slideCounterHidden || revealHidden) && (
+                    <div
+                      className={`group relative mt-1 px-2 rounded ${
+                        defaultScreenSettings.slideCounterHidden
+                          ? "opacity-40 border-2 border-dashed border-purple-400"
+                          : ""
+                      }`}
+                    >
+                      <span className="text-gray-400 text-xs">Slide 1 of 0</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdate({
+                            slideCounterHidden: !defaultScreenSettings.slideCounterHidden,
+                          })
+                        }
+                        title={
+                          defaultScreenSettings.slideCounterHidden
+                            ? "Restore slide counter"
+                            : "Hide slide counter"
+                        }
+                        className={`absolute -top-2 -right-2 z-20 p-1 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition-opacity ${
+                          defaultScreenSettings.slideCounterHidden
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        {defaultScreenSettings.slideCounterHidden ? (
                           <Eye className="w-3.5 h-3.5" />
                         ) : (
                           <EyeOff className="w-3.5 h-3.5" />

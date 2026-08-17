@@ -1,7 +1,8 @@
-import React from "react";
-import { useLivePresentationState } from "../useLivePresentationState";
+import React, { useRef } from "react";
+import { useLivePresentationState, TEXT_SIZE_MAX_REM } from "../useLivePresentationState";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "../../components/SlideCanvasRenderer";
+import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 
 export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState>> = (props) => {
   const {
@@ -30,21 +31,55 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     defaultScreenFontColor,
     defaultScreenBold,
     defaultScreenItalic,
-    getDefaultScreenTextSizeClass,
-    getDefaultScreenSubtitleSizeClass,
     defaultScreenTitle,
     defaultScreenDescription,
+    defaultScreenTextSize,
     defaultScreenTitleHidden,
     defaultScreenDescriptionHidden,
     defaultScreenLiveBadgeHidden,
+    defaultScreenSlideCounterHidden,
     defaultScreenTitleBoxWidthPct,
     defaultScreenTitleBoxHeightPct,
     defaultScreenDescriptionBoxWidthPct,
     defaultScreenDescriptionBoxHeightPct,
   } = props;
 
+  // "Screen" reference for the Default Web Screen's box-size percentages
+  // (set as a % of this same area in the settings page preview) and the
+  // container each title/description box's text is auto-fit-shrunk against.
+  const screenRef = useRef<HTMLDivElement>(null);
+  const defaultTitleBoxRef = useRef<HTMLDivElement>(null);
+  const defaultTitleTextRef = useRef<HTMLHeadingElement>(null);
+  const defaultDescBoxRef = useRef<HTMLDivElement>(null);
+  const defaultDescTextRef = useRef<HTMLParagraphElement>(null);
+
+  const defaultTitleBaseRem = TEXT_SIZE_MAX_REM[defaultScreenTextSize] ?? 10;
+  useAutoFitTextSize(
+    defaultTitleBoxRef,
+    defaultTitleTextRef,
+    (factor) => {
+      if (defaultTitleTextRef.current) {
+        defaultTitleTextRef.current.style.fontSize = `${defaultTitleBaseRem * factor}rem`;
+      }
+    },
+    [defaultScreenTitle, defaultScreenTitleBoxWidthPct, defaultScreenTitleBoxHeightPct, defaultTitleBaseRem, defaultScreenFontFamily, defaultScreenBold, defaultScreenItalic],
+  );
+
+  const defaultDescBaseRem = defaultTitleBaseRem * 0.4;
+  useAutoFitTextSize(
+    defaultDescBoxRef,
+    defaultDescTextRef,
+    (factor) => {
+      if (defaultDescTextRef.current) {
+        defaultDescTextRef.current.style.fontSize = `${defaultDescBaseRem * factor}rem`;
+      }
+    },
+    [defaultScreenDescription, defaultScreenDescriptionBoxWidthPct, defaultScreenDescriptionBoxHeightPct, defaultDescBaseRem, defaultScreenFontFamily, defaultScreenItalic],
+  );
+
   return (
     <div
+          ref={screenRef}
           className={`text-center max-w-6xl max-h-[92vh] overflow-hidden flex flex-col justify-center relative ${contentFixedArea ? "h-[85vh]" : ""}`}>
           {/* Content is conditionally rendered based on activeMode from display mode store */}
           {/* Song/Bible Projection - only show when mode matches */}
@@ -448,18 +483,15 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             <>
               {!defaultScreenTitleHidden && (
                 <div
-                  className="mx-auto overflow-hidden mb-12"
+                  ref={defaultTitleBoxRef}
+                  className="mx-auto overflow-hidden mb-12 flex items-center justify-center"
                   style={{
-                    maxWidth: defaultScreenTitleBoxWidthPct
-                      ? `${defaultScreenTitleBoxWidthPct}%`
-                      : undefined,
-                    maxHeight: defaultScreenTitleBoxHeightPct
-                      ? `${defaultScreenTitleBoxHeightPct}%`
-                      : undefined,
+                    width: `${defaultScreenTitleBoxWidthPct ?? 90}%`,
+                    height: `${defaultScreenTitleBoxHeightPct ?? 38}%`,
                   }}
                 >
                   <h1
-                    className={getDefaultScreenTextSizeClass()}
+                    ref={defaultTitleTextRef}
                     style={{
                       fontFamily: defaultScreenFontFamily,
                       color: defaultScreenFontColor,
@@ -473,18 +505,16 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               )}
               {!defaultScreenDescriptionHidden && (
                 <div
-                  className="mx-auto overflow-hidden mb-8"
+                  ref={defaultDescBoxRef}
+                  className="mx-auto overflow-hidden mb-8 flex items-center justify-center"
                   style={{
-                    maxWidth: defaultScreenDescriptionBoxWidthPct
-                      ? `${defaultScreenDescriptionBoxWidthPct}%`
-                      : undefined,
-                    maxHeight: defaultScreenDescriptionBoxHeightPct
-                      ? `${defaultScreenDescriptionBoxHeightPct}%`
-                      : undefined,
+                    width: `${defaultScreenDescriptionBoxWidthPct ?? 85}%`,
+                    height: `${defaultScreenDescriptionBoxHeightPct ?? 18}%`,
                   }}
                 >
                   <p
-                    className={`opacity-80 ${getDefaultScreenSubtitleSizeClass()}`}
+                    ref={defaultDescTextRef}
+                    className="opacity-80"
                     style={{
                       fontFamily: defaultScreenFontFamily,
                       color: defaultScreenFontColor,
@@ -501,9 +531,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   <span className="text-red-400 text-2xl font-medium">LIVE</span>
                 </div>
               )}
+              {!defaultScreenSlideCounterHidden && (
               <div className="mt-8 text-gray-400 text-lg">
                 Slide {currentSlide} of {totalSlides}
               </div>
+              )}
             </>
           )}
         </div>

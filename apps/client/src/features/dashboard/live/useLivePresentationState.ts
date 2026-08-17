@@ -32,6 +32,23 @@ function readDefaultScreenSeed(): DefaultScreenSeed | null {
   return null;
 }
 
+// The numeric "max" rem value behind each TEXT_SIZE_CLAMP_CLASSES tier -
+// used as the auto-fit base size for the Default Web Screen's title/
+// description on the real console (features/dashboard/live/components/
+// LiveSlideLayer.tsx), which needs a plain number to multiply by a shrink
+// factor rather than a CSS class string.
+export const TEXT_SIZE_MAX_REM: Record<string, number> = {
+  small: 1.5,
+  medium: 1.875,
+  large: 2.25,
+  "extra-large": 3,
+  "2x-extra-large": 3.75,
+  "3x-extra-large": 4.5,
+  "4x-extra-large": 6,
+  "5x-extra-large": 8,
+  "6x-extra-large": 10,
+};
+
 // Shared by getTextSizeClass() (live slide text) and
 // getDefaultScreenTextSizeClass() (idle screen title) - same 9-tier scale
 // used throughout the Live/Default Presentation Settings pages.
@@ -282,6 +299,9 @@ export function useLivePresentationState() {
   const [defaultScreenLiveBadgeHidden, setDefaultScreenLiveBadgeHidden] = useState(
     () => readDefaultScreenSeed()?.liveBadgeHidden ?? false,
   );
+  const [defaultScreenSlideCounterHidden, setDefaultScreenSlideCounterHidden] = useState(
+    () => readDefaultScreenSeed()?.slideCounterHidden ?? false,
+  );
   const [defaultScreenTitleBoxWidthPct, setDefaultScreenTitleBoxWidthPct] = useState<
     number | undefined
   >(() => readDefaultScreenSeed()?.titleBoxWidthPct);
@@ -332,6 +352,7 @@ export function useLivePresentationState() {
           setDefaultScreenTitleHidden(seed.titleHidden ?? false);
           setDefaultScreenDescriptionHidden(seed.descriptionHidden ?? false);
           setDefaultScreenLiveBadgeHidden(seed.liveBadgeHidden ?? false);
+          setDefaultScreenSlideCounterHidden(seed.slideCounterHidden ?? false);
           setDefaultScreenTitleBoxWidthPct(seed.titleBoxWidthPct);
           setDefaultScreenTitleBoxHeightPct(seed.titleBoxHeightPct);
           setDefaultScreenDescriptionBoxWidthPct(seed.descriptionBoxWidthPct);
@@ -2821,9 +2842,11 @@ export function useLivePresentationState() {
     getDefaultScreenSubtitleSizeClass,
     defaultScreenTitle,
     defaultScreenDescription,
+    defaultScreenTextSize,
     defaultScreenTitleHidden,
     defaultScreenDescriptionHidden,
     defaultScreenLiveBadgeHidden,
+    defaultScreenSlideCounterHidden,
     defaultScreenTitleBoxWidthPct,
     defaultScreenTitleBoxHeightPct,
     defaultScreenDescriptionBoxWidthPct,

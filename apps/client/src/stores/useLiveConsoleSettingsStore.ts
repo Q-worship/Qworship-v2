@@ -124,6 +124,7 @@ export interface DefaultScreenSettings {
   titleHidden: boolean;
   descriptionHidden: boolean;
   liveBadgeHidden: boolean;
+  slideCounterHidden: boolean;
   // Manual box size overrides, as a % of the preview/live screen's own
   // width/height, set by dragging the resize handles in the preview.
   // Undefined = natural/auto sizing.
@@ -152,6 +153,7 @@ export const DEFAULT_DEFAULT_SCREEN_SETTINGS: DefaultScreenSettings = {
   titleHidden: false,
   descriptionHidden: false,
   liveBadgeHidden: false,
+  slideCounterHidden: false,
   titleBoxWidthPct: undefined,
   titleBoxHeightPct: undefined,
   descriptionBoxWidthPct: undefined,
@@ -171,6 +173,7 @@ export const BLANK_CANVAS_SCREEN_SETTINGS: DefaultScreenSettings = {
   titleHidden: true,
   descriptionHidden: true,
   liveBadgeHidden: true,
+  slideCounterHidden: true,
   preset: "blank",
 };
 
@@ -192,6 +195,7 @@ export interface DefaultScreenSeed {
   titleHidden: boolean;
   descriptionHidden: boolean;
   liveBadgeHidden: boolean;
+  slideCounterHidden: boolean;
   titleBoxWidthPct?: number;
   titleBoxHeightPct?: number;
   descriptionBoxWidthPct?: number;
@@ -210,6 +214,7 @@ export function toDefaultScreenSeed(settings: DefaultScreenSettings): DefaultScr
     titleHidden: settings.titleHidden,
     descriptionHidden: settings.descriptionHidden,
     liveBadgeHidden: settings.liveBadgeHidden,
+    slideCounterHidden: settings.slideCounterHidden,
     titleBoxWidthPct: settings.titleBoxWidthPct,
     titleBoxHeightPct: settings.titleBoxHeightPct,
     descriptionBoxWidthPct: settings.descriptionBoxWidthPct,
