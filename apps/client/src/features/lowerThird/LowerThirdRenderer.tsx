@@ -227,6 +227,7 @@ function ShapeElement({
   isPreview: boolean;
 }) {
   const animStyle = getAnimationStyle(element, isVisible, isPreview);
+  const hasBgImage = !!element.backgroundImage;
 
   return (
     <div
@@ -236,10 +237,21 @@ function ShapeElement({
         top: `${element.y}%`,
         width: `${element.width}%`,
         height: `${element.height}%`,
-        backgroundColor: element.gradient
-          ? undefined
-          : element.backgroundColor || "transparent",
-        background: element.gradient || undefined,
+        backgroundColor:
+          hasBgImage || element.gradient
+            ? undefined
+            : element.backgroundColor || "transparent",
+        background: hasBgImage ? undefined : element.gradient || undefined,
+        // Image fill - a CSS background is inherently clipped to this div's
+        // own box, so it's always cropped to fit the shape, never larger.
+        backgroundImage: hasBgImage ? `url(${element.backgroundImage})` : undefined,
+        backgroundPosition: hasBgImage
+          ? `${element.backgroundImagePosX ?? 50}% ${element.backgroundImagePosY ?? 50}%`
+          : undefined,
+        backgroundSize: hasBgImage
+          ? `${(element.backgroundImageScale ?? 1) * 100}%`
+          : undefined,
+        backgroundRepeat: hasBgImage ? "no-repeat" : undefined,
         borderColor: element.borderColor,
         borderWidth: element.borderWidth
           ? `${element.borderWidth}px`

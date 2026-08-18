@@ -57,6 +57,31 @@ function getEditorAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+// Uploads a local file to the lower-third asset store, returning its URL.
+// Shared by the toolbar's "+Image" element upload and a shape's background
+// image upload - same endpoint, same auth, different destination.
+async function uploadLowerThirdAsset(file: File): Promise<string | null> {
+  const b64: string = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const res = await fetch("/api/lower-third/upload-asset", {
+    method: "POST",
+    credentials: "include",
+    headers: getEditorAuthHeaders(),
+    body: JSON.stringify({
+      fileBase64: b64,
+      mimeType: file.type,
+      filename: file.name,
+    }),
+  });
+  if (!res.ok) return null;
+  const { assetUrl } = await res.json();
+  return assetUrl as string;
+}
+
 function getStoredChurchName(): string {
   try {
     const stored = localStorage.getItem("qworship_user");
@@ -502,6 +527,114 @@ function GradientBuilderPopover({
   );
 }
 
+// ─── Background image cropper ─────────────────────────────────────────────────
+// A pan/zoom crop for a shape's background image, matching the element's own
+// aspect ratio. Rendered as a CSS background (background-position/-size), so
+// it's always clipped to this same box - never larger than the shape it
+// belongs to. Drag anywhere to pan; drag an edge to zoom (crop) in or out.
+function BackgroundImageCropper({
+  element,
+  onChange,
+}: {
+  element: LowerThirdElement;
+  onChange: (updates: Partial<LowerThirdElement>) => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const posX = element.backgroundImagePosX ?? 50;
+  const posY = element.backgroundImagePosY ?? 50;
+  const scale = element.backgroundImageScale ?? 1;
+  const aspect =
+    element.width > 0 && element.height > 0
+      ? element.width / element.height
+      : 16 / 9;
+
+  const clamp = (v: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, v));
+
+  const startPan = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const box = boxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startPosX = posX;
+    const startPosY = posY;
+    let finalX = startPosX;
+    let finalY = startPosY;
+
+    const onMove = (ev: PointerEvent) => {
+      const dxPct = ((ev.clientX - startX) / rect.width) * 100;
+      const dyPct = ((ev.clientY - startY) / rect.height) * 100;
+      finalX = clamp(startPosX - dxPct / scale, 0, 100);
+      finalY = clamp(startPosY - dyPct / scale, 0, 100);
+      box.style.backgroundPosition = `${finalX}% ${finalY}%`;
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      onChange({ backgroundImagePosX: finalX, backgroundImagePosY: finalY });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  const startZoom = (edge: "n" | "s" | "e" | "w") => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const box = boxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startScale = scale;
+    let finalScale = startScale;
+
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      // Dragging an edge INWARD (toward centre) zooms in / crops tighter.
+      let delta = 0;
+      if (edge === "e") delta = -dx / rect.width;
+      else if (edge === "w") delta = dx / rect.width;
+      else if (edge === "n") delta = dy / rect.height;
+      else if (edge === "s") delta = -dy / rect.height;
+      finalScale = clamp(startScale + delta * 2, 1, 4);
+      box.style.backgroundSize = `${finalScale * 100}%`;
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      onChange({ backgroundImageScale: finalScale });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  const handleCls =
+    "absolute bg-purple-400/80 rounded-full opacity-0 group-hover:opacity-90 transition-opacity z-10";
+
+  return (
+    <div
+      ref={boxRef}
+      onPointerDown={startPan}
+      className="group relative w-full rounded border border-gray-700/60 overflow-hidden cursor-move select-none"
+      style={{
+        aspectRatio: `${aspect}`,
+        backgroundImage: `url(${element.backgroundImage})`,
+        backgroundPosition: `${posX}% ${posY}%`,
+        backgroundSize: `${scale * 100}%`,
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      <div onPointerDown={startZoom("n")} className={`${handleCls} top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 cursor-ns-resize`} />
+      <div onPointerDown={startZoom("s")} className={`${handleCls} bottom-0.5 left-1/2 -translate-x-1/2 w-8 h-1 cursor-ns-resize`} />
+      <div onPointerDown={startZoom("e")} className={`${handleCls} right-0.5 top-1/2 -translate-y-1/2 w-1 h-8 cursor-ew-resize`} />
+      <div onPointerDown={startZoom("w")} className={`${handleCls} left-0.5 top-1/2 -translate-y-1/2 w-1 h-8 cursor-ew-resize`} />
+    </div>
+  );
+}
+
 // ─── Element type icons ───────────────────────────────────────────────────────
 
 const BINDING_FIELDS: { value: BindingField; label: string }[] = [
@@ -710,10 +843,15 @@ function ElementIcon({ type }: { type: string }) {
 function PropertiesPanel({
   element,
   onChange,
+  onUploadBackgroundImage,
+  uploadingBackgroundImage,
 }: {
   element: LowerThirdElement;
   onChange: (updates: Partial<LowerThirdElement>) => void;
+  onUploadBackgroundImage: (file: File) => void;
+  uploadingBackgroundImage: boolean;
 }) {
+  const bgImageInputRef = useRef<HTMLInputElement>(null);
   const fieldRow = (label: string, children: React.ReactNode) => (
     <div className="grid grid-cols-2 gap-2 items-center">
       <Label className="text-xs text-gray-400 text-right">{label}</Label>
@@ -883,6 +1021,65 @@ function PropertiesPanel({
               value={element.gradient}
               onChange={(css) => onChange({ gradient: css })}
             />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                Background Image
+              </p>
+              {element.backgroundImage && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      backgroundImage: undefined,
+                      backgroundImagePosX: undefined,
+                      backgroundImagePosY: undefined,
+                      backgroundImageScale: undefined,
+                    })
+                  }
+                  title="Remove background image"
+                  className="text-gray-600 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            {element.backgroundImage ? (
+              <BackgroundImageCropper element={element} onChange={onChange} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => bgImageInputRef.current?.click()}
+                disabled={uploadingBackgroundImage}
+                className="w-full h-16 flex flex-col items-center justify-center gap-1 rounded border border-dashed border-gray-700/60 text-gray-500 hover:border-purple-500 hover:text-purple-300 transition-colors text-[10px]"
+              >
+                {uploadingBackgroundImage ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Upload from device
+                  </>
+                )}
+              </button>
+            )}
+            <input
+              ref={bgImageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onUploadBackgroundImage(file);
+                e.target.value = "";
+              }}
+            />
+            {element.backgroundImage && (
+              <p className="text-[10px] text-gray-500 mt-1">
+                Drag to reposition. Drag an edge to crop in or out.
+              </p>
+            )}
           </div>
           {fieldRow(
             "Radius",
@@ -1123,31 +1320,33 @@ export function LowerThirdEditorPage() {
     if (!file) return;
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const b64 = (reader.result as string).split(",")[1];
-        const res = await fetch("/api/lower-third/upload-asset", {
-          method: "POST",
-          credentials: "include",
-          headers: getEditorAuthHeaders(),
-          body: JSON.stringify({
-            fileBase64: b64,
-            mimeType: file.type,
-            filename: file.name,
-          }),
-        });
-        if (res.ok) {
-          const { assetUrl } = await res.json();
-          addElement(makeImageElement(assetUrl));
-        }
-        setUploading(false);
-      };
-    } catch {
+      const assetUrl = await uploadLowerThirdAsset(file);
+      if (assetUrl) addElement(makeImageElement(assetUrl));
+    } finally {
       setUploading(false);
     }
     // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Sets (or replaces) a shape element's image fill from a local file -
+  // resets pan/zoom to centred/fitted so a new image always starts framed.
+  const [uploadingBackgroundImage, setUploadingBackgroundImage] = useState(false);
+  const handleBackgroundImageUpload = async (elementId: string, file: File) => {
+    setUploadingBackgroundImage(true);
+    try {
+      const assetUrl = await uploadLowerThirdAsset(file);
+      if (assetUrl) {
+        updateElement(elementId, {
+          backgroundImage: assetUrl,
+          backgroundImagePosX: 50,
+          backgroundImagePosY: 50,
+          backgroundImageScale: 1,
+        });
+      }
+    } finally {
+      setUploadingBackgroundImage(false);
+    }
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -1427,6 +1626,10 @@ export function LowerThirdEditorPage() {
                 onChange={(updates) =>
                   updateElement(selectedElement.id, updates)
                 }
+                onUploadBackgroundImage={(file) =>
+                  handleBackgroundImageUpload(selectedElement.id, file)
+                }
+                uploadingBackgroundImage={uploadingBackgroundImage}
               />
             </>
           ) : (

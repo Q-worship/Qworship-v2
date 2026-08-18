@@ -70,6 +70,15 @@ export interface LowerThirdElement {
   transform?: string;
   backdropFilter?: string;
 
+  // Image fill for shape elements (e.g. a "Background Bar" shape) - a
+  // pannable/zoomable crop, applied as a CSS background clipped to the
+  // shape's own bounds (so it's always cropped to fit, never larger).
+  // Takes priority over backgroundColor/gradient when set.
+  backgroundImage?: string;
+  backgroundImagePosX?: number; // 0-100, CSS background-position-x %
+  backgroundImagePosY?: number; // 0-100, CSS background-position-y %
+  backgroundImageScale?: number; // 1 = fitted, >1 = cropped in (zoomed)
+
   text?: string;
   fontFamily?: string;
   fontSize?: number;
