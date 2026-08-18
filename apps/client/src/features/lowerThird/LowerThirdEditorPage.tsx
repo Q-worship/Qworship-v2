@@ -1582,6 +1582,11 @@ export function LowerThirdEditorPage() {
                 data={getPlaceholderData(template)}
                 isVisible={true}
                 isPreview={true}
+                isEditable={true}
+                selectedElementId={selectedElementId}
+                onSelectElement={setSelectedElementId}
+                onMoveElement={(id, x, y) => updateElement(id, { x, y })}
+                onDeleteElement={deleteElement}
               />
             </div>
           </div>

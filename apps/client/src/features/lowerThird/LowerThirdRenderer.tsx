@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { X as XIcon } from "lucide-react";
 
 import type {
   LowerThirdTemplate,
@@ -278,15 +279,59 @@ function ImageElement({
   element,
   isVisible,
   isPreview,
+  isEditable,
+  isSelected,
+  canvasRef,
+  onSelect,
+  onMove,
+  onDelete,
 }: {
   element: LowerThirdElement;
   isVisible: boolean;
   isPreview: boolean;
+  isEditable?: boolean;
+  isSelected?: boolean;
+  canvasRef?: React.RefObject<HTMLElement>;
+  onSelect?: (id: string) => void;
+  onMove?: (id: string, x: number, y: number) => void;
+  onDelete?: (id: string) => void;
 }) {
   const animStyle = getAnimationStyle(element, isVisible, isPreview);
 
+  // Editor-only: drag anywhere on the image to reposition it (still writes
+  // through the same x/y fields the Position & Size number inputs use, so
+  // both stay in sync). Clamped so it can't be dragged fully off-canvas.
+  const startDrag = (e: React.PointerEvent) => {
+    if (!isEditable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect?.(element.id);
+    const canvas = canvasRef?.current;
+    if (!canvas || !onMove) return;
+    const rect = canvas.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startElX = element.x;
+    const startElY = element.y;
+
+    const handleMove = (ev: PointerEvent) => {
+      const dxPct = ((ev.clientX - startX) / rect.width) * 100;
+      const dyPct = ((ev.clientY - startY) / rect.height) * 100;
+      const newX = Math.min(100 - element.width, Math.max(0, startElX + dxPct));
+      const newY = Math.min(100 - element.height, Math.max(0, startElY + dyPct));
+      onMove(element.id, newX, newY);
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  };
+
   return (
     <div
+      onPointerDown={isEditable ? startDrag : undefined}
       style={{
         position: "absolute",
         left: `${element.x}%`,
@@ -300,19 +345,38 @@ function ImageElement({
         borderRadius: element.borderRadius
           ? `${element.borderRadius}px`
           : undefined,
+        cursor: isEditable ? "move" : undefined,
+        outline: isEditable && isSelected ? "2px dashed #a855f7" : undefined,
+        outlineOffset: isEditable && isSelected ? "2px" : undefined,
         ...animStyle,
       }}>
       {element.src && (
         <img
           src={element.src}
           alt={element.name || ""}
+          draggable={false}
           style={{
             width: "100%",
             height: "100%",
             objectFit: (element.objectFit as React.CSSProperties["objectFit"]) || "cover",
             display: "block",
+            pointerEvents: "none",
           }}
         />
+      )}
+      {isEditable && isSelected && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete?.(element.id);
+          }}
+          title="Delete image"
+          className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg transition-colors"
+        >
+          <XIcon className="w-3 h-3" />
+        </button>
       )}
     </div>
   );
@@ -327,6 +391,14 @@ interface LowerThirdRendererProps {
   containerWidth?: number;
   containerHeight?: number;
   isPreview?: boolean;
+  // Editor-only interactivity (LowerThirdEditorPage's "Live Preview" pane) -
+  // never set from the real broadcast display or the template gallery
+  // thumbnail, both of which stay pointer-events:none via isPreview above.
+  isEditable?: boolean;
+  selectedElementId?: string | null;
+  onSelectElement?: (id: string) => void;
+  onMoveElement?: (id: string, x: number, y: number) => void;
+  onDeleteElement?: (id: string) => void;
 }
 
 export function LowerThirdRenderer({
@@ -334,15 +406,22 @@ export function LowerThirdRenderer({
   data,
   isVisible,
   isPreview = false,
+  isEditable = false,
+  selectedElementId = null,
+  onSelectElement,
+  onMoveElement,
+  onDeleteElement,
 }: LowerThirdRendererProps) {
+  const canvasRef = useRef<HTMLDivElement>(null);
   return (
     <div
+      ref={canvasRef}
       style={{
         position: "relative",
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        pointerEvents: isPreview ? "none" : undefined,
+        pointerEvents: isEditable ? "auto" : isPreview ? "none" : undefined,
       }}>
       {template.elements
         .filter((el) => el.visible)
@@ -366,6 +445,12 @@ export function LowerThirdRenderer({
                 element={element}
                 isVisible={isVisible}
                 isPreview={isPreview}
+                isEditable={isEditable}
+                isSelected={selectedElementId === element.id}
+                canvasRef={canvasRef}
+                onSelect={onSelectElement}
+                onMove={onMoveElement}
+                onDelete={onDeleteElement}
               />
             );
           }
