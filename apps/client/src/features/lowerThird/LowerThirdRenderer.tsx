@@ -284,6 +284,7 @@ function ImageElement({
   canvasRef,
   onSelect,
   onMove,
+  onResize,
   onDelete,
 }: {
   element: LowerThirdElement;
@@ -294,6 +295,7 @@ function ImageElement({
   canvasRef?: React.RefObject<HTMLElement>;
   onSelect?: (id: string) => void;
   onMove?: (id: string, x: number, y: number) => void;
+  onResize?: (id: string, x: number, y: number, width: number, height: number) => void;
   onDelete?: (id: string) => void;
 }) {
   const animStyle = getAnimationStyle(element, isVisible, isPreview);
@@ -329,6 +331,60 @@ function ImageElement({
     window.addEventListener("pointerup", handleUp);
   };
 
+  // Drag an edge to shrink/grow the box from that edge - the opposite edge
+  // stays put (anchor-preserving), like a normal design-tool resize. Since
+  // objectFit is "cover" by default, the box's own edges and the visible
+  // photo's edges are the same thing, so this doubles as the crop control.
+  const MIN_SIZE_PCT = 4;
+  const startResize = (edge: "n" | "s" | "e" | "w") => (e: React.PointerEvent) => {
+    if (!isEditable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const canvas = canvasRef?.current;
+    if (!canvas || !onResize) return;
+    const rect = canvas.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startElX = element.x;
+    const startElY = element.y;
+    const startElW = element.width;
+    const startElH = element.height;
+
+    const handleMove = (ev: PointerEvent) => {
+      const dxPct = ((ev.clientX - startX) / rect.width) * 100;
+      const dyPct = ((ev.clientY - startY) / rect.height) * 100;
+      let { x: newX, y: newY, width: newW, height: newH } = {
+        x: startElX,
+        y: startElY,
+        width: startElW,
+        height: startElH,
+      };
+      if (edge === "e") {
+        newW = Math.max(MIN_SIZE_PCT, Math.min(100 - startElX, startElW + dxPct));
+      } else if (edge === "w") {
+        const proposedX = Math.max(0, Math.min(startElX + startElW - MIN_SIZE_PCT, startElX + dxPct));
+        newW = startElW + (startElX - proposedX);
+        newX = proposedX;
+      } else if (edge === "s") {
+        newH = Math.max(MIN_SIZE_PCT, Math.min(100 - startElY, startElH + dyPct));
+      } else if (edge === "n") {
+        const proposedY = Math.max(0, Math.min(startElY + startElH - MIN_SIZE_PCT, startElY + dyPct));
+        newH = startElH + (startElY - proposedY);
+        newY = proposedY;
+      }
+      onResize(element.id, newX, newY, newW, newH);
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  };
+
+  const resizeHandleCls =
+    "absolute bg-purple-400/80 hover:bg-purple-400 rounded-full transition-opacity z-10";
+
   return (
     <div
       onPointerDown={isEditable ? startDrag : undefined}
@@ -346,8 +402,8 @@ function ImageElement({
           ? `${element.borderRadius}px`
           : undefined,
         cursor: isEditable ? "move" : undefined,
-        outline: isEditable && isSelected ? "2px dashed #a855f7" : undefined,
-        outlineOffset: isEditable && isSelected ? "2px" : undefined,
+        outline: isEditable && isSelected ? "1.5px dashed #a855f7" : undefined,
+        outlineOffset: isEditable && isSelected ? "1px" : undefined,
         ...animStyle,
       }}>
       {element.src && (
@@ -365,18 +421,24 @@ function ImageElement({
         />
       )}
       {isEditable && isSelected && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete?.(element.id);
-          }}
-          title="Delete image"
-          className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg transition-colors"
-        >
-          <XIcon className="w-3 h-3" />
-        </button>
+        <>
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete?.(element.id);
+            }}
+            title="Delete image"
+            className="absolute -top-2 -right-2 z-20 flex items-center justify-center w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg transition-colors"
+          >
+            <XIcon className="w-3 h-3" />
+          </button>
+          <div onPointerDown={startResize("n")} className={`${resizeHandleCls} top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-[3px] cursor-ns-resize`} />
+          <div onPointerDown={startResize("s")} className={`${resizeHandleCls} bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-[3px] cursor-ns-resize`} />
+          <div onPointerDown={startResize("e")} className={`${resizeHandleCls} right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-[3px] h-8 cursor-ew-resize`} />
+          <div onPointerDown={startResize("w")} className={`${resizeHandleCls} left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-[3px] h-8 cursor-ew-resize`} />
+        </>
       )}
     </div>
   );
@@ -398,6 +460,7 @@ interface LowerThirdRendererProps {
   selectedElementId?: string | null;
   onSelectElement?: (id: string) => void;
   onMoveElement?: (id: string, x: number, y: number) => void;
+  onResizeElement?: (id: string, x: number, y: number, width: number, height: number) => void;
   onDeleteElement?: (id: string) => void;
 }
 
@@ -410,6 +473,7 @@ export function LowerThirdRenderer({
   selectedElementId = null,
   onSelectElement,
   onMoveElement,
+  onResizeElement,
   onDeleteElement,
 }: LowerThirdRendererProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -450,6 +514,7 @@ export function LowerThirdRenderer({
                 canvasRef={canvasRef}
                 onSelect={onSelectElement}
                 onMove={onMoveElement}
+                onResize={onResizeElement}
                 onDelete={onDeleteElement}
               />
             );

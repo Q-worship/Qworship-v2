@@ -187,7 +187,11 @@ function makeImageElement(src: string): LowerThirdElement {
     height: 25,
     rotation: 0,
     src,
-    objectFit: "contain",
+    // "cover" always fills the box edge-to-edge (cropping overflow instead
+    // of letterboxing) - the box's own bounds and the visible photo's
+    // bounds are then identical by construction, so the editor's selection
+    // outline and resize handles never show a gap around the actual image.
+    objectFit: "cover",
     opacity: 1,
     zIndex: 5,
     locked: false,
@@ -1137,6 +1141,15 @@ function PropertiesPanel({
               </SelectContent>
             </Select>,
           )}
+          {element.objectFit !== "cover" && (
+            <button
+              type="button"
+              onClick={() => onChange({ objectFit: "cover" })}
+              className="w-full text-[10px] text-purple-300 hover:text-purple-200 bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 rounded py-1.5 transition-colors"
+            >
+              Switch to Cover for gap-free crop &amp; resize
+            </button>
+          )}
           {fieldRow(
             "Radius",
             <Input
@@ -1586,6 +1599,9 @@ export function LowerThirdEditorPage() {
                 selectedElementId={selectedElementId}
                 onSelectElement={setSelectedElementId}
                 onMoveElement={(id, x, y) => updateElement(id, { x, y })}
+                onResizeElement={(id, x, y, width, height) =>
+                  updateElement(id, { x, y, width, height })
+                }
                 onDeleteElement={deleteElement}
               />
             </div>
