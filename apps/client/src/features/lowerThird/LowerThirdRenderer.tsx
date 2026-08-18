@@ -222,22 +222,39 @@ function ShapeElement({
   element,
   isVisible,
   isPreview,
+  isEditable,
+  isSelected,
+  onSelect,
 }: {
   element: LowerThirdElement;
   isVisible: boolean;
   isPreview: boolean;
+  isEditable?: boolean;
+  isSelected?: boolean;
+  onSelect?: (id: string) => void;
 }) {
   const animStyle = getAnimationStyle(element, isVisible, isPreview);
   const hasBgImage = !!element.backgroundImage;
 
   return (
     <div
+      onClick={
+        isEditable
+          ? (e) => {
+              e.stopPropagation();
+              onSelect?.(element.id);
+            }
+          : undefined
+      }
       style={{
         position: "absolute",
         left: `${element.x}%`,
         top: `${element.y}%`,
         width: `${element.width}%`,
         height: `${element.height}%`,
+        cursor: isEditable ? "pointer" : undefined,
+        outline: isEditable && isSelected ? "1.5px dashed #a855f7" : undefined,
+        outlineOffset: isEditable && isSelected ? "1px" : undefined,
         // Deliberately never uses the `background` shorthand alongside these
         // longhands: per the CSSOM spec, clearing a shorthand (e.g. setting
         // it to "" when its value is undefined) cascades and clears ALL of
@@ -541,6 +558,9 @@ export function LowerThirdRenderer({
               element={element}
               isVisible={isVisible}
               isPreview={isPreview}
+              isEditable={isEditable}
+              isSelected={selectedElementId === element.id}
+              onSelect={onSelectElement}
             />
           );
         })}
