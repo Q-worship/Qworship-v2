@@ -238,14 +238,22 @@ function ShapeElement({
         top: `${element.y}%`,
         width: `${element.width}%`,
         height: `${element.height}%`,
+        // Deliberately never uses the `background` shorthand alongside these
+        // longhands: per the CSSOM spec, clearing a shorthand (e.g. setting
+        // it to "" when its value is undefined) cascades and clears ALL of
+        // its longhand sub-properties too - including a `backgroundColor`
+        // that was just set moments earlier in this same style object. A
+        // CSS gradient is a valid `background-image` value on its own, so
+        // there's no need for the shorthand at all.
         backgroundColor:
           hasBgImage || element.gradient
             ? undefined
             : element.backgroundColor || "transparent",
-        background: hasBgImage ? undefined : element.gradient || undefined,
         // Image fill - a CSS background is inherently clipped to this div's
         // own box, so it's always cropped to fit the shape, never larger.
-        backgroundImage: hasBgImage ? `url(${element.backgroundImage})` : undefined,
+        backgroundImage: hasBgImage
+          ? `url(${element.backgroundImage})`
+          : element.gradient || undefined,
         backgroundPosition: hasBgImage
           ? `${element.backgroundImagePosX ?? 50}% ${element.backgroundImagePosY ?? 50}%`
           : undefined,
