@@ -331,12 +331,13 @@ function ImageElement({
     window.addEventListener("pointerup", handleUp);
   };
 
-  // Drag an edge to shrink/grow the box from that edge - the opposite edge
-  // stays put (anchor-preserving), like a normal design-tool resize. Since
-  // objectFit is "cover" by default, the box's own edges and the visible
-  // photo's edges are the same thing, so this doubles as the crop control.
+  // Drag an edge - or a corner, for both axes at once - to shrink/grow the
+  // box from that side; the opposite side stays put (anchor-preserving),
+  // like a normal design-tool resize. Since objectFit is "cover" by
+  // default, the box's own edges and the visible photo's edges are the
+  // same thing, so this doubles as the crop control.
   const MIN_SIZE_PCT = 4;
-  const startResize = (edge: "n" | "s" | "e" | "w") => (e: React.PointerEvent) => {
+  const startResize = (edge: "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw") => (e: React.PointerEvent) => {
     if (!isEditable) return;
     e.preventDefault();
     e.stopPropagation();
@@ -353,21 +354,20 @@ function ImageElement({
     const handleMove = (ev: PointerEvent) => {
       const dxPct = ((ev.clientX - startX) / rect.width) * 100;
       const dyPct = ((ev.clientY - startY) / rect.height) * 100;
-      let { x: newX, y: newY, width: newW, height: newH } = {
-        x: startElX,
-        y: startElY,
-        width: startElW,
-        height: startElH,
-      };
-      if (edge === "e") {
+      let newX = startElX;
+      let newY = startElY;
+      let newW = startElW;
+      let newH = startElH;
+      if (edge.includes("e")) {
         newW = Math.max(MIN_SIZE_PCT, Math.min(100 - startElX, startElW + dxPct));
-      } else if (edge === "w") {
+      } else if (edge.includes("w")) {
         const proposedX = Math.max(0, Math.min(startElX + startElW - MIN_SIZE_PCT, startElX + dxPct));
         newW = startElW + (startElX - proposedX);
         newX = proposedX;
-      } else if (edge === "s") {
+      }
+      if (edge.includes("s")) {
         newH = Math.max(MIN_SIZE_PCT, Math.min(100 - startElY, startElH + dyPct));
-      } else if (edge === "n") {
+      } else if (edge.includes("n")) {
         const proposedY = Math.max(0, Math.min(startElY + startElH - MIN_SIZE_PCT, startElY + dyPct));
         newH = startElH + (startElY - proposedY);
         newY = proposedY;
@@ -384,6 +384,10 @@ function ImageElement({
 
   const resizeHandleCls =
     "absolute bg-purple-400/80 hover:bg-purple-400 rounded-full transition-opacity z-10";
+  // Corners are small squares, not circles - avoids reading as "dots" the
+  // way a rounded handle does at a sharp corner.
+  const cornerHandleCls =
+    "absolute bg-purple-400/80 hover:bg-purple-400 rounded-[2px] transition-opacity z-10 w-2 h-2";
 
   return (
     <div
@@ -438,6 +442,10 @@ function ImageElement({
           <div onPointerDown={startResize("s")} className={`${resizeHandleCls} bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-[3px] cursor-ns-resize`} />
           <div onPointerDown={startResize("e")} className={`${resizeHandleCls} right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-[3px] h-8 cursor-ew-resize`} />
           <div onPointerDown={startResize("w")} className={`${resizeHandleCls} left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-[3px] h-8 cursor-ew-resize`} />
+          <div onPointerDown={startResize("ne")} className={`${cornerHandleCls} top-0 right-0 -translate-y-1/2 translate-x-1/2 cursor-nesw-resize`} />
+          <div onPointerDown={startResize("nw")} className={`${cornerHandleCls} top-0 left-0 -translate-y-1/2 -translate-x-1/2 cursor-nwse-resize`} />
+          <div onPointerDown={startResize("se")} className={`${cornerHandleCls} bottom-0 right-0 translate-y-1/2 translate-x-1/2 cursor-nwse-resize`} />
+          <div onPointerDown={startResize("sw")} className={`${cornerHandleCls} bottom-0 left-0 translate-y-1/2 -translate-x-1/2 cursor-nesw-resize`} />
         </>
       )}
     </div>
