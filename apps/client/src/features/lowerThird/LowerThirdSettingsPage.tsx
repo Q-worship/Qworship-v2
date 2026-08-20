@@ -565,108 +565,114 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
                   onClick={() => setActiveIdForTab(template.id)}
                 >
                   {/* ── Template preview (inline renderer) ──── */}
-                  <TemplateCardPreview template={template} />
+                  <div className="relative">
+                    <TemplateCardPreview template={template} />
 
-                  {/* Active check */}
-                  {isTabActive && (
-                    <div className="absolute top-2 right-2 z-10">
-                      <div className={`${activeCheckBg} text-white rounded-full p-1`}>
-                        <Check className="w-3 h-3" />
+                    {/* Active check */}
+                    {isTabActive && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <div className={`${activeCheckBg} text-white rounded-full p-1`}>
+                          <Check className="w-3 h-3" />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Assignment badges */}
-                  <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
-                    {isScripture && (
-                      <span className="flex items-center gap-1 bg-purple-700/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-                        <BookOpen className="w-2.5 h-2.5" /> Scripture
-                      </span>
-                    )}
-                    {isLyric && (
-                      <span className="flex items-center gap-1 bg-pink-700/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-                        <Music className="w-2.5 h-2.5" /> Songs
-                      </span>
-                    )}
-                    {isAnnouncement && (
-                      <span className="flex items-center gap-1 bg-indigo-700/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
-                        <Megaphone className="w-2.5 h-2.5" /> Announce
-                      </span>
-                    )}
+                    {/* Assignment badges */}
+                    <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                      {isScripture && (
+                        <span className="flex items-center gap-1 bg-purple-700/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                          <BookOpen className="w-2.5 h-2.5" /> Scripture
+                        </span>
+                      )}
+                      {isLyric && (
+                        <span className="flex items-center gap-1 bg-pink-700/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                          <Music className="w-2.5 h-2.5" /> Songs
+                        </span>
+                      )}
+                      {isAnnouncement && (
+                        <span className="flex items-center gap-1 bg-indigo-700/90 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+                          <Megaphone className="w-2.5 h-2.5" /> Announce
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Dimming hover effect - scoped to the preview only, not the whole card */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   </div>
 
-                  {/* Hover actions */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-[52px] left-0 right-0 px-3 flex items-center gap-1.5">
+                  {/* Action row - its own space just below the preview, never
+                      overlapping it, so it's never visually cropped against
+                      the preview's bottom edge. Reserved layout space at all
+                      times; buttons fade in on hover. */}
+                  <div className="flex items-center gap-1.5 px-3 py-2 bg-[#150c28] opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditTemplate(template);
+                      }}
+                      className="p-1.5 bg-gray-700/90 hover:bg-gray-600 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-white" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateTemplate(template.id);
+                      }}
+                      className="p-1.5 bg-gray-700/90 hover:bg-gray-600 rounded-lg transition-colors"
+                      title="Duplicate"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-white" />
+                    </button>
+                    {activeTab === "bible" && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleEditTemplate(template);
+                          setScriptureTemplateId(template.id);
                         }}
-                        className="p-1.5 bg-gray-700/90 hover:bg-gray-600 rounded-lg transition-colors"
-                        title="Edit"
+                        className="p-1.5 bg-purple-700/90 hover:bg-purple-600 rounded-lg transition-colors"
+                        title="Set as Scripture default"
                       >
-                        <Pencil className="w-3.5 h-3.5 text-white" />
+                        <BookOpen className="w-3.5 h-3.5 text-white" />
                       </button>
+                    )}
+                    {activeTab === "songs" && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          duplicateTemplate(template.id);
+                          setLyricTemplateId(template.id);
                         }}
-                        className="p-1.5 bg-gray-700/90 hover:bg-gray-600 rounded-lg transition-colors"
-                        title="Duplicate"
+                        className="p-1.5 bg-pink-700/90 hover:bg-pink-600 rounded-lg transition-colors"
+                        title="Set as Lyrics default"
                       >
-                        <Copy className="w-3.5 h-3.5 text-white" />
+                        <Music className="w-3.5 h-3.5 text-white" />
                       </button>
-                      {activeTab === "bible" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setScriptureTemplateId(template.id);
-                          }}
-                          className="p-1.5 bg-purple-700/90 hover:bg-purple-600 rounded-lg transition-colors"
-                          title="Set as Scripture default"
-                        >
-                          <BookOpen className="w-3.5 h-3.5 text-white" />
-                        </button>
-                      )}
-                      {activeTab === "songs" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLyricTemplateId(template.id);
-                          }}
-                          className="p-1.5 bg-pink-700/90 hover:bg-pink-600 rounded-lg transition-colors"
-                          title="Set as Lyrics default"
-                        >
-                          <Music className="w-3.5 h-3.5 text-white" />
-                        </button>
-                      )}
-                      {activeTab === "announcements" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAnnouncementTemplateId(template.id);
-                          }}
-                          className="p-1.5 bg-indigo-700/90 hover:bg-indigo-600 rounded-lg transition-colors"
-                          title="Set as Announcement default"
-                        >
-                          <Megaphone className="w-3.5 h-3.5 text-white" />
-                        </button>
-                      )}
-                      {template.isCustom && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTemplate(template.id);
-                          }}
-                          className="p-1.5 bg-red-700/90 hover:bg-red-600 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-white" />
-                        </button>
-                      )}
-                    </div>
+                    )}
+                    {activeTab === "announcements" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAnnouncementTemplateId(template.id);
+                        }}
+                        className="p-1.5 bg-indigo-700/90 hover:bg-indigo-600 rounded-lg transition-colors"
+                        title="Set as Announcement default"
+                      >
+                        <Megaphone className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    )}
+                    {template.isCustom && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTemplate(template.id);
+                        }}
+                        className="p-1.5 bg-red-700/90 hover:bg-red-600 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Name + desc */}

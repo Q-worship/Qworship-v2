@@ -324,6 +324,7 @@ function ImageElement({
   onDelete?: (id: string) => void;
 }) {
   const animStyle = getAnimationStyle(element, isVisible, isPreview);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   // Editor-only: drag anywhere on the image to reposition it (still writes
   // through the same x/y fields the Position & Size number inputs use, so
@@ -356,11 +357,11 @@ function ImageElement({
     window.addEventListener("pointerup", handleUp);
   };
 
-  // Drag an edge - or a corner, for both axes at once - to shrink/grow the
-  // box from that side; the opposite side stays put (anchor-preserving),
-  // like a normal design-tool resize. Since objectFit is "cover" by
-  // default, the box's own edges and the visible photo's edges are the
-  // same thing, so this doubles as the crop control.
+  // Drag any handle to scale the whole image down/up from its centre,
+  // locked to the photo's own natural aspect ratio - this shrinks the
+  // photo as a whole rather than cropping it (objectFit stays "cover", but
+  // since the box always matches the photo's real proportions there's
+  // nothing left over for "cover" to crop away).
   const MIN_SIZE_PCT = 4;
   const startResize = (edge: "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw") => (e: React.PointerEvent) => {
     if (!isEditable) return;
@@ -376,28 +377,50 @@ function ImageElement({
     const startElW = element.width;
     const startElH = element.height;
 
+    const startWpx = (startElW / 100) * rect.width;
+    const startHpx = (startElH / 100) * rect.height;
+    const naturalAspect =
+      imgRef.current?.naturalWidth && imgRef.current?.naturalHeight
+        ? imgRef.current.naturalWidth / imgRef.current.naturalHeight
+        : startWpx / startHpx;
+    const centerXpx = ((startElX + startElW / 2) / 100) * rect.width;
+    const centerYpx = ((startElY + startElH / 2) / 100) * rect.height;
+    const minWpx = (MIN_SIZE_PCT / 100) * rect.width;
+    const minHpx = (MIN_SIZE_PCT / 100) * rect.height;
+
     const handleMove = (ev: PointerEvent) => {
-      const dxPct = ((ev.clientX - startX) / rect.width) * 100;
-      const dyPct = ((ev.clientY - startY) / rect.height) * 100;
-      let newX = startElX;
-      let newY = startElY;
-      let newW = startElW;
-      let newH = startElH;
-      if (edge.includes("e")) {
-        newW = Math.max(MIN_SIZE_PCT, Math.min(100 - startElX, startElW + dxPct));
-      } else if (edge.includes("w")) {
-        const proposedX = Math.max(0, Math.min(startElX + startElW - MIN_SIZE_PCT, startElX + dxPct));
-        newW = startElW + (startElX - proposedX);
-        newX = proposedX;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let scale = 1;
+      if (edge === "e") scale = (startWpx + dx) / startWpx;
+      else if (edge === "w") scale = (startWpx - dx) / startWpx;
+      else if (edge === "s") scale = (startHpx + dy) / startHpx;
+      else if (edge === "n") scale = (startHpx - dy) / startHpx;
+      else if (edge === "se") scale = Math.max((startWpx + dx) / startWpx, (startHpx + dy) / startHpx);
+      else if (edge === "sw") scale = Math.max((startWpx - dx) / startWpx, (startHpx + dy) / startHpx);
+      else if (edge === "ne") scale = Math.max((startWpx + dx) / startWpx, (startHpx - dy) / startHpx);
+      else if (edge === "nw") scale = Math.max((startWpx - dx) / startWpx, (startHpx - dy) / startHpx);
+
+      let newWpx = Math.max(minWpx, startWpx * scale);
+      let newHpx = newWpx / naturalAspect;
+      if (newHpx < minHpx) {
+        newHpx = minHpx;
+        newWpx = newHpx * naturalAspect;
       }
-      if (edge.includes("s")) {
-        newH = Math.max(MIN_SIZE_PCT, Math.min(100 - startElY, startElH + dyPct));
-      } else if (edge.includes("n")) {
-        const proposedY = Math.max(0, Math.min(startElY + startElH - MIN_SIZE_PCT, startElY + dyPct));
-        newH = startElH + (startElY - proposedY);
-        newY = proposedY;
-      }
-      onResize(element.id, newX, newY, newW, newH);
+      // Keep the scaled box within the canvas, still centred on the same point.
+      newWpx = Math.min(newWpx, rect.width);
+      newHpx = Math.min(newHpx, rect.height);
+
+      const newXpx = Math.min(Math.max(0, centerXpx - newWpx / 2), rect.width - newWpx);
+      const newYpx = Math.min(Math.max(0, centerYpx - newHpx / 2), rect.height - newHpx);
+
+      onResize(
+        element.id,
+        (newXpx / rect.width) * 100,
+        (newYpx / rect.height) * 100,
+        (newWpx / rect.width) * 100,
+        (newHpx / rect.height) * 100,
+      );
     };
     const handleUp = () => {
       window.removeEventListener("pointermove", handleMove);
@@ -423,32 +446,40 @@ function ImageElement({
         top: `${element.y}%`,
         width: `${element.width}%`,
         height: `${element.height}%`,
-        overflow: "hidden",
         opacity: element.opacity ?? 1,
         zIndex: element.zIndex,
         display: element.visible ? "block" : "none",
-        borderRadius: element.borderRadius
-          ? `${element.borderRadius}px`
-          : undefined,
         cursor: isEditable ? "move" : undefined,
         outline: isEditable && isSelected ? "1.5px dashed #a855f7" : undefined,
         outlineOffset: isEditable && isSelected ? "1px" : undefined,
         ...animStyle,
       }}>
-      {element.src && (
-        <img
-          src={element.src}
-          alt={element.name || ""}
-          draggable={false}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: (element.objectFit as React.CSSProperties["objectFit"]) || "cover",
-            display: "block",
-            pointerEvents: "none",
-          }}
-        />
-      )}
+      {/* Clips only the photo itself - the delete button and resize handles
+          below live outside this box, so they're never cropped by it. */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
+        }}
+      >
+        {element.src && (
+          <img
+            ref={imgRef}
+            src={element.src}
+            alt={element.name || ""}
+            draggable={false}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: (element.objectFit as React.CSSProperties["objectFit"]) || "cover",
+              display: "block",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+      </div>
       {isEditable && isSelected && (
         <>
           <button
