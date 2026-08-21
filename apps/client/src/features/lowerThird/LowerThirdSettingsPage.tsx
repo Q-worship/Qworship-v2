@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -466,10 +467,22 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
         )}
 
         <div className="flex-1" />
-        <p className="text-xs text-gray-500 flex items-center gap-1.5">
+        <p className="text-xs text-gray-500 flex items-center gap-1.5 mr-3">
           <Eye className="w-3.5 h-3.5 text-purple-400" />
           Click any template below to preview it live on your OBS/NDI source
         </p>
+        <Button
+          onClick={() => {
+            if (activeIdForTab) navigate(`/lower-third-editor/${activeIdForTab}`);
+          }}
+          variant="outline"
+          size="sm"
+          className="border-purple-500/40 text-purple-300 hover:bg-purple-600/20 bg-purple-500/5"
+          disabled={!activeIdForTab}
+        >
+          <Pencil className="w-4 h-4 mr-1.5" />
+          Open in Editor
+        </Button>
       </div>
 
       {/* ── Template grid ──────────────────────────────────────────────── */}
