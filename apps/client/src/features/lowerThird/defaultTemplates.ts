@@ -1,6 +1,57 @@
-import type { LowerThirdTemplate, TemplateCategory } from "./types";
+import type {
+  LowerThirdTemplate,
+  TemplateCategory,
+  LowerThirdBindingData,
+} from "./types";
 
 const now = new Date().toISOString();
+
+// ─── Placeholder / preview data ────────────────────────────────────────────────
+// Shared by the settings-page card previews and the "Preview on stream" push
+// (useLowerThirdStore.previewTemplate), so both show identical sample text.
+
+function getStoredChurchName(): string {
+  try {
+    const stored = localStorage.getItem("qworship_user");
+    if (stored) {
+      const user = JSON.parse(stored);
+      return user.organizationName || "My Church";
+    }
+  } catch {}
+  return "My Church";
+}
+
+export function getPlaceholderData(
+  template: LowerThirdTemplate,
+): LowerThirdBindingData {
+  const churchName = getStoredChurchName();
+  if (template.category === "lyrics") {
+    return {
+      verse: "Amazing grace, how sweet the sound\nThat saved a wretch like me",
+      reference: "Verse 1",
+      version: "Amazing Grace",
+      churchName,
+      songTitle: "Amazing Grace",
+    };
+  }
+  if (template.category === "announcement") {
+    return {
+      verse: "Sunday Service — Join us for worship and fellowship",
+      reference: "This Sunday",
+      version: "10:00 AM",
+      churchName,
+      songTitle: "",
+    };
+  }
+  return {
+    verse:
+      "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.",
+    reference: "John 3:16",
+    version: "NIV",
+    churchName,
+    songTitle: "",
+  };
+}
 
 function createTextElement(
   id: string,

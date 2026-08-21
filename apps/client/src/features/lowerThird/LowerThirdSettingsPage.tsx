@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useLowerThirdStore } from "@/stores/useLowerThirdStore";
 import { useAuthStore } from "@/features/auth/auth.store";
-import { TEMPLATE_CATEGORIES } from "./defaultTemplates";
+import { TEMPLATE_CATEGORIES, getPlaceholderData } from "./defaultTemplates";
 import { LowerThirdRenderer } from "./LowerThirdRenderer";
 import type { LowerThirdTemplate, LowerThirdBindingData, TemplateCategory } from "./types";
 
@@ -42,48 +42,6 @@ const TAB_SCRIPTURE_CATEGORIES: TemplateCategory[] = [
 
 interface LowerThirdSettingsPageProps {
   onClose: () => void;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getStoredChurchName(): string {
-  try {
-    const stored = localStorage.getItem("qworship_user");
-    if (stored) {
-      const user = JSON.parse(stored);
-      return user.organizationName || "My Church";
-    }
-  } catch {}
-  return "My Church";
-}
-
-function getPlaceholderData(template: LowerThirdTemplate): LowerThirdBindingData {
-  const churchName = getStoredChurchName();
-  if (template.category === "lyrics") {
-    return {
-      verse: "Amazing grace, how sweet the sound\nThat saved a wretch like me",
-      reference: "Verse 1",
-      version: "Amazing Grace",
-      churchName,
-      songTitle: "Amazing Grace",
-    };
-  }
-  if (template.category === "announcement") {
-    return {
-      verse: "Sunday Service — Join us for worship and fellowship",
-      reference: "This Sunday",
-      version: "10:00 AM",
-      churchName,
-      songTitle: "",
-    };
-  }
-  return {
-    verse: "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.",
-    reference: "John 3:16",
-    version: "NIV",
-    churchName,
-    songTitle: "",
-  };
 }
 
 // ─── Template Card — 1920×1080 render scaled to card ─────────────────────────
@@ -164,6 +122,7 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
     setEnabled,
     duplicateTemplate,
     deleteCustomTemplate,
+    previewTemplate,
   } = useLowerThirdStore();
 
   const authUser = useAuthStore((s) => s.user);
@@ -624,6 +583,20 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
                       title="Duplicate"
                     >
                       <Copy className="w-3.5 h-3.5 text-white" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        previewTemplate(template);
+                        toast({
+                          title: "Sent to stream",
+                          description: `"${template.name}" is now live on your OBS/NDI source with sample text.`,
+                        });
+                      }}
+                      className="p-1.5 bg-emerald-700/90 hover:bg-emerald-600 rounded-lg transition-colors"
+                      title="Preview on stream (pushes sample text to your real OBS/NDI source)"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-white" />
                     </button>
                     {activeTab === "bible" && (
                       <button

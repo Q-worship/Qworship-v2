@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { LowerThirdTemplate, LowerThirdBindingData } from "@/features/lowerThird/types";
-import { DEFAULT_TEMPLATES } from "@/features/lowerThird/defaultTemplates";
+import { DEFAULT_TEMPLATES, getPlaceholderData } from "@/features/lowerThird/defaultTemplates";
 
 const STORAGE_KEY = "qworship-lower-third";
 const CUSTOM_TEMPLATES_KEY = "qworship-lower-third-custom-templates"; // write-through cache only
@@ -54,6 +54,10 @@ interface LowerThirdState {
     forUserId?: string | number | null,
   ) => void;
   clearActiveData: (forUserId?: string | number | null) => void;
+  /** Pushes `template` with realistic sample text to the real OBS/NDI room
+   *  (isVisible: true), so it can be verified live without needing an
+   *  actual Bible verse/song/announcement in progress. */
+  previewTemplate: (template: LowerThirdTemplate, forUserId?: string | number | null) => void;
   getSelectedTemplate: () => LowerThirdTemplate | undefined;
   getScriptureTemplate: () => LowerThirdTemplate | undefined;
   getLyricTemplate: () => LowerThirdTemplate | undefined;
@@ -563,6 +567,26 @@ export const useLowerThirdStore = create<LowerThirdState>((set, get) => {
       set({ activeData: null, isVisible: false });
       get().broadcastState();
       pushToServer({ activeData: null, isVisible: false }, forUserId);
+    },
+
+    previewTemplate: (template, forUserId?) => {
+      const { enabled } = get();
+      const activeData = getPlaceholderData(template);
+      set({
+        activeData,
+        isVisible: true,
+        selectedTemplateId: template.id,
+      });
+      get().broadcastState();
+      pushToServer(
+        {
+          activeData,
+          isVisible: true,
+          templateId: template.id,
+          enabled,
+        },
+        forUserId,
+      );
     },
 
     getSelectedTemplate: () => {
