@@ -262,10 +262,16 @@ function ShapeElement({
         // that was just set moments earlier in this same style object. A
         // CSS gradient is a valid `background-image` value on its own, so
         // there's no need for the shorthand at all.
-        backgroundColor:
-          hasBgImage || element.gradient
-            ? undefined
-            : element.backgroundColor || "transparent",
+        //
+        // backgroundColor is kept as a fallback layer even when there's an
+        // image fill: CSS paints background-color first and
+        // background-image on top of it, so a fully-loaded image still
+        // covers it completely - but if the image URL ever fails to load
+        // (broken link, network hiccup), the shape stays visible with its
+        // colour instead of silently going fully transparent.
+        backgroundColor: element.gradient
+          ? undefined
+          : element.backgroundColor || (hasBgImage ? undefined : "transparent"),
         // Image fill - a CSS background is inherently clipped to this div's
         // own box, so it's always cropped to fit the shape, never larger.
         backgroundImage: hasBgImage
