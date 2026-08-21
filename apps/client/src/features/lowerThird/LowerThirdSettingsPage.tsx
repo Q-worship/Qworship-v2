@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -467,21 +466,10 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
         )}
 
         <div className="flex-1" />
-        <Button
-          onClick={() => {
-            // Navigate to editor with the currently active tab's template
-            if (activeIdForTab) {
-              navigate(`/lower-third-editor/${activeIdForTab}`);
-            }
-          }}
-          variant="outline"
-          size="sm"
-          className="border-purple-500/40 text-purple-300 hover:bg-purple-600/20 bg-purple-500/5"
-          disabled={!activeIdForTab}
-        >
-          <Eye className="w-4 h-4 mr-1.5" />
-          Preview Active
-        </Button>
+        <p className="text-xs text-gray-500 flex items-center gap-1.5">
+          <Eye className="w-3.5 h-3.5 text-purple-400" />
+          Click any template below to preview it live on your OBS/NDI source
+        </p>
       </div>
 
       {/* ── Template grid ──────────────────────────────────────────────── */}
@@ -521,7 +509,14 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
                       ? activeBorder
                       : "border-gray-700/50 hover:border-gray-600"
                   }`}
-                  onClick={() => setActiveIdForTab(template.id)}
+                  onClick={() => {
+                    setActiveIdForTab(template.id);
+                    previewTemplate(template);
+                    toast({
+                      title: "Sent to stream",
+                      description: `"${template.name}" is now live on your OBS/NDI source with sample text.`,
+                    });
+                  }}
                 >
                   {/* ── Template preview (inline renderer) ──── */}
                   <div className="relative">
@@ -583,20 +578,6 @@ export function LowerThirdSettingsPage({ onClose }: LowerThirdSettingsPageProps)
                       title="Duplicate"
                     >
                       <Copy className="w-3.5 h-3.5 text-white" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        previewTemplate(template);
-                        toast({
-                          title: "Sent to stream",
-                          description: `"${template.name}" is now live on your OBS/NDI source with sample text.`,
-                        });
-                      }}
-                      className="p-1.5 bg-emerald-700/90 hover:bg-emerald-600 rounded-lg transition-colors"
-                      title="Preview on stream (pushes sample text to your real OBS/NDI source)"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-white" />
                     </button>
                     {activeTab === "bible" && (
                       <button
