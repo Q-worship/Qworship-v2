@@ -429,11 +429,10 @@ export function MainPresentationSettingsPage({
                     "Sample text is now live on your OBS/NDI source with the current background and typography.",
                 });
               }}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold flex-shrink-0 bg-emerald-700 hover:bg-emerald-600 text-white transition-colors"
+              className="p-2.5 bg-gray-800 border border-gray-700/60 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-gray-700 transition-colors flex-shrink-0"
               title="Push the current background/typography with sample text to your real OBS/NDI source"
             >
-              <Eye className="w-3.5 h-3.5" />
-              Preview on Stream
+              <Eye className="w-4 h-4" />
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-2">
