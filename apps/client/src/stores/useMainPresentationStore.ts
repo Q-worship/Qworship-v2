@@ -53,6 +53,12 @@ interface MainPresentationState {
   projectLyric: (lyrics: string, sectionTitle: string, songTitle: string, forUserId?: string | null) => void;
   projectAnnouncement: (text: string, category: string, subtitle: string, forUserId?: string | null) => void;
   clearActiveData: (forUserId?: string | null) => void;
+  /** Pushes the current background/typography settings together with
+   *  realistic sample text and isVisible: true, so they can be verified
+   *  live without an actual presentation in progress. Changing settings
+   *  alone (setSettings) is not enough to show anything - the renderer
+   *  requires isVisible + bindingData too. */
+  previewSample: (forUserId?: string | null) => void;
 
   broadcastState: () => void;
   getRenderUrl: () => string;
@@ -236,6 +242,19 @@ export const useMainPresentationStore = create<MainPresentationState>((set, get)
       set({ activeData: null, isVisible: false });
       get().broadcastState();
       pushToServer({ activeData: null, isVisible: false }, forUserId);
+    },
+
+    previewSample: (forUserId?) => {
+      const activeData: MainPresentationBindingData = {
+        verse:
+          "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.",
+        reference: "John 3:16",
+        version: "KJV",
+        type: "scripture",
+      };
+      set({ activeData, isVisible: true });
+      get().broadcastState();
+      pushToServer({ activeData, isVisible: true }, forUserId);
     },
 
     broadcastState: () => {

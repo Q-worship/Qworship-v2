@@ -27,6 +27,7 @@ import {
   Plus,
   Trash2,
   GripVertical,
+  Eye,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -288,7 +289,7 @@ function ColorPickerField({
 export function MainPresentationSettingsPage({
   onClose,
 }: MainPresentationSettingsPageProps) {
-  const { settings, setSettings, enabled, setEnabled } =
+  const { settings, setSettings, enabled, setEnabled, previewSample } =
     useMainPresentationStore();
 
   const authUser = useAuthStore((s) => s.user);
@@ -419,9 +420,27 @@ export function MainPresentationSettingsPage({
             >
               <ExternalLink className="w-4 h-4" />
             </a>
+            <button
+              onClick={() => {
+                previewSample();
+                toast({
+                  title: "Sent to stream",
+                  description:
+                    "Sample text is now live on your OBS/NDI source with the current background and typography.",
+                });
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold flex-shrink-0 bg-emerald-700 hover:bg-emerald-600 text-white transition-colors"
+              title="Push the current background/typography with sample text to your real OBS/NDI source"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Preview on Stream
+            </button>
           </div>
           <p className="text-xs text-gray-500 mt-2">
             Add this as a Browser Source in OBS. Width: 1920, Height: 1080.
+            Changing settings alone doesn't show anything on the stream until
+            something is actually presenting — use "Preview on Stream" to
+            check your background/typography with sample text.
           </p>
         </div>
       </div>
