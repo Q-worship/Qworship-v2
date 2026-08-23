@@ -27,7 +27,6 @@ import {
   Plus,
   Trash2,
   GripVertical,
-  Eye,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -415,12 +414,6 @@ export function MainPresentationSettingsPage({
               href={renderUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2.5 bg-gray-800 border border-gray-700/60 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors flex-shrink-0"
-              title="Open in browser"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
-            <button
               onClick={() => {
                 previewSample();
                 toast({
@@ -429,11 +422,11 @@ export function MainPresentationSettingsPage({
                     "Sample text is now live on your OBS/NDI source with the current background and typography.",
                 });
               }}
-              className="p-2.5 bg-gray-800 border border-gray-700/60 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-gray-700 transition-colors flex-shrink-0"
-              title="Push the current background/typography with sample text to your real OBS/NDI source"
+              className="p-2.5 bg-gray-800 border border-gray-700/60 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors flex-shrink-0"
+              title="Preview with sample text and open in browser"
             >
-              <Eye className="w-4 h-4" />
-            </button>
+              <ExternalLink className="w-4 h-4" />
+            </a>
           </div>
           <p className="text-xs text-gray-500 mt-2">
             Add this as a Browser Source in OBS. Width: 1920, Height: 1080.
