@@ -1,4 +1,7 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
+import { User } from "../auth/auth.model.js";
+import { notifyPlanSubscription } from "../notifications/notification.service.js";
 import { MediaCategory, MediaCollection } from "../media/media.model.js";
 import {
   BibleVerse,
@@ -25,19 +28,432 @@ export const getSystemStatus = (req: Request, res: Response) => {
   });
 };
 
-export const getTrialAnalytics = (req: Request, res: Response) => {
-  res.status(200).json({
-    totalUsers: 2542,
-    activeTrials: 342,
-    expiredTrials: 156,
-    trialConversionRate: 60.1,
-    averageTrialDuration: 12, // days
-    upcomingExpirations: {
-      today: 14,
-      thisWeek: 56,
-      thisMonth: 124,
-    },
-  });
+export const getTrialAnalytics = async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const oneDayAhead = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const oneWeekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalUsers,
+      activeTrials,
+      expiredTrials,
+      convertedUsers,
+      expiringToday,
+      expiringThisWeek,
+      expiringThisMonth,
+    ] = await Promise.all([
+      User.countDocuments({}),
+      User.countDocuments({
+        $or: [
+          { trialStatus: "active", trialEndDate: { $gt: now } },
+          { subscriptionStatus: "trial", trialEndDate: { $gt: now } },
+        ],
+      }),
+      User.countDocuments({
+        $or: [
+          { trialStatus: "expired" },
+          { trialStatus: "active", trialEndDate: { $lte: now } },
+        ],
+      }),
+      User.countDocuments({
+        $or: [
+          { trialStatus: "converted" },
+          { subscriptionStatus: "active" },
+          { accountType: "paid" },
+        ],
+      }),
+      User.countDocuments({
+        trialStatus: "active",
+        trialEndDate: { $gt: now, $lte: oneDayAhead },
+      }),
+      User.countDocuments({
+        trialStatus: "active",
+        trialEndDate: { $gt: now, $lte: oneWeekAhead },
+      }),
+      User.countDocuments({
+        trialStatus: "active",
+        trialEndDate: { $gt: now, $lte: oneMonthAhead },
+      }),
+    ]);
+
+    const totalTrials = activeTrials + expiredTrials + convertedUsers;
+    const trialConversionRate = totalTrials > 0
+      ? Number(((convertedUsers / totalTrials) * 100).toFixed(1))
+      : 0;
+
+    res.status(200).json({
+      totalUsers,
+      activeTrials,
+      expiredTrials,
+      convertedUsers,
+      trialConversionRate,
+      averageTrialDuration: 30, // 30-day standard free tier
+      upcomingExpirations: {
+        today: expiringToday,
+        thisWeek: expiringThisWeek,
+        thisMonth: expiringThisMonth,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching trial analytics:", error);
+    res.status(500).json({ success: false, message: "Error fetching trial analytics" });
+  }
+};
+
+export const getAdminSubscriptionUsers = async (req: Request, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const searchTerm = (req.query.search as string || "").trim();
+    const statusFilter = (req.query.status as string || "all").trim();
+    const planFilter = (req.query.plan as string || "all").trim();
+    const sortBy = (req.query.sortBy as string || "createdAt");
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+    const filter: any = {};
+    const now = new Date();
+
+    if (searchTerm) {
+      const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(escaped, "i");
+      filter.$or = [
+        { email: searchRegex },
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { organizationName: searchRegex },
+        { username: searchRegex },
+      ];
+    }
+
+    if (statusFilter !== "all") {
+      if (statusFilter === "active_trial") {
+        filter.trialEndDate = { $gt: now };
+        filter.trialStatus = { $ne: "expired" };
+        filter.subscriptionStatus = { $in: ["trial", "active", "inactive", undefined] };
+      } else if (statusFilter === "expiring_soon") {
+        const threeDaysAhead = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+        filter.trialEndDate = { $gt: now, $lte: threeDaysAhead };
+      } else if (statusFilter === "expired") {
+        filter.$or = [
+          { trialStatus: "expired" },
+          { trialEndDate: { $lte: now }, trialStatus: { $ne: "converted" } },
+        ];
+      } else if (statusFilter === "converted" || statusFilter === "paid") {
+        filter.$or = [
+          { trialStatus: "converted" },
+          { subscriptionStatus: "active" },
+          { accountType: "paid" },
+        ];
+      } else if (statusFilter === "cancelled") {
+        filter.subscriptionStatus = "cancelled";
+      }
+    }
+
+    if (planFilter !== "all") {
+      filter.planType = planFilter;
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .select("-password")
+        .sort({ [sortBy]: sortOrder })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(filter),
+    ]);
+
+    const formattedUsers = users.map((u: any) => {
+      let computedStatus = u.trialStatus || "not_started";
+      const trialEnd = u.trialEndDate ? new Date(u.trialEndDate) : null;
+      const isPaid = u.subscriptionStatus === "active" || u.trialStatus === "converted";
+
+      if (isPaid) {
+        computedStatus = "active_paid";
+      } else if (u.subscriptionStatus === "cancelled") {
+        computedStatus = "cancelled";
+      } else if (trialEnd) {
+        if (now > trialEnd) {
+          computedStatus = "expired";
+        } else {
+          computedStatus = "active_trial";
+        }
+      }
+
+      const daysRemaining = trialEnd && trialEnd > now
+        ? Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+
+      return {
+        ...u,
+        computedStatus,
+        daysRemaining,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      users: formattedUsers,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching subscription users:", error);
+    res.status(500).json({ success: false, message: "Error fetching users" });
+  }
+};
+
+export const extendUserTrial = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { days, targetDate, notifyUser = true } = req.body;
+
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid user ID format" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const now = new Date();
+    let newEndDate: Date;
+
+    if (targetDate) {
+      newEndDate = new Date(targetDate);
+      if (isNaN(newEndDate.getTime()) || newEndDate <= now) {
+        return res.status(400).json({
+          success: false,
+          message: "Target date must be a valid future date",
+        });
+      }
+    } else {
+      const extensionDays = parseInt(days, 10);
+      if (isNaN(extensionDays) || extensionDays <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Please specify a valid number of days to extend",
+        });
+      }
+
+      const baseDate = (user.trialEndDate && new Date(user.trialEndDate) > now)
+        ? new Date(user.trialEndDate)
+        : now;
+
+      newEndDate = new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+    }
+
+    user.trialEndDate = newEndDate;
+    user.trialStatus = "active";
+    user.subscriptionStatus = "trial";
+    if (!user.trialStartDate) {
+      user.trialStartDate = now;
+    }
+    await user.save();
+
+    if (notifyUser) {
+      notifyPlanSubscription(user._id, `Trial Extended until ${newEndDate.toLocaleDateString()}`).catch(() => {});
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Trial successfully extended to ${newEndDate.toLocaleDateString()}`,
+      user: {
+        id: user._id,
+        trialStatus: user.trialStatus,
+        subscriptionStatus: user.subscriptionStatus,
+        trialStartDate: user.trialStartDate,
+        trialEndDate: user.trialEndDate,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error extending user trial:", error);
+    res.status(500).json({ success: false, message: error.message || "Error extending trial" });
+  }
+};
+
+export const updateUserSubscriptionPlan = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { planType, accountType, subscriptionStatus, trialStatus } = req.body;
+
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid user ID format" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (planType !== undefined) user.planType = planType;
+    if (accountType !== undefined) user.accountType = accountType;
+    if (subscriptionStatus !== undefined) user.subscriptionStatus = subscriptionStatus;
+    if (trialStatus !== undefined) user.trialStatus = trialStatus;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Subscription plan updated successfully",
+      user: {
+        id: user._id,
+        planType: user.planType,
+        accountType: user.accountType,
+        subscriptionStatus: user.subscriptionStatus,
+        trialStatus: user.trialStatus,
+        trialEndDate: user.trialEndDate,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating user subscription:", error);
+    res.status(500).json({ success: false, message: error.message || "Error updating subscription" });
+  }
+};
+
+export const bulkExtendUserTrials = async (req: Request, res: Response) => {
+  try {
+    const { target, planType, userIds, days = 30, targetDate, notifyUsers = false } = req.body;
+    const now = new Date();
+    const extensionDays = parseInt(days, 10);
+
+    if (!targetDate && (isNaN(extensionDays) || extensionDays <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid number of days or target date to extend",
+      });
+    }
+
+    let modifiedCount = 0;
+
+    if (target === "all_expired") {
+      // Find all users whose trial has lapsed
+      const newEndDate = targetDate
+        ? new Date(targetDate)
+        : new Date(now.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+
+      const filter = {
+        $or: [
+          { trialStatus: "expired" },
+          { trialEndDate: { $lte: now }, trialStatus: { $ne: "converted" } },
+        ],
+      };
+
+      const result = await User.updateMany(filter, {
+        $set: {
+          trialEndDate: newEndDate,
+          trialStatus: "active",
+          subscriptionStatus: "trial",
+        },
+      });
+
+      modifiedCount = result.modifiedCount;
+    } else if (target === "by_tier") {
+      if (!planType || typeof planType !== "string") {
+        return res.status(400).json({
+          success: false,
+          message: "Please specify a plan tier to extend",
+        });
+      }
+
+      const users = await User.find({ planType }).select("_id trialEndDate trialStatus");
+      const ops = users.map((u: any) => {
+        let newEnd: Date;
+        if (targetDate) {
+          newEnd = new Date(targetDate);
+        } else {
+          const baseDate = u.trialEndDate && new Date(u.trialEndDate) > now
+            ? new Date(u.trialEndDate)
+            : now;
+          newEnd = new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+        }
+
+        return {
+          updateOne: {
+            filter: { _id: u._id },
+            update: {
+              $set: {
+                trialEndDate: newEnd,
+                trialStatus: "active" as const,
+                subscriptionStatus: "trial" as const,
+              },
+            },
+          },
+        };
+      });
+
+      if (ops.length > 0) {
+        const result = await User.bulkWrite(ops as any, { ordered: false });
+        modifiedCount = result.modifiedCount || ops.length;
+      }
+    } else if (target === "selected_users") {
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a list of user IDs to extend",
+        });
+      }
+
+      const validIds = userIds.filter((id: string) => mongoose.isValidObjectId(id));
+      const users = await User.find({ _id: { $in: validIds } }).select("_id trialEndDate");
+
+      const ops = users.map((u: any) => {
+        let newEnd: Date;
+        if (targetDate) {
+          newEnd = new Date(targetDate);
+        } else {
+          const baseDate = u.trialEndDate && new Date(u.trialEndDate) > now
+            ? new Date(u.trialEndDate)
+            : now;
+          newEnd = new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+        }
+
+        return {
+          updateOne: {
+            filter: { _id: u._id },
+            update: {
+              $set: {
+                trialEndDate: newEnd,
+                trialStatus: "active" as const,
+                subscriptionStatus: "trial" as const,
+              },
+            },
+          },
+        };
+      });
+
+      if (ops.length > 0) {
+        const result = await User.bulkWrite(ops as any, { ordered: false });
+        modifiedCount = result.modifiedCount || ops.length;
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid target scope. Must be 'all_expired', 'by_tier', or 'selected_users'",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: modifiedCount,
+      message: `Successfully extended subscription deadline for ${modifiedCount} user(s).`,
+    });
+  } catch (error: any) {
+    console.error("Error in bulkExtendUserTrials:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Server error during bulk extension",
+    });
+  }
 };
 
 export const getUserMetrics = (req: Request, res: Response) => {

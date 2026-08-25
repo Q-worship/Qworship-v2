@@ -20,6 +20,10 @@ import {
   updateManagedBibleVerse,
   getBibleImportHistory,
   rollbackBibleImport,
+  getAdminSubscriptionUsers,
+  extendUserTrial,
+  updateUserSubscriptionPlan,
+  bulkExtendUserTrials,
 } from "./admin.controller.js";
 import { protect, authorizeAdmin } from "../auth/auth.middleware.js";
 import {
@@ -46,6 +50,12 @@ router.get("/user-metrics", getUserMetrics);
 router.get("/revenue-data", getRevenueData);
 router.get("/system-metrics", getSystemMetrics);
 router.get("/accounts", getAdminAccounts);
+
+// Subscription & Trial Management Routes
+router.get("/subscriptions/users", getAdminSubscriptionUsers);
+router.post("/subscriptions/users/:userId/extend", extendUserTrial);
+router.patch("/subscriptions/users/:userId/plan", updateUserSubscriptionPlan);
+router.post("/subscriptions/bulk-extend", bulkExtendUserTrials);
 
 // Media Metadata Routes for Super Admin
 router.get("/media/categories", getMediaCategories);
