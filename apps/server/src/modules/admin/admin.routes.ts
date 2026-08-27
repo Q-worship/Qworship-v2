@@ -25,6 +25,10 @@ import {
   updateManagedBibleVerse,
   getBibleImportHistory,
   rollbackBibleImport,
+  getAdminSubscriptionUsers,
+  extendUserTrial,
+  updateUserSubscriptionPlan,
+  bulkExtendUserTrials,
 } from "./admin.controller.js";
 import { listRoles, createRole, updateRole, deleteRole } from "./role.controller.js";
 import { protect, authorizeAdmin, requireSuperAdmin } from "../auth/auth.middleware.js";
@@ -64,6 +68,12 @@ router.get("/roles", requireSuperAdmin, listRoles);
 router.post("/roles", requireSuperAdmin, createRole);
 router.patch("/roles/:id", requireSuperAdmin, updateRole);
 router.delete("/roles/:id", requireSuperAdmin, deleteRole);
+
+// Subscription & Trial Management Routes
+router.get("/subscriptions/users", getAdminSubscriptionUsers);
+router.post("/subscriptions/users/:userId/extend", extendUserTrial);
+router.patch("/subscriptions/users/:userId/plan", updateUserSubscriptionPlan);
+router.post("/subscriptions/bulk-extend", bulkExtendUserTrials);
 
 // Media Metadata Routes for Super Admin
 router.get("/media/categories", getMediaCategories);

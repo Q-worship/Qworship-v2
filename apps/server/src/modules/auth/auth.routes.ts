@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signIn, signUp, verifyEmail, resendVerification, requestPasswordReset, resetPassword, updateProfile, updatePassword, getBiblePreferences, updateBiblePreferences, completeFirstLogin } from './auth.controller.js';
+import { signIn, signUp, verifyEmail, resendVerification, requestPasswordReset, resetPassword, updateProfile, updatePassword, getBiblePreferences, updateBiblePreferences, completeFirstLogin, extendSelfTrial } from './auth.controller.js';
 import { rateLimit } from './rate-limit.middleware.js';
 
 export const authRouter = Router();
@@ -78,3 +78,4 @@ authRouter.put('/update-password', ...protectMiddlewares, updatePassword as any)
 authRouter.post('/complete-first-login', rateLimit('complete-first-login', 10, 15 * 60 * 1000), ...protectMiddlewares, completeFirstLogin as any);
 authRouter.get('/bible-preferences', ...protectMiddlewares, getBiblePreferences as any);
 authRouter.put('/bible-preferences', ...protectMiddlewares, updateBiblePreferences as any);
+authRouter.post('/extend-trial', ...protectMiddlewares, extendSelfTrial as any);

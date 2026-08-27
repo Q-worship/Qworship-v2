@@ -309,3 +309,37 @@ export const updateBiblePreferences = async (req: Request, res: Response) => {
   await user.save();
   return res.json({ success: true, pinnedVersions: unique });
 };
+
+export const extendSelfTrial = async (req: Request, res: Response) => {
+  try {
+    const user = await User.findById((req as any).user?._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const now = new Date();
+    const extensionDays = 30;
+    const baseDate = (user.trialEndDate && new Date(user.trialEndDate) > now)
+      ? new Date(user.trialEndDate)
+      : now;
+
+    const newEndDate = new Date(baseDate.getTime() + extensionDays * 24 * 60 * 60 * 1000);
+
+    user.trialEndDate = newEndDate;
+    user.trialStatus = 'active';
+    user.subscriptionStatus = 'trial';
+    if (!user.planType) user.planType = 'cloud_pro';
+    if (!user.trialStartDate) user.trialStartDate = now;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Your 30-day free trial has been successfully activated!',
+      user: publicUser(user),
+    });
+  } catch (error: any) {
+    console.error('Error extending self trial:', error);
+    return res.status(500).json({ success: false, message: 'Server error extending trial' });
+  }
+};

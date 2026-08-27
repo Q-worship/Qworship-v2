@@ -368,4 +368,8 @@ export function requestPasswordReset(email: string) {
 export function resetPassword(email: string, token: string, password: string) {
   return authFetch<{ success: boolean; message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email, token, password }) })
 }
+
+export function extendSelfTrialApi() {
+  return authFetch<{ success: boolean; message: string; user: AuthUser }>('/auth/extend-trial', { method: 'POST', headers: bearerHeaders() })
+}
 import { useAuthStore } from '@/features/auth/auth.store'
