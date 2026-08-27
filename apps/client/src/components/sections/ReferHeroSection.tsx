@@ -70,13 +70,6 @@ export function ReferHeroSection() {
             </div>
           </div>
         </div>
-
-        <img
-          src={images.referBannerWide}
-          alt="Church congregation gathered for worship"
-          className="refer-hero-banner"
-          loading="lazy"
-        />
       </SiteContainer>
     </section>
   )

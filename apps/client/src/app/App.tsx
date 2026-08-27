@@ -198,7 +198,7 @@ export const AppRouter = () => {
           <Route path="/about">{(params) => <Layout><About /></Layout>}</Route>
           <Route path="/pricing">{(params) => <Layout><Pricing /></Layout>}</Route>
           <Route path="/resources">{(params) => <Layout><Resources /></Layout>}</Route>
-          <Route path="/refer-and-earn">{(params) => <Layout><ReferAndEarn /></Layout>}</Route>
+          <Route path="/refer-and-earn">{(params) => <ReferAndEarn />}</Route>
           <Route path="/guides/:guideId"><Layout><GuideDetailPage /></Layout></Route>
           <Route path="/guides">{(params) => <Layout><Guides /></Layout>}</Route>
           <Route path="/faqs">{(params) => <Layout><FAQs /></Layout>}</Route>
