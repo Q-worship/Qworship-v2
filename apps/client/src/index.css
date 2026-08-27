@@ -6068,6 +6068,425 @@ body.mobile-nav-open {
   color: #4a4a4a;
 }
 
+/* ── Refer & Earn page ─────────────────────────────────────────────── */
+
+.about-core-beliefs-section--light {
+  background: #ffffff;
+}
+
+.about-core-beliefs-section--light .about-core-beliefs-heading {
+  color: #000000;
+}
+
+.refer-hero-section {
+  background: #F1F0FF;
+  padding-top: 8rem;
+  padding-bottom: 4.5rem;
+}
+
+@media (max-width: 767px) {
+  .refer-hero-section {
+    padding-top: 6.5rem;
+    padding-bottom: 3rem;
+  }
+}
+
+.refer-hero-grid {
+  display: grid;
+  gap: 2.5rem;
+  align-items: center;
+}
+
+@media (max-width: 1023px) {
+  .refer-hero-grid {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 1024px) {
+  .refer-hero-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+  }
+}
+
+.refer-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.refer-hero-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 0.4rem 1rem;
+  border-radius: 9999px;
+  background: rgba(191, 54, 255, 0.1);
+  color: #8e20c1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.refer-hero-heading {
+  display: flex;
+  flex-direction: column;
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  line-height: 1.15;
+}
+
+.refer-hero-heading-line {
+  display: block;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .refer-hero-heading-line {
+    white-space: normal;
+  }
+}
+
+.refer-hero-heading-line--dark {
+  color: #17122b;
+}
+
+.refer-hero-heading-line--accent {
+  background: linear-gradient(135deg, #bf36ff 0%, #8e20c1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.refer-hero-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #4b4762;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  max-width: 34rem;
+}
+
+.refer-hero-body-line {
+  display: block;
+}
+
+.refer-hero-cta {
+  align-self: flex-start;
+  padding: 0.875rem 1.75rem;
+  border-radius: 0.75rem;
+  border: none;
+  background: linear-gradient(135deg, #bf36ff 0%, #8e20c1 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 12px 24px -12px rgba(142, 32, 193, 0.55);
+}
+
+.refer-hero-cta:hover {
+  transform: translateY(-2px);
+}
+
+.refer-hero-media {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.refer-hero-carousel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: #17122b;
+  box-shadow: 0 30px 60px -30px rgba(23, 18, 43, 0.35);
+}
+
+.refer-hero-carousel-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.refer-hero-carousel-image.is-active {
+  opacity: 1;
+}
+
+.refer-hero-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.refer-hero-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  border: none;
+  padding: 0;
+  background: #d7d5ea;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.refer-hero-dot.is-active {
+  background: #d946ef;
+  transform: scale(1.3);
+}
+
+.refer-hero-banner {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 22rem;
+  object-fit: cover;
+  border-radius: 1rem;
+  margin-top: 3rem;
+}
+
+@media (max-width: 767px) {
+  .refer-hero-banner {
+    margin-top: 2rem;
+    max-height: 14rem;
+  }
+}
+
+.refer-who-we-are-section {
+  background: #ffffff;
+}
+
+.refer-who-we-are-grid {
+  display: grid;
+  gap: 3rem;
+  align-items: stretch;
+}
+
+@media (max-width: 1023px) {
+  .refer-who-we-are-grid {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 1024px) {
+  .refer-who-we-are-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 5rem;
+    min-height: 26rem;
+  }
+}
+
+.refer-who-we-are-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  justify-content: center;
+}
+
+.refer-who-we-are-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #8e20c1;
+}
+
+.refer-who-we-are-heading {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.15;
+}
+
+.refer-who-we-are-heading-dark {
+  color: #000000;
+}
+
+.refer-who-we-are-heading-accent {
+  color: #d946ef;
+}
+
+.refer-who-we-are-body {
+  color: #4a4a4a;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  max-width: 34rem;
+}
+
+.refer-who-we-are-btn {
+  align-self: flex-start;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: #f1e9ff;
+  color: #8e20c1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.refer-who-we-are-btn:hover {
+  background: #e6d7ff;
+}
+
+.refer-who-we-are-media {
+  min-height: 16rem;
+}
+
+.refer-image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 16rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1.5px dashed #d4cdf0;
+  background: #f8f6ff;
+  color: #9b93b8;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.refer-image-placeholder-icon {
+  font-size: 2.25rem;
+}
+
+.refer-work-benefits-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 3rem;
+}
+
+.refer-work-benefits-header .about-work-benefits-heading {
+  margin-bottom: 0;
+}
+
+.refer-work-benefits-btn {
+  flex-shrink: 0;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  border: none;
+  background: linear-gradient(135deg, #bf36ff 0%, #8e20c1 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.refer-work-benefits-btn:hover {
+  transform: translateY(-2px);
+}
+
+.refer-how-it-works-section {
+  background: #0a0510;
+}
+
+.refer-how-it-works-header {
+  text-align: center;
+  max-width: 40rem;
+  margin: 0 auto 3.5rem;
+}
+
+.refer-how-it-works-heading {
+  color: #ffffff;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  margin-bottom: 0.75rem;
+}
+
+.refer-how-it-works-body {
+  color: #a09cb8;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.refer-how-it-works-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .refer-how-it-works-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.75rem;
+  }
+}
+
+.refer-how-it-works-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 2rem;
+  border-radius: 0.75rem;
+  background: #17122b;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.refer-how-it-works-number {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.08);
+}
+
+.refer-how-it-works-icon {
+  color: #d946ef;
+  font-size: 1.75rem;
+}
+
+.refer-how-it-works-card-title {
+  font-size: 1.125rem;
+  color: #ffffff;
+}
+
+.refer-how-it-works-card-body {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #a09cb8;
+}
+
+.refer-how-it-works-cta-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 3rem;
+}
+
+.refer-how-it-works-cta {
+  padding: 0.875rem 2rem;
+  border-radius: 0.75rem;
+  border: none;
+  background: linear-gradient(135deg, #bf36ff 0%, #8e20c1 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.refer-how-it-works-cta:hover {
+  transform: translateY(-2px);
+}
+
 .about-openings-intro {
   margin-bottom: 2.5rem;
 }

@@ -20,6 +20,7 @@ const Resources = lazy(() => import("@/features/web/pages/Resources").then(m => 
 const JobDetailPage = lazy(() => import("@/features/web/pages/JobDetailPage").then(m => ({ default: m.JobDetailPage })));
 const GuideDetailPage = lazy(() => import("@/features/web/pages/GuideDetailPage").then(m => ({ default: m.GuideDetailPage })));
 const Guides = lazy(() => import("@/features/web/pages/Guides").then(m => ({ default: m.Guides })));
+const ReferAndEarn = lazy(() => import("@/features/web/pages/ReferAndEarn").then(m => ({ default: m.ReferAndEarn })));
 import { Login } from "@/features/web/pages/Login";
 import { SignUp } from "@/features/web/pages/SignUp";
 import { Verify } from "@/features/web/pages/Verify";
@@ -197,6 +198,7 @@ export const AppRouter = () => {
           <Route path="/about">{(params) => <Layout><About /></Layout>}</Route>
           <Route path="/pricing">{(params) => <Layout><Pricing /></Layout>}</Route>
           <Route path="/resources">{(params) => <Layout><Resources /></Layout>}</Route>
+          <Route path="/refer-and-earn">{(params) => <Layout><ReferAndEarn /></Layout>}</Route>
           <Route path="/guides/:guideId"><Layout><GuideDetailPage /></Layout></Route>
           <Route path="/guides">{(params) => <Layout><Guides /></Layout>}</Route>
           <Route path="/faqs">{(params) => <Layout><FAQs /></Layout>}</Route>

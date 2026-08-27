@@ -43,9 +43,17 @@ function BeliefIcon({ icon }: { icon: CoreBelief['icon'] }) {
   )
 }
 
-export function AboutCoreBeliefsSection() {
+interface AboutCoreBeliefsSectionProps {
+  variant?: 'dark' | 'light'
+}
+
+export function AboutCoreBeliefsSection({ variant = 'dark' }: AboutCoreBeliefsSectionProps) {
   return (
-    <section className="about-core-beliefs-section section-gap reveal">
+    <section
+      className={`about-core-beliefs-section section-gap reveal ${
+        variant === 'light' ? 'about-core-beliefs-section--light' : ''
+      }`}
+    >
       <SiteContainer>
         <h2 className="about-core-beliefs-heading font-headline font-bold">
           We thrive on <span className="about-core-beliefs-accent">three core believes :</span>

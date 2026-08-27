@@ -35,6 +35,7 @@ export const navLinks: NavLink[] = [
   { label: 'About', href: '/about' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Resources', href: '/resources' },
+  { label: 'Refer & Earn', href: '/refer-and-earn' },
 ]
 
 export const resourceDropdownItems: NavDropdownItem[] = [
@@ -3402,6 +3403,56 @@ export const aboutWorkBenefits: WorkBenefit[] = [
   },
 ]
 
+export const referHeroCopy = {
+  badge: 'REFERRAL PROGRAM',
+  heading: { line1: 'Welcome to Q-worship', line2: 'Referral program' },
+  body: "Every team member shares in the success of the platform. As Q-worship grows, so does your stake in it. We believe the people who build it should benefit from it. Join our referral program and start earning today.",
+  bodyLines: [
+    'Every team member shares in the success of the platform.',
+    'As Q-worship grows, so does your stake in it.',
+    'We believe the people who build it should benefit from it.',
+    'Join our referral program and start earning today.',
+  ],
+  cta: 'Join Referral Programme',
+  imageAlt: 'Worship team leading a congregation on stage',
+}
+
+export const referWhoWeAreCopy = {
+  badge: aboutHeroCopy.badge,
+  heading: { before: 'Led by', accent: 'pastors' },
+  body: aboutHeroCopy.body,
+  cta: 'Learn more',
+  imageAlt: aboutHeroCopy.imageAlt,
+}
+
+export const referWorkBenefitsCopy = {
+  heading: 'Why work with us !',
+  cta: 'Join referral program',
+}
+
+export const referHowItWorksCopy = {
+  heading: 'How it works',
+  body: 'Join our referral steps in a few quick and easy steps and start earning',
+  cta: 'Get Started Today',
+  steps: [
+    {
+      icon: 'mic',
+      title: 'Voice Bible Search',
+      description: 'Search 31,406 verses across 6 translations using only your voice. No typing, no clicking.',
+    },
+    {
+      icon: 'wifi_off',
+      title: 'Online & Offline Ready',
+      description: "Full functionality with or without internet. Your service never stops, no matter the venue.",
+    },
+    {
+      icon: 'translate',
+      title: 'Multi Bible Translations',
+      description: 'KJV, NKJV, NIV, AMP, MSG and 20+ more bible versions. Switch translations mid-service with a single command.',
+    },
+  ],
+}
+
 export const aboutJobOpeningsCopy = {
   title: 'Current openings at Q-worship',
   intro:
@@ -3625,4 +3676,11 @@ export const images = {
   cta: '/Photos/lastlast.webp',
   ctaMobile: '/Photos/Pastors.webp',
   featuresHero: '/Photos/features/Rectangle%2042300.webp',
+  referCarousel: [
+    '/Photos/ReferAndEarn/carousel-display-settings.webp',
+    '/Photos/ReferAndEarn/carousel-audience-screen.webp',
+    '/Photos/ReferAndEarn/carousel-lyrics.webp',
+    '/Photos/ReferAndEarn/carousel-pastor.webp',
+  ],
+  referBannerWide: '/Photos/ReferAndEarn/referral-banner-wide.webp',
 }
