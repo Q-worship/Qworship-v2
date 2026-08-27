@@ -7,6 +7,11 @@ import {
   getRevenueData,
   getSystemMetrics,
   getAdminAccounts,
+  createAdminAccount,
+  updateAdminRole,
+  suspendAdmin,
+  deleteAdmin,
+  resetAdminPassword,
   getMediaCategories,
   createMediaCategory,
   getMediaCollections,
@@ -21,7 +26,9 @@ import {
   getBibleImportHistory,
   rollbackBibleImport,
 } from "./admin.controller.js";
-import { protect, authorizeAdmin } from "../auth/auth.middleware.js";
+import { listRoles, createRole, updateRole, deleteRole } from "./role.controller.js";
+import { protect, authorizeAdmin, requireSuperAdmin } from "../auth/auth.middleware.js";
+import { rateLimit } from "../auth/rate-limit.middleware.js";
 import {
   getAdminDownloadableFiles,
   uploadDownloadableFile,
@@ -46,6 +53,17 @@ router.get("/user-metrics", getUserMetrics);
 router.get("/revenue-data", getRevenueData);
 router.get("/system-metrics", getSystemMetrics);
 router.get("/accounts", getAdminAccounts);
+router.post("/accounts", requireSuperAdmin, rateLimit("admin-create-account", 20, 60 * 60 * 1000), createAdminAccount);
+router.patch("/accounts/:id/role", requireSuperAdmin, updateAdminRole);
+router.post("/suspend-admin/:id", requireSuperAdmin, suspendAdmin);
+router.delete("/delete-admin/:id", requireSuperAdmin, deleteAdmin);
+router.post("/reset-password/:id", requireSuperAdmin, rateLimit("admin-reset-password", 20, 60 * 60 * 1000), resetAdminPassword);
+
+// Role management (superadmin only)
+router.get("/roles", requireSuperAdmin, listRoles);
+router.post("/roles", requireSuperAdmin, createRole);
+router.patch("/roles/:id", requireSuperAdmin, updateRole);
+router.delete("/roles/:id", requireSuperAdmin, deleteRole);
 
 // Media Metadata Routes for Super Admin
 router.get("/media/categories", getMediaCategories);

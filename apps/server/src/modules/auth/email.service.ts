@@ -80,6 +80,39 @@ export async function sendPasswordResetEmail(to: string, firstName: string | und
   });
 }
 
+export async function sendAdminCredentialsEmail(
+  to: string,
+  firstName: string | undefined,
+  temporaryPassword: string,
+  options: { roleName?: string; isReset?: boolean; loginUrl: string },
+) {
+  const subject = options.isReset
+    ? 'Your Q-Worship admin password has been reset'
+    : 'Your Q-Worship Admin access is ready';
+  const roleName = options.roleName || 'Super Admin';
+  const intro = options.isReset
+    ? 'Your Q-Worship admin password has been reset. Use the temporary password below to sign in.'
+    : "You've been granted Q-Worship Admin access. Use the credentials below to sign in.";
+  await createTransport().sendMail({
+    from: sender(),
+    to: { address: to, name: firstName || to },
+    subject,
+    text: `Hello ${firstName || 'there'}, ${intro}\n\nUsername: ${to}\nTemporary Password: ${temporaryPassword}\nRole: ${roleName}\n\nSign in at: ${options.loginUrl}\n\nYou will be asked to choose a new password the first time you sign in.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">
+      <h2>${escapeHtml(options.isReset ? 'Your admin password has been reset' : "Here's your access")}</h2>
+      <p>Hello ${escapeHtml(firstName || 'there')},</p>
+      <p>${escapeHtml(intro)}</p>
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:20px 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <tr><td style="padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:14px;color:#6b7280;">Username</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;">${escapeHtml(to)}</td></tr>
+        <tr><td style="padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:14px;color:#6b7280;">Temporary Password</td><td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;font-family:monospace;">${escapeHtml(temporaryPassword)}</td></tr>
+        <tr><td style="padding:12px 16px;background:#f9fafb;font-size:14px;color:#6b7280;">Role</td><td style="padding:12px 16px;font-size:14px;font-weight:600;">${escapeHtml(roleName)}</td></tr>
+      </table>
+      <p><a href="${escapeHtml(options.loginUrl)}" style="display:inline-block;padding:12px 20px;background:#6d28d9;color:#fff;text-decoration:none;border-radius:8px">Sign in</a></p>
+      <p style="color:#6b7280;font-size:13px;">You will be asked to choose a new password the first time you sign in.</p>
+    </div>`,
+  });
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]!);
 }

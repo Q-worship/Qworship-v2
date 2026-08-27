@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
 import { MediaCategory, MediaCollection } from "../media/media.model.js";
 import {
   BibleVerse,
@@ -14,6 +16,8 @@ import {
   type ManagedBibleVersion,
   type ParsedBibleVerse,
 } from "../bible/bible-admin.service.js";
+import { User } from "../auth/auth.model.js";
+import { sendAdminCredentialsEmail } from "../auth/email.service.js";
 
 export const getSystemStatus = (req: Request, res: Response) => {
   res.status(200).json({
@@ -74,23 +78,192 @@ export const getSystemMetrics = (req: Request, res: Response) => {
   });
 };
 
-export const getAdminAccounts = (req: Request, res: Response) => {
-  res.status(200).json([
-    {
-      id: "admin-1",
-      email: "superadmin@qworship.com",
-      role: "superadmin",
-      status: "active",
-      lastLogin: new Date().toISOString(),
-    },
-    {
-      id: "admin-2",
-      email: "moderator@qworship.com",
-      role: "moderator",
-      status: "active",
-      lastLogin: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ]);
+function normalizeEmail(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function generateTempPassword() {
+  return randomBytes(12).toString("base64url");
+}
+
+function toAdminAccountRow(user: any) {
+  return {
+    id: user._id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    isActive: !!user.isActive,
+    mustChangePassword: !!user.mustChangePassword,
+    roleId: user.roleId?._id ?? user.roleId ?? null,
+    roleName: user.roleId?.name ?? null,
+    lastLogin: user.lastLoginAt ?? null,
+    createdAt: user.createdAt,
+  };
+}
+
+const MIN_ACTIVE_SUPERADMINS = 1;
+
+async function wouldRemoveLastActiveSuperadmin(targetUserId: string) {
+  const target = await User.findById(targetUserId);
+  if (!target || target.role !== "superadmin") return false;
+  const activeSuperadmins = await User.countDocuments({ role: "superadmin", isActive: true });
+  return activeSuperadmins <= MIN_ACTIVE_SUPERADMINS;
+}
+
+export const getAdminAccounts = async (req: Request, res: Response) => {
+  try {
+    const admins = await User.find({ role: { $in: ["admin", "superadmin"] } })
+      .select("-password")
+      .populate("roleId", "name permissions")
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.json(admins.map(toAdminAccountRow));
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const createAdminAccount = async (req: Request, res: Response) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const firstName = typeof req.body.firstName === "string" ? req.body.firstName.trim() : "";
+    const lastName = typeof req.body.lastName === "string" ? req.body.lastName.trim() : "";
+    const role = req.body.role === "superadmin" ? "superadmin" : "admin";
+    const roleId = role === "admin" && req.body.roleId ? req.body.roleId : null;
+
+    if (!email || !firstName) {
+      return res.status(400).json({ success: false, message: "A valid email and first name are required" });
+    }
+    if (await User.findOne({ email })) {
+      return res.status(409).json({ success: false, message: "An account with this email already exists" });
+    }
+
+    const tempPassword = generateTempPassword();
+    const user = await User.create({
+      username: email,
+      email,
+      password: await bcrypt.hash(tempPassword, 12),
+      firstName,
+      lastName,
+      role,
+      roleId,
+      isActive: true,
+      emailVerified: true,
+      mustChangePassword: true,
+    });
+
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+    let emailSent = true;
+    try {
+      const populated = await user.populate("roleId", "name");
+      await sendAdminCredentialsEmail(email, firstName, tempPassword, {
+        roleName: role === "superadmin" ? "Super Admin" : (populated.roleId as any)?.name,
+        loginUrl: `${frontendUrl}/admin/login`,
+      });
+      console.log("[Admin] credentials email sent to", email);
+    } catch (emailError: any) {
+      emailSent = false;
+      console.error("[Admin] failed to send credentials email:", emailError.message);
+    }
+
+    const populatedUser = await User.findById(user._id).select("-password").populate("roleId", "name permissions").lean();
+    return res.status(201).json({
+      success: true,
+      account: toAdminAccountRow(populatedUser),
+      emailSent,
+      warning: emailSent ? undefined : "Account created, but the credentials email failed to send. Use Reset Password to retry.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateAdminRole = async (req: Request, res: Response) => {
+  try {
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, message: "Admin account not found" });
+    if (target.role !== "admin") {
+      return res.status(400).json({ success: false, message: "Only admin accounts can be assigned a custom role" });
+    }
+    target.roleId = req.body.roleId || null;
+    await target.save();
+    const populated = await User.findById(target._id).select("-password").populate("roleId", "name permissions").lean();
+    return res.json({ success: true, account: toAdminAccountRow(populated) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const suspendAdmin = async (req: Request, res: Response) => {
+  try {
+    const requester = (req as any).user;
+    if (String(requester._id) === String(req.params.id)) {
+      return res.status(400).json({ success: false, message: "You cannot suspend your own account" });
+    }
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, message: "Admin account not found" });
+    if (target.isActive && (await wouldRemoveLastActiveSuperadmin(req.params.id))) {
+      return res.status(400).json({ success: false, message: "Cannot suspend the last active superadmin" });
+    }
+    target.isActive = !target.isActive;
+    await target.save();
+    const populated = await User.findById(target._id).select("-password").populate("roleId", "name permissions").lean();
+    return res.json({ success: true, account: toAdminAccountRow(populated) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteAdmin = async (req: Request, res: Response) => {
+  try {
+    const requester = (req as any).user;
+    if (String(requester._id) === String(req.params.id)) {
+      return res.status(400).json({ success: false, message: "You cannot delete your own account" });
+    }
+    if (await wouldRemoveLastActiveSuperadmin(req.params.id)) {
+      return res.status(400).json({ success: false, message: "Cannot delete the last active superadmin" });
+    }
+    const deleted = await User.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: "Admin account not found" });
+    return res.json({ success: true });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const resetAdminPassword = async (req: Request, res: Response) => {
+  try {
+    const target = await User.findById(req.params.id).populate("roleId", "name");
+    if (!target) return res.status(404).json({ success: false, message: "Admin account not found" });
+
+    const tempPassword = generateTempPassword();
+    target.password = await bcrypt.hash(tempPassword, 12);
+    target.mustChangePassword = true;
+    await target.save();
+
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+    let emailSent = true;
+    try {
+      await sendAdminCredentialsEmail(target.email, target.firstName, tempPassword, {
+        roleName: target.role === "superadmin" ? "Super Admin" : (target.roleId as any)?.name,
+        isReset: true,
+        loginUrl: `${frontendUrl}/admin/login`,
+      });
+      console.log("[Admin] password reset email sent to", target.email);
+    } catch (emailError: any) {
+      emailSent = false;
+      console.error("[Admin] failed to send password reset email:", emailError.message);
+    }
+
+    return res.json({
+      success: true,
+      emailSent,
+      warning: emailSent ? undefined : "Password was reset, but the notification email failed to send.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // --- Media Taxonomy Endpoints ---

@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import AdminTopBar from "@/features/super-admin/components/AdminTopBar";
+import { useAuthStore } from "@/features/auth/auth.store";
 
 // Restored actual UI pages replacing old placeholders
 import { DashboardView } from "@/features/super-admin/components/views/DashboardView";
@@ -235,11 +236,16 @@ interface RecentActivity {
 
 export default function SuperAdminSidebar() {
   const { toast } = useToast();
+  const currentUser = useAuthStore((s) => s.user);
+  const isSuperAdmin = currentUser?.role === "superadmin";
+  const allowedSectionIds = new Set(currentUser?.permissions || []);
   const [dateRange, setDateRange] = useState("30d");
   const [userFilter, setUserFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [activeSection, setActiveSection] = useState("dashboard");
+  const [activeSection, setActiveSection] = useState(() =>
+    isSuperAdmin ? "dashboard" : (currentUser?.permissions?.[0] || "dashboard")
+  );
 
   // Trial Management States
   const [selectedTrial, setSelectedTrial] = useState<any>(null);
@@ -1318,6 +1324,19 @@ export default function SuperAdminSidebar() {
     },
   ];
 
+  // Restricted admins (role === 'admin' with a custom role) only see the sections
+  // their role's permissions include; superadmin always sees everything.
+  // "admin-management" is never granted to non-superadmins - it's filtered out here
+  // even if it were ever present in a permissions array, as defense in depth.
+  const visibleSidebarItems = isSuperAdmin
+    ? sidebarItems
+    : sidebarItems
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => item.id !== "admin-management" && allowedSectionIds.has(item.id)),
+        }))
+        .filter((group) => group.items.length > 0);
+
   // Historical chart, regional demographics, and activity mock logic has been extracted directly to features/super-admin/components/views/DashboardView.tsx
 
 
@@ -1394,6 +1413,15 @@ export default function SuperAdminSidebar() {
           }}
           isDarkMode={isDarkMode}
         />
+      );
+    }
+
+    if (!isSuperAdmin && activeSection !== "user-profile" && !allowedSectionIds.has(activeSection)) {
+      return (
+        <div className="flex flex-col items-center justify-center p-12 text-center h-full">
+          <h2 className={`text-2xl font-bold mb-4 ${themeClasses.primaryText}`}>Access Denied</h2>
+          <p className={themeClasses.secondaryText}>You don't have permission to view this section.</p>
+        </div>
       );
     }
 
@@ -1530,7 +1558,7 @@ export default function SuperAdminSidebar() {
           {/* Sidebar Navigation */}
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 space-y-6">
-              {sidebarItems.map((section, index) => (
+              {visibleSidebarItems.map((section, index) => (
                 <div key={index}>
                   <h3
                     className={`text-xs font-semibold uppercase tracking-wider mb-3 ${themeClasses.sectionHeader}`}>

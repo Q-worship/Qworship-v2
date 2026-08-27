@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signIn, signUp, verifyEmail, resendVerification, requestPasswordReset, resetPassword, updateProfile, updatePassword, getBiblePreferences, updateBiblePreferences } from './auth.controller.js';
+import { signIn, signUp, verifyEmail, resendVerification, requestPasswordReset, resetPassword, updateProfile, updatePassword, getBiblePreferences, updateBiblePreferences, completeFirstLogin } from './auth.controller.js';
 import { rateLimit } from './rate-limit.middleware.js';
 
 export const authRouter = Router();
@@ -31,15 +31,18 @@ const currentUserHandler = [protect, async (req: any, res: any) => {
       await req.user.save();
     }
     const organizations = await Organization.find({ ownerId: req.user._id });
-    
-    res.status(200).json({ 
-      success: true, 
+
+    res.status(200).json({
+      success: true,
       user: {
         id: req.user._id,
         email: req.user.email,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         role: req.user.role,
+        roleId: req.user.roleId?._id ?? req.user.roleId ?? null,
+        mustChangePassword: !!req.user.mustChangePassword,
+        permissions: req.user.role === 'superadmin' ? ['*'] : (req.user.roleId?.permissions || []),
         username: req.user.username,
         accountType: req.user.accountType,
         phoneNumber: req.user.phoneNumber,
@@ -72,5 +75,6 @@ authRouter.get('/current', ...currentUserHandler as any);
 const protectMiddlewares = [protect] as any;
 authRouter.put('/profile', ...protectMiddlewares, updateProfile as any);
 authRouter.put('/update-password', ...protectMiddlewares, updatePassword as any);
+authRouter.post('/complete-first-login', rateLimit('complete-first-login', 10, 15 * 60 * 1000), ...protectMiddlewares, completeFirstLogin as any);
 authRouter.get('/bible-preferences', ...protectMiddlewares, getBiblePreferences as any);
 authRouter.put('/bible-preferences', ...protectMiddlewares, updateBiblePreferences as any);

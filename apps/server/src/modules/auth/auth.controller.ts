@@ -32,6 +32,9 @@ function publicUser(user: any) {
     firstName: user.firstName,
     lastName: user.lastName,
     role: user.role,
+    roleId: user.roleId?._id ?? user.roleId ?? null,
+    mustChangePassword: !!user.mustChangePassword,
+    permissions: user.role === 'superadmin' ? ['*'] : (user.roleId?.permissions || []),
     organizationName: user.organizationName,
     emailVerified: user.emailVerified,
     onboardingStatus: user.onboardingStatus,
@@ -205,12 +208,19 @@ export const signIn = async (req: Request, res: Response) => {
     const email = normalizeEmail(req.body.email || req.body.username);
     const password = req.body.password;
     if (!email || typeof password !== 'string') return res.status(400).json({ success: false, message: 'Email and password are required' });
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).populate('roleId');
     if (!user?.password || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ success: false, message: 'Invalid credentials' });
     if (!user.emailVerified) return res.status(403).json({ success: false, message: 'Please verify your email before signing in', errorType: 'EMAIL_NOT_VERIFIED', email });
 
-    const nextStep = user.role === 'admin' || user.role === 'superadmin'
-      ? '/super-admin' : user.onboardingStatus === 'completed' ? '/project-selection' : '/onboarding';
+    if (user.role !== 'user') {
+      user.lastLoginAt = new Date();
+      await user.save();
+    }
+
+    const nextStep = user.mustChangePassword
+      ? '/admin/force-password-change'
+      : user.role === 'admin' || user.role === 'superadmin'
+        ? '/super-admin' : user.onboardingStatus === 'completed' ? '/project-selection' : '/onboarding';
     return res.json({ success: true, token: createToken(user), user: publicUser(user), admin: user.role !== 'user' ? { adminType: user.role } : undefined, nextStep });
   } catch (error) {
     console.error('Sign-in error:', error);
@@ -244,6 +254,32 @@ export const updatePassword = async (req: Request, res: Response) => {
     return res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Server error updating password' });
+  }
+};
+
+export const completeFirstLogin = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?._id;
+    const user = await User.findById(userId).populate('roleId');
+    const { currentPassword, newPassword } = req.body;
+    if (!user?.password) return res.status(400).json({ success: false, message: 'Account not found' });
+    if (!user.mustChangePassword) return res.status(400).json({ success: false, message: 'Password change is not required' });
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'Valid current and new passwords are required' });
+    }
+    if (!(await bcrypt.compare(currentPassword, user.password))) return res.status(400).json({ success: false, message: 'Incorrect current password' });
+    if (currentPassword === newPassword) return res.status(400).json({ success: false, message: 'Choose a different password than the one you were issued' });
+
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.mustChangePassword = false;
+    await user.save();
+    notifyPasswordChange(user._id).catch(() => {});
+
+    const nextStep = user.role === 'admin' || user.role === 'superadmin' ? '/super-admin' : '/dashboard';
+    return res.json({ success: true, token: createToken(user), user: publicUser(user), nextStep });
+  } catch (error) {
+    console.error('Complete first login error:', error);
+    return res.status(500).json({ success: false, message: 'Unable to update password' });
   }
 };
 

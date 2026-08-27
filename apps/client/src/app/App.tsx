@@ -31,6 +31,7 @@ const ProjectSelectionView = lazy(() => import("@/components/onboarding/ProjectS
 import { ChatbotWidget } from "@/components/chat/ChatbotWidget";
 import { Layout } from "@/components/layout/Layout";
 import AdminSignInPage from "@/features/auth/pages/AdminSignInPage";
+const AdminForcePasswordChangePage = lazy(() => import("@/features/auth/pages/AdminForcePasswordChangePage"));
 import DesktopAuthRemote from "@/features/auth/pages/DesktopAuthRemote";
 const LivePresentationV2 = lazy(() => import("@/features/dashboard/live/LivePresentationV2").then(m => ({ default: m.LivePresentationV2 })));
 const GuidePage = lazy(() => import("@/features/dashboard/pages/GuidePage").then(m => ({ default: m.GuidePage })));
@@ -145,7 +146,8 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   
   if (!isAuthenticated) return <Redirect to="/admin/login" />;
   if (user?.role !== 'admin' && user?.role !== 'superadmin') return <Redirect to="/dashboard" />;
-  
+  if (user?.mustChangePassword) return <Redirect to="/admin/force-password-change" />;
+
   return <>{children}</>;
 };
 
@@ -201,6 +203,7 @@ export const AppRouter = () => {
           <Route path="/downloads">{(params) => <Layout><Downloads /></Layout>}</Route>
           <Route path="/desktop-auth" component={DesktopAuthRemote} />
           <Route path="/admin/login" component={AdminSignInPage} />
+          <Route path="/admin/force-password-change" component={AdminForcePasswordChangePage} />
 
           {/* Standalone authenticated routes like Super Admin */}
           <Route path="/super-admin">

@@ -16,6 +16,9 @@ export interface IUser extends Document {
   emailVerified?: boolean;
   profilePicture?: string;
   role: 'user' | 'admin' | 'superadmin' | 'pastor' | 'worship_leader' | 'member';
+  roleId?: mongoose.Types.ObjectId | null;
+  mustChangePassword?: boolean;
+  lastLoginAt?: Date;
   planType?: string;
   trialStartDate?: Date;
   trialEndDate?: Date;
@@ -50,6 +53,9 @@ const UserSchema = new Schema<IUser>(
     emailVerified: { type: Boolean, default: false },
     profilePicture: { type: String },
     role: { type: String, enum: ['user', 'admin', 'superadmin', 'pastor', 'worship_leader', 'member'], default: 'user' },
+    roleId: { type: Schema.Types.ObjectId, ref: 'Role', default: null },
+    mustChangePassword: { type: Boolean, default: false },
+    lastLoginAt: { type: Date },
     emailVerifiedAt: { type: Date },
     onboardingStatus: { type: String, enum: ['pending', 'organization', 'preferences', 'completed'], default: 'pending' },
     onboardingCompletedAt: { type: Date },

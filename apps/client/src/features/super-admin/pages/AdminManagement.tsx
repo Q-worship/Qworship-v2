@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Users, 
-  Shield, 
-  AlertTriangle, 
+import {
+  Users,
+  Shield,
+  AlertTriangle,
   Crown,
   Search,
   Plus,
@@ -20,15 +20,22 @@ import {
   Eye,
   Edit,
   Key,
-  Trash2
+  Trash2,
+  ArrowLeft,
 } from 'lucide-react';
+import { AdminPermissionsView } from "./admin-management/AdminPermissionsView";
+import { AdminCustomRolesView } from "./admin-management/AdminCustomRolesView";
+import { AdminAddUserView } from "./admin-management/AdminAddUserView";
 
 interface AdminManagementProps {
   adminKey: string;
 }
 
+type AdminManagementView = "list" | "permissions" | "custom-roles" | "add-user";
+
 export default function AdminManagement({ adminKey }: AdminManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [view, setView] = useState<AdminManagementView>('list');
   const { toast } = useToast();
 
   // Fetch admin accounts
@@ -47,7 +54,7 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
 
   // Mutations
   const suspendAdminMutation = useMutation({
-    mutationFn: async (adminId: number) => {
+    mutationFn: async (adminId: string) => {
       const response = await apiRequest('POST', `/api/admin/suspend-admin/${adminId}?adminKey=${adminKey}`, {});
       return response;
     },
@@ -61,7 +68,7 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
   });
 
   const deleteAdminMutation = useMutation({
-    mutationFn: async (adminId: number) => {
+    mutationFn: async (adminId: string) => {
       const response = await apiRequest('DELETE', `/api/admin/delete-admin/${adminId}?adminKey=${adminKey}`, {});
       return response;
     },
@@ -75,7 +82,7 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async (adminId: number) => {
+    mutationFn: async (adminId: string) => {
       const response = await apiRequest('POST', `/api/admin/reset-password/${adminId}?adminKey=${adminKey}`, {});
       return response;
     },
@@ -87,6 +94,31 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
     }
   });
 
+  if (view !== 'list') {
+    return (
+      <div className="space-y-6 p-6">
+        <Button
+          variant="outline"
+          onClick={() => setView('list')}
+          className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 dark:hover:border-gray-500"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to User Management
+        </Button>
+        {view === 'permissions' && <AdminPermissionsView onManageRoles={() => setView('custom-roles')} />}
+        {view === 'custom-roles' && <AdminCustomRolesView />}
+        {view === 'add-user' && (
+          <AdminAddUserView
+            onCreated={() => {
+              refetchAdmins();
+              setView('list');
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header Section */}
@@ -96,15 +128,26 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
           <p className="text-sm text-gray-500 dark:text-gray-400">Manage admin users and permissions</p>
         </div>
         <div className="flex items-center space-x-3">
-          <Button variant="outline" className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 dark:hover:border-gray-500">
+          <Button
+            variant="outline"
+            onClick={() => setView('permissions')}
+            className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 dark:hover:border-gray-500"
+          >
             <Shield className="w-4 h-4 mr-2" />
             Permissions
           </Button>
-          <Button variant="outline" className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 dark:hover:border-gray-500">
+          <Button
+            variant="outline"
+            onClick={() => setView('custom-roles')}
+            className="text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 dark:hover:border-gray-500"
+          >
             <Users className="w-4 h-4 mr-2" />
             Custom Roles
           </Button>
-          <Button className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+          <Button
+            onClick={() => setView('add-user')}
+            className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add New User
           </Button>
@@ -155,7 +198,7 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
               <Crown className="w-6 h-6 text-purple-600 dark:text-purple-400" />
             </div>
             <div className="ml-4">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{filteredAdmins.filter((admin: any) => admin.adminType === 'superadministrator').length}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{filteredAdmins.filter((admin: any) => admin.role === 'superadmin').length}</p>
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Super Admins</p>
             </div>
           </div>
@@ -247,16 +290,19 @@ export default function AdminManagement({ adminKey }: AdminManagementProps) {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className={
-                          admin.adminType === 'superadministrator' 
+                          admin.role === 'superadmin'
                             ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700"
                             : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700"
                         }
                       >
-                        {admin.adminType === 'superadministrator' ? 'superadmin' : admin.adminType}
+                        {admin.role}
                       </Badge>
+                      {admin.roleName && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{admin.roleName}</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button

@@ -42,17 +42,27 @@ export default function AdminSignInPage() {
         return;
       }
 
-      toast({
-        title: "Admin Authenticated",
-        description: "Welcome to the Q-worship Super Admin Portal.",
-      });
-      
       // Store user ID and JWT token for session
       sessionStorage.setItem("qworship_user_id", response.user.id.toString());
       localStorage.setItem("token", response.token);
 
       // Update global Zustand store
       useAuthStore.getState().setAuth(response.user);
+
+      if (response.user.mustChangePassword) {
+        sessionStorage.setItem("qworship_pending_temp_password", formData.password);
+        toast({
+          title: "Set a new password",
+          description: "For security, choose your own password before continuing.",
+        });
+        setLocation('/admin/force-password-change');
+        return;
+      }
+
+      toast({
+        title: "Admin Authenticated",
+        description: "Welcome to the Q-worship Super Admin Portal.",
+      });
 
       // Force navigate strictly to super-admin dashboard
       setLocation('/super-admin');
