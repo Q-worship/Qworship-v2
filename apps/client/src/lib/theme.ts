@@ -3432,23 +3432,23 @@ export const referWorkBenefitsCopy = {
 
 export const referHowItWorksCopy = {
   heading: 'How it works',
-  body: 'Join our referral steps in a few quick and easy steps and start earning',
+  body: 'Join our referral steps in a few quick and easy steps and start earning.',
   cta: 'Get Started Today',
   steps: [
     {
-      icon: 'mic',
-      title: 'Voice Bible Search',
-      description: 'Search 31,406 verses across 6 translations using only your voice. No typing, no clicking.',
+      icon: 'edit_document',
+      title: 'Apply online',
+      description: 'Sign up for the referral program in minutes. No paperwork, no waiting — just a simple form to get you in.',
     },
     {
-      icon: 'wifi_off',
-      title: 'Online & Offline Ready',
-      description: "Full functionality with or without internet. Your service never stops, no matter the venue.",
+      icon: 'task_alt',
+      title: 'Review & Account Setup',
+      description: 'Our team reviews your application and sets up your referral account with a unique tracking link.',
     },
     {
-      icon: 'translate',
-      title: 'Multi Bible Translations',
-      description: 'KJV, NKJV, NIV, AMP, MSG and 20+ more bible versions. Switch translations mid-service with a single command.',
+      icon: 'payments',
+      title: 'Start referring & Earning',
+      description: 'Share your link with churches and ministries, and earn a share of the revenue for every successful referral.',
     },
   ],
 }
@@ -3677,10 +3677,10 @@ export const images = {
   ctaMobile: '/Photos/Pastors.webp',
   featuresHero: '/Photos/features/Rectangle%2042300.webp',
   referCarousel: [
+    '/Photos/ReferAndEarn/referral-banner-wide.webp',
     '/Photos/ReferAndEarn/carousel-display-settings.webp',
     '/Photos/ReferAndEarn/carousel-audience-screen.webp',
     '/Photos/ReferAndEarn/carousel-lyrics.webp',
-    '/Photos/ReferAndEarn/carousel-pastor.webp',
   ],
   referPastor: '/Photos/ReferAndEarn/carousel-pastor.webp',
 }

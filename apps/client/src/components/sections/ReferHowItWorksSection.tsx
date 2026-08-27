@@ -14,10 +14,11 @@ export function ReferHowItWorksSection() {
         </div>
 
         <div className="refer-how-it-works-grid">
-          {referHowItWorksCopy.steps.map((step, index) => (
+          {referHowItWorksCopy.steps.map((step) => (
             <article key={step.title} className="refer-how-it-works-card">
-              <span className="refer-how-it-works-number">{String(index + 1).padStart(2, '0')}</span>
-              <MaterialIcon name={step.icon} className="refer-how-it-works-icon" />
+              <span className="refer-how-it-works-icon-badge">
+                <MaterialIcon name={step.icon} className="refer-how-it-works-icon" />
+              </span>
               <h3 className="refer-how-it-works-card-title font-headline font-bold">{step.title}</h3>
               <p className="refer-how-it-works-card-body">{step.description}</p>
             </article>
