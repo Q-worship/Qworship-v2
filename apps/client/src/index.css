@@ -6661,8 +6661,6 @@ body.mobile-nav-open {
 }
 
 .refer-join-intro p {
-  max-width: 56rem;
-  margin: 0 auto;
   color: #3f3d4a;
   font-size: 1.0625rem;
   line-height: 1.75;
@@ -6684,8 +6682,6 @@ body.mobile-nav-open {
 }
 
 .refer-join-form {
-  max-width: 40rem;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
