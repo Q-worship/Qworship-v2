@@ -6325,7 +6325,7 @@ body.mobile-nav-open {
   aspect-ratio: 16 / 11;
   border-radius: 1rem;
   overflow: hidden;
-  background: transparent;
+  background: #F1F0FF;
   box-shadow: 0 30px 60px -30px rgba(23, 18, 43, 0.35);
 }
 
