@@ -1,4 +1,5 @@
-import { images, referWhoWeAreCopy } from '@/lib/theme'
+import { Link } from 'wouter'
+import { images, referWhoWeAreCopy, REFER_JOIN_PATH } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
 export function ReferWhoWeAreSection() {
@@ -14,9 +15,9 @@ export function ReferWhoWeAreSection() {
               <span className="refer-who-we-are-heading-accent">{referWhoWeAreCopy.heading.accent}</span>
             </h2>
 
-            <button type="button" className="refer-who-we-are-btn">
+            <Link href={REFER_JOIN_PATH} className="refer-who-we-are-btn">
               {referWhoWeAreCopy.cta}
-            </button>
+            </Link>
           </div>
 
           <p className="refer-who-we-are-body">{referWhoWeAreCopy.body}</p>

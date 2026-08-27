@@ -6077,6 +6077,14 @@ body.mobile-nav-open {
   right: 0;
   z-index: 50;
   background: transparent;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.refer-navbar--solid {
+  background: rgba(241, 240, 255, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 rgba(23, 18, 43, 0.08);
 }
 
 .refer-navbar-inner {
@@ -6585,6 +6593,307 @@ body.mobile-nav-open {
 
 .refer-how-it-works-cta:hover {
   transform: translateY(-2px);
+}
+
+/* ── Refer & Earn: Join / apply page ───────────────────────────────── */
+
+.refer-join-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2.2 / 1;
+  min-height: 20rem;
+  max-height: 32rem;
+  overflow: hidden;
+}
+
+.refer-join-hero-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.refer-join-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 8, 30, 0.35) 0%, rgba(15, 8, 30, 0.65) 100%);
+}
+
+.refer-join-hero-inner {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.refer-join-hero-badge {
+  display: inline-flex;
+  padding: 0.4rem 1.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #bf36ff 0%, #8e20c1 100%);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.refer-join-hero-heading {
+  color: #ffffff;
+  font-size: clamp(1.5rem, 1.4vw + 1.4rem, 2.5rem);
+  line-height: 1.25;
+  max-width: 40rem;
+}
+
+.refer-join-hero-heading-accent {
+  color: #d8b4fe;
+}
+
+.refer-join-intro {
+  background: #ffffff;
+  padding: 3rem 0;
+}
+
+.refer-join-intro p {
+  max-width: 56rem;
+  margin: 0 auto;
+  color: #3f3d4a;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+.refer-join-intro a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.refer-join-intro a:hover {
+  text-decoration: underline;
+}
+
+.refer-join-form-section {
+  background: #ffffff;
+  padding-bottom: 5rem;
+}
+
+.refer-join-form {
+  max-width: 40rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.refer-join-form-heading {
+  color: #8e20c1;
+  font-size: clamp(1.125rem, 0.6vw + 1rem, 1.375rem);
+  margin: 0;
+}
+
+.refer-form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .refer-form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.refer-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.refer-form-field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #17122b;
+}
+
+.refer-form-field input,
+.refer-form-field select,
+.refer-form-field textarea {
+  width: 100%;
+  border: none;
+  border-radius: 0.5rem;
+  background: #eeeeee;
+  color: #17122b;
+  font-size: 0.9375rem;
+  padding: 0.8125rem 1rem;
+  font-family: inherit;
+}
+
+.refer-form-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+.refer-form-field select:invalid,
+.refer-form-field select option[value=""] {
+  color: #8a8a8a;
+}
+
+.refer-form-field input::placeholder,
+.refer-form-field textarea::placeholder {
+  color: #9a9a9a;
+}
+
+.refer-form-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.refer-phone-input {
+  display: flex;
+  align-items: stretch;
+  border-radius: 0.5rem;
+  background: #eeeeee;
+  overflow: hidden;
+}
+
+.refer-phone-code {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  font-weight: 700;
+  color: #17122b;
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.refer-phone-input input {
+  flex: 1;
+  background: transparent;
+  border-radius: 0;
+}
+
+.refer-join-submit {
+  width: 100%;
+  padding: 1rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #bf36ff 0%, #8e20c1 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.refer-join-submit:hover {
+  transform: translateY(-2px);
+}
+
+.refer-join-legal {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #6b6685;
+  margin: 0;
+}
+
+.refer-join-legal a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.refer-join-legal a:hover {
+  text-decoration: underline;
+}
+
+/* ── Refer & Earn: Sign in page ─────────────────────────────────────── */
+
+.refer-signin-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #F1F0FF;
+}
+
+.refer-signin-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8rem 0 3rem;
+}
+
+.refer-signin-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.refer-signin-welcome {
+  color: #17122b;
+  font-size: clamp(1.5rem, 1vw + 1.3rem, 2rem);
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.refer-signin-welcome-accent {
+  color: #8e20c1;
+}
+
+.refer-signin-card {
+  width: 100%;
+  max-width: 28rem;
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 30px 60px -30px rgba(23, 18, 43, 0.25);
+}
+
+.refer-signin-title {
+  color: #17122b;
+  font-size: 1.5rem;
+  text-align: center;
+  margin: 0 0 0.5rem;
+}
+
+.refer-signin-subtitle {
+  color: #6b6685;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-align: center;
+  margin: 0 0 1.75rem;
+}
+
+.refer-signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.refer-signin-password-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.refer-signin-forgot {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #8e20c1;
+  text-decoration: none;
+}
+
+.refer-signin-forgot:hover {
+  text-decoration: underline;
 }
 
 .about-openings-intro {

@@ -1,4 +1,5 @@
-import { aboutWorkBenefits, referWorkBenefitsCopy } from '@/lib/theme'
+import { Link } from 'wouter'
+import { aboutWorkBenefits, referWorkBenefitsCopy, REFER_JOIN_PATH } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
 export function ReferWorkBenefitsSection() {
@@ -9,9 +10,9 @@ export function ReferWorkBenefitsSection() {
           <h2 className="about-work-benefits-heading font-headline font-bold">
             {referWorkBenefitsCopy.heading}
           </h2>
-          <button type="button" className="refer-work-benefits-btn">
+          <Link href={REFER_JOIN_PATH} className="refer-work-benefits-btn">
             {referWorkBenefitsCopy.cta}
-          </button>
+          </Link>
         </div>
 
         <div className="about-work-benefits-grid">

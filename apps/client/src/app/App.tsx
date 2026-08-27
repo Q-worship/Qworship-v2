@@ -21,6 +21,8 @@ const JobDetailPage = lazy(() => import("@/features/web/pages/JobDetailPage").th
 const GuideDetailPage = lazy(() => import("@/features/web/pages/GuideDetailPage").then(m => ({ default: m.GuideDetailPage })));
 const Guides = lazy(() => import("@/features/web/pages/Guides").then(m => ({ default: m.Guides })));
 const ReferAndEarn = lazy(() => import("@/features/web/pages/ReferAndEarn").then(m => ({ default: m.ReferAndEarn })));
+const ReferJoinPage = lazy(() => import("@/features/web/pages/ReferJoinPage").then(m => ({ default: m.ReferJoinPage })));
+const ReferSignInPage = lazy(() => import("@/features/web/pages/ReferSignInPage").then(m => ({ default: m.ReferSignInPage })));
 import { Login } from "@/features/web/pages/Login";
 import { SignUp } from "@/features/web/pages/SignUp";
 import { Verify } from "@/features/web/pages/Verify";
@@ -199,6 +201,8 @@ export const AppRouter = () => {
           <Route path="/pricing">{(params) => <Layout><Pricing /></Layout>}</Route>
           <Route path="/resources">{(params) => <Layout><Resources /></Layout>}</Route>
           <Route path="/refer-and-earn">{(params) => <ReferAndEarn />}</Route>
+          <Route path="/refer-and-earn/join">{(params) => <ReferJoinPage />}</Route>
+          <Route path="/refer-and-earn/login">{(params) => <ReferSignInPage />}</Route>
           <Route path="/guides/:guideId"><Layout><GuideDetailPage /></Layout></Route>
           <Route path="/guides">{(params) => <Layout><Guides /></Layout>}</Route>
           <Route path="/faqs">{(params) => <Layout><FAQs /></Layout>}</Route>

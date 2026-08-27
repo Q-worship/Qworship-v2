@@ -30,6 +30,8 @@ import type {
   WorkBenefit,
 } from '@/types/content'
 
+export const REFER_JOIN_PATH = '/refer-and-earn/join'
+
 export const navLinks: NavLink[] = [
   { label: 'Features', href: '/features' },
   { label: 'About', href: '/about' },

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { images, referHeroCopy } from '@/lib/theme'
+import { Link } from 'wouter'
+import { images, referHeroCopy, REFER_JOIN_PATH } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
 export function ReferHeroSection() {
@@ -37,9 +38,9 @@ export function ReferHeroSection() {
               ))}
             </p>
 
-            <button type="button" className="refer-hero-cta">
+            <Link href={REFER_JOIN_PATH} className="refer-hero-cta">
               {referHeroCopy.cta}
-            </button>
+            </Link>
           </div>
 
           <div className="refer-hero-media">

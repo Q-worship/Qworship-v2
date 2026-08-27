@@ -1,4 +1,5 @@
-import { referHowItWorksCopy } from '@/lib/theme'
+import { Link } from 'wouter'
+import { referHowItWorksCopy, REFER_JOIN_PATH } from '@/lib/theme'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 
@@ -26,9 +27,9 @@ export function ReferHowItWorksSection() {
         </div>
 
         <div className="refer-how-it-works-cta-wrap">
-          <button type="button" className="refer-how-it-works-cta">
+          <Link href={REFER_JOIN_PATH} className="refer-how-it-works-cta">
             {referHowItWorksCopy.cta}
-          </button>
+          </Link>
         </div>
       </SiteContainer>
     </section>
