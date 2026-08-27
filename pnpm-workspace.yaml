@@ -2,3 +2,10 @@ packages:
   - 'packages/*'
   - 'apps/client'
   - 'apps/server'
+
+onlyBuiltDependencies:
+  - core-js
+  - es5-ext
+  - esbuild
+  - sharp
+  - workerd
