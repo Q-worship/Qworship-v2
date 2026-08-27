@@ -446,15 +446,16 @@ export function setupAudioSocket(server: Server) {
         interimOccurrences.set(occurrenceKey, { count: stableCount, lastSeenAt: now });
 
         if (!isFinal) {
-          const deterministicNavigation = command.name === "navigate_bible";
+          const isNavigation = command.name === "navigate_bible";
           const structurallyCompleteReference =
             command.name === "project_bible_reference" && command._confidence >= 0.88;
-          // Short navigation phrases are especially prone to interim revisions
-          // ("next" -> "next chapter", "verse ten" -> a full reference).
-          // References may project predictively, but navigation waits for an
-          // end-of-turn/final result so one utterance produces one movement.
-          const requiredResults = deterministicNavigation
-            ? Infinity
+          // All navigation commands (goto verse, relative next/prev, chapter navigation)
+          // and references can execute promptly on streaming interims when confidence is verified:
+          // - High confidence (>= 0.85) -> 1 interim frame (~120ms latency).
+          // - Moderate confidence (>= 0.65) -> 2 consecutive matching frames.
+          // - Low confidence (< 0.65) -> waits for End-of-Turn / final.
+          const requiredResults = isNavigation
+            ? (confidence >= INTERIM_HIGH_CONFIDENCE ? 1 : confidence >= 0.65 ? 2 : Infinity)
             : confidence >= INTERIM_HIGH_CONFIDENCE
             ? 1
             : confidence >= 0.5 && structurallyCompleteReference

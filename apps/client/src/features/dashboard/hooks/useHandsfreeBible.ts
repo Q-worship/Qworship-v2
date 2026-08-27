@@ -528,27 +528,51 @@ export const useHandsfreeBible = ({
     }
   };
 
-  const processContextNavigationLocally = (text: string, commit = false): boolean => {
+  const processContextNavigationLocally = (
+    text: string,
+    confidence = 0,
+    isFinal = false,
+  ): boolean => {
     const navigation = parseHFBContextNavigation(text);
     if (!navigation) return false;
-    // Interim transcripts often expose "chapter X verse Y" before the book
-    // name settles. Treat it as a candidate, but only let a final transcript
-    // navigate using the current book context.
-    if (!commit) return true;
+    // Both chapter and verse must be present and valid integers
+    if (
+      !Number.isInteger(navigation.chapter) || navigation.chapter < 1 ||
+      !Number.isInteger(navigation.verse) || navigation.verse < 1
+    ) {
+      return false;
+    }
+
     const current = useBibleProjectionStore.getState().currentVerse ||
       currentVerseContextRef.current;
     if (!current?.book) return false;
 
     const key = `${current.book}|${navigation.chapter}|${navigation.verse}`;
     const now = performance.now();
+
+    // Confidence scoring on interims:
+    // High confidence (>= 0.85) -> 1 frame. Moderate (>= 0.65) -> 2 frames.
+    const previous = pendingInterimRef.current;
+    const sameCandidate = previous.key === key && now - previous.at < 1500;
+    const count = sameCandidate ? previous.count + 1 : 1;
+    pendingInterimRef.current = {
+      key,
+      count,
+      at: now,
+      firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
+    };
+
+    const requiredResults = isFinal ? 1 : confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+    if (count < requiredResults) return true;
+
     if (
       lastContextNavigationRef.current.key === key &&
-      now - lastContextNavigationRef.current.at < 650
+      now - lastContextNavigationRef.current.at < 1200
     ) return true;
 
     lastContextNavigationRef.current = { key, at: now };
     console.info(
-      `[HFB] Client contextual navigation: ${current.book} ${navigation.chapter}:${navigation.verse}`,
+      `[HFB] Client contextual navigation: ${current.book} ${navigation.chapter}:${navigation.verse} (conf: ${confidence.toFixed(2)})`,
     );
     void executeNavigation(
       "jump_to_chapter_verse",
@@ -557,6 +581,73 @@ export const useHandsfreeBible = ({
       undefined,
       undefined,
       navigation.chapter,
+    );
+    return true;
+  };
+
+  const NEXT_VERSE_RE = /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse|go next|forward|next one)\b/i;
+  const PREV_VERSE_RE = /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse|go back|back one)\b/i;
+  const NEXT_CHAP_RE = /\b(?:next chapter|following chapter)\b/i;
+  const PREV_CHAP_RE = /\b(?:previous chapter|last chapter|go back a chapter)\b/i;
+
+  const processRelativeNavigationLocally = (
+    text: string,
+    confidence = 0,
+    isFinal = false,
+  ): boolean => {
+    let direction: "next" | "previous" | null = null;
+    let scope: "verse" | "chapter" = "verse";
+
+    if (NEXT_VERSE_RE.test(text)) {
+      direction = "next";
+      scope = "verse";
+    } else if (PREV_VERSE_RE.test(text)) {
+      direction = "previous";
+      scope = "verse";
+    } else if (NEXT_CHAP_RE.test(text)) {
+      direction = "next";
+      scope = "chapter";
+    } else if (PREV_CHAP_RE.test(text)) {
+      direction = "previous";
+      scope = "chapter";
+    }
+
+    if (!direction) return false;
+
+    const current = useBibleProjectionStore.getState().currentVerse ||
+      currentVerseContextRef.current;
+    if (!current?.book) return false;
+
+    const key = `nav:${scope}:${direction}`;
+    const now = performance.now();
+
+    // Confidence scoring on interims:
+    // High confidence (>= 0.85) -> 1 frame. Moderate (>= 0.65) -> 2 frames.
+    const previous = pendingInterimRef.current;
+    const sameCandidate = previous.key === key && now - previous.at < 1500;
+    const count = sameCandidate ? previous.count + 1 : 1;
+    pendingInterimRef.current = {
+      key,
+      count,
+      at: now,
+      firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
+    };
+
+    const requiredResults = isFinal ? 1 : confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+    if (count < requiredResults) return true;
+
+    if (
+      lastContextNavigationRef.current.key === key &&
+      now - lastContextNavigationRef.current.at < 1200
+    ) return true;
+
+    lastContextNavigationRef.current = { key, at: now };
+    console.info(
+      `[HFB] Client relative navigation: ${direction} ${scope} (conf: ${confidence.toFixed(2)})`,
+    );
+    void executeNavigation(
+      scope === "chapter" ? "chapter_change" : "verse_change",
+      direction,
     );
     return true;
   };
@@ -583,7 +674,11 @@ export const useHandsfreeBible = ({
       useHFBStore.getState().setHfbCurrentPartial(text, metadata?.detectedReferences);
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
-      if (!processContextNavigationLocally(text)) {
+      const conf = metadata?.confidence ?? 0;
+      if (
+        !processContextNavigationLocally(text, conf, false) &&
+        !processRelativeNavigationLocally(text, conf, false)
+      ) {
         void processInterimLocally(text, metadata);
       }
     },
@@ -593,6 +688,8 @@ export const useHandsfreeBible = ({
       useHFBStore.getState().setHfbCurrentPartial(""); // Clear partial when final arrives
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
+      processContextNavigationLocally(text, 1.0, true);
+      processRelativeNavigationLocally(text, 1.0, true);
       if (text.trim()) {
         useHFBStore.getState().addHfbTranscriptLine({
           id: Date.now(),

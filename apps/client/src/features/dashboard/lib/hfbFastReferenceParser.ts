@@ -45,7 +45,7 @@ const bookAlternation = [...aliases.keys()]
   .join("|");
 
 const units: Record<string, number> = {
-  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  zero: 0, o: 0, oh: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
   eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
   fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
   nineteen: 19,
@@ -56,8 +56,16 @@ const tens: Record<string, number> = {
 };
 
 const parseNumber = (value: string): number => {
-  if (/^\d+$/.test(value)) return Number(value);
-  const words = value.toLowerCase().replace(/-/g, " ").split(/\s+/);
+  let cleanValue = value.toLowerCase().trim();
+  cleanValue = cleanValue.replace(/\b1\s*['’]?\s*(?:o|oh)\s*['’]?\s*(\d)\b/g, "10$1");
+  cleanValue = cleanValue.replace(/\bone\s+['’]?\s*(?:o|oh)\s*['’]?\s*(one|two|three|four|five|six|seven|eight|nine)\b/g, (_, unit) => {
+    const uMap: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
+    return `10${uMap[unit] || unit}`;
+  });
+  if (/^\d+$/.test(cleanValue)) return Number(cleanValue);
+  if (/^(\d\s+)+\d$/.test(cleanValue)) return Number(cleanValue.replace(/\s+/g, ""));
+
+  const words = cleanValue.replace(/-/g, " ").split(/\s+/).filter(w => w !== "and");
   let total = 0;
   for (const word of words) {
     if (word === "hundred") total = Math.max(1, total) * 100;
@@ -72,10 +80,12 @@ const numberWords = "(?:\\d+|(?:one|two|three|four|five|six|seven|eight|nine|ten
 
 const patterns = [
   new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(${numberWords})\\s+verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
+  new RegExp(`\\b(${bookAlternation})\\s+((?:\\d\\s+){2,5})verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(${numberWords})\\s+verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(\\d+)\\s*[:.]\\s*(\\d+)(?:\\s*[-–—]\\s*(\\d+))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(\\d+)\\s+(\\d+)(?:\\s+(?:to|through|and)\\s+(\\d+))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(\\d+)\\s+(\\d+)(?:\\s+(?:to|through|and)\\s+(\\d+))?\\b`, "i"),
+  new RegExp(`\\b(${bookAlternation})\\s+(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\\s+(${numberWords})\\b`, "i"),
 ];
 
 const contextualChapterVersePattern = new RegExp(
@@ -134,7 +144,7 @@ export function parseHFBReference(text: string): HFBParsedReference | null {
       if (!bookData || chapter > bookData.chapters) continue;
       const candidate = {
         book, chapter, verse, verseEnd,
-        confidence: index === 2 ? 0.99 : index === 0 ? 0.96 : index === 1 ? 0.94 : 0.9,
+        confidence: index === 3 ? 0.99 : index === 0 ? 0.96 : index === 2 ? 0.94 : 0.9,
         explicit: true as const,
         start: match.index,
         patternIndex: index,

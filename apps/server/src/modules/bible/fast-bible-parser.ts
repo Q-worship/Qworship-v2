@@ -52,6 +52,7 @@ export class FastBibleParser {
     fifteen: "15", sixteen: "16", seventeen: "17", eighteen: "18",
     nineteen: "19", twenty: "20", thirty: "30", forty: "40",
     fifty: "50", sixty: "60", seventy: "70", eighty: "80", ninety: "90",
+    hundred: "100", thousand: "1000",
   };
 
   // ─── Pre-compiled scan patterns (applied to full sentence) ───────────────
@@ -59,13 +60,6 @@ export class FastBibleParser {
   /**
    * Spoken format patterns — match references embedded anywhere in a sentence.
    * Each pattern has named groups: book, chapter, verse (optional), verseEnd (optional).
-   *
-   * Examples caught:
-   *   "as written in Matthew chapter one verse five"
-   *   "turn to the book of John chapter three verse sixteen"
-   *   "let's look at Psalm 23"
-   *   "1 John 3:16"
-   *   "Romans 8 28"
    */
   private static readonly SCAN_PATTERNS: Array<{
     re: RegExp;
@@ -78,6 +72,17 @@ export class FastBibleParser {
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.95,
     },
+    // Digit-by-digit sequence before verse keyword: "Psalms 1 1 6 verse 16" -> Psalms 116:16
+    {
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+((?:\d\s+){2,5})verse\s+(\d+)(?:\s+(?:to|through|and)\s+(\d+))?\b/gi,
+      extract: (m) => ({
+        rawBook: m[1],
+        chapter: m[2].trim().split(/\s+/).join(""),
+        verse: m[3],
+        verseEnd: m[4],
+      }),
+      confidence: 0.96,
+    },
     // "1st Kings 2 verse 2" / "Romans 8 verse 12" — chapter cue omitted
     {
       re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\w+)\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
@@ -85,7 +90,6 @@ export class FastBibleParser {
       confidence: 0.94,
     },
     // "Matthew chapter 7 7" / "Matthew chapter 7 verse 7" without 'verse' keyword
-    // This catches the common pattern where Deepgram drops the word 'verse'
     {
       re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)\s+(\d+)(?:\s+(?:to|through|and)\s+(\d+))?\b/gi,
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
@@ -103,20 +107,42 @@ export class FastBibleParser {
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.98,
     },
-    // "1 John 3 16" / "John 3 16" — space-separated
+    // "1 John 3 16" / "John 3 16" / "Isaiah 30 1" / "Genesis 10 10" — space-separated compact
     {
-      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d+)\s+(\d+)(?:\s+(?:to|through|-)\s+(\d+))?\b/gi,
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d+)\s+(\d+)(?:\s+(?:to|through|-)\s+(\d+))?(?!\s+\d)\b/gi,
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
-      confidence: 0.88,
+      confidence: 0.90,
     },
-    // "John 316" / "Romans 121" — compressed 3 or 4 digit voice format
+    // "John 316" / "Romans 121" / "Psalms 1032" — compressed 3, 4, or 5 digit voice format
     {
       re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\d{3,5})\b/gi,
       extract: (m) => {
         const rawBook = m[1];
         const numStr = m[2];
+        const isPsalms = /psalm/i.test(rawBook);
+
+        // Psalms has 150 chapters: 4-digit numbers like "1032" mean Psalm 103:2
+        if (isPsalms && numStr.length === 4) {
+          const chap3 = parseInt(numStr.slice(0, 3));
+          const v1 = parseInt(numStr.slice(3));
+          if (chap3 >= 100 && chap3 <= 150 && v1 >= 1) {
+            return { rawBook, chapter: String(chap3), verse: String(v1) };
+          }
+        }
+        if (isPsalms && numStr.length === 5) {
+          const chap3 = parseInt(numStr.slice(0, 3));
+          const v2 = parseInt(numStr.slice(3));
+          if (chap3 >= 100 && chap3 <= 150 && v2 >= 1) {
+            return { rawBook, chapter: String(chap3), verse: String(v2) };
+          }
+        }
+
         // For 3-digit number like "121", prefer 2-digit chapter if valid for book (Romans 12:1 > Romans 1:21)
         if (numStr.length === 3) {
+          if (isPsalms && parseInt(numStr) >= 100 && parseInt(numStr) <= 150) {
+            // Chapter only for Psalms 100-150 (partial)
+            return { rawBook, chapter: numStr };
+          }
           const chap2 = parseInt(numStr.slice(0, 2));
           const verse1 = parseInt(numStr.slice(2));
           if (chap2 >= 1 && chap2 <= 150 && verse1 >= 1) {
@@ -145,22 +171,10 @@ export class FastBibleParser {
   // ─── Navigation & version patterns ───────────────────────────────────────
 
   /**
-   * QC63 — Goto-verse pattern (captures verse number).
-   *
-   * Matches:
-   *   "take me to verse 10"  →  goto verse 10
-   *   "go to verse 5"        →  goto verse 5
-   *   "show me verse 3"      →  goto verse 3
-   *   "jump to verse 7"      →  goto verse 7
-   *   "verse 10"             →  goto verse 10  (bare form)
-   *
-   * NOTE: This is intentionally checked BEFORE the NAV_PATTERNS loop in parse()
-   * because "verse N" could otherwise be confused with a partial Bible reference.
-   * The pattern only fires when there is NO book name in the transcript (navigation
-   * commands are context-free — they operate on the current book+chapter).
+   * QC63 + QC65 — Conversational Goto-verse pattern.
    */
   private static readonly GOTO_VERSE_RE =
-    /\b(?:take me to|go to|show me|jump to|move to|moving on to|look at|turn to|now in|let'?s look at|let'?s read|let'?s go to)?\s*verse\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/i;
+    /\b(?:take me to|go to|show me|jump to|move to|moving on to|look at|turn to|now in|let'?s look at|let'?s read|let'?s go to|now let'?s look at|can we look at|can we read|reading)\s*verse\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/i;
 
   /**
    * Context-aware chapter + verse navigation. The current Bible book is kept,
@@ -557,9 +571,9 @@ export class FastBibleParser {
       }
     }
 
-    const gotoVerseRe = /\b(?:(?:take me to|go to|show me|jump to)\s+)?verse\s+(\d+)\b/gi;
+    const gotoVerseRe = /\b(?:(?:take me to|go to|show me|jump to|move to|moving on to|look at|turn to|now in|let'?s look at|let'?s read|let'?s go to|now let'?s look at|can we look at|can we read|reading)\s+)?verse\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/gi;
     while ((match = gotoVerseRe.exec(clean)) !== null) {
-      const verse = Number(match[1]);
+      const verse = Number(this.normalizeNumbers(match[1]));
       const immediatePrefix = clean.slice(0, match.index).trim();
       const looksLikeUnknownReference = /[a-z]+\s+\d+\s*$/i.test(immediatePrefix) ||
         /\bchapter\s+\d+\s*$/i.test(immediatePrefix);
@@ -593,21 +607,57 @@ export class FastBibleParser {
     // "1st Kings", "2nd Samuel", and "3rd John". Canonicalize those before
     // the goto-verse rule decides whether a book name is present.
     t = t.replace(/\b([1-3])(?:st|nd|rd)\b/gi, "$1");
+
+    // 'O' / 'Oh' in numeric / phonetic patterns:
+    // e.g. "1'O'3", "1'o'5", "1 O 3", "1 o 5", "one oh three", "one o three"
+    t = t.replace(/\b1\s*['’]?\s*(?:o|oh)\s*['’]?\s*(\d)\b/gi, "10$1");
+    t = t.replace(/\bone\s+['’]?\s*(?:o|oh)\s*['’]?\s*(one|two|three|four|five|six|seven|eight|nine)\b/gi, (_, unit) => {
+      const uMap: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
+      return `10${uMap[unit.toLowerCase()] || unit}`;
+    });
+    t = t.replace(/\b(\d+)\s*['’]?\s*(?:o|oh)\s*['’]?\s*(\d+)\b/gi, "$1 0 $2");
+
+    // Spoken hundred phrases:
+    // "one hundred and five" -> "105", "one hundred nineteen" -> "119", "one hundred and fifty" -> "150", "one hundred" -> "100", "hundred and five" -> "105"
+    t = t.replace(/\b(?:one\s+)?hundred\s+(?:and\s+)?(nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ten)\b/gi, (_, teen) => {
+      const teenMap: Record<string, number> = {
+        ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14,
+        fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+      };
+      return String(100 + (teenMap[teen.toLowerCase()] || 0));
+    });
+    t = t.replace(/\b(?:one\s+)?hundred\s+(?:and\s+)?(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](one|two|three|four|five|six|seven|eight|nine))?\b/gi, (_, tenWord, unitWord) => {
+      const tensMap: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+      const unitsMap: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+      const base = 100 + (tensMap[tenWord.toLowerCase()] || 0);
+      const extra = unitWord ? (unitsMap[unitWord.toLowerCase()] || 0) : 0;
+      return String(base + extra);
+    });
+    t = t.replace(/\b(?:one\s+)?hundred\s+(?:and\s+)?(one|two|three|four|five|six|seven|eight|nine)\b/gi, (_, unit) => {
+      const unitsMap: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+      return String(100 + (unitsMap[unit.toLowerCase()] || 0));
+    });
+    t = t.replace(/\b(?:one\s+)?hundred\s+(?:and\s+)?(\d+)\b/gi, (_, digits) => String(100 + parseInt(digits)));
+    t = t.replace(/\b(?:one\s+)?hundred\b/gi, "100");
+
     // Ordinals first ("first" → "1")
     for (const [word, digit] of Object.entries(this.ORDINALS)) {
       t = t.replace(new RegExp(`\\b${word}\\b`, "gi"), digit);
     }
 
-    // Cardinals ("twenty" → "20", then "twenty 3" → "23")
+    // Compound hyphenated spoken numbers: "twenty-three" -> "23"
+    for (const [tenWord, tenDigit] of Object.entries(this.CARDINALS)) {
+      for (const [unitWord, unitDigit] of Object.entries(this.CARDINALS)) {
+        if (Number(tenDigit) >= 20 && Number(unitDigit) >= 1 && Number(unitDigit) <= 9) {
+          t = t.replace(new RegExp(`\\b${tenWord}-${unitWord}\\b`, "gi"), String(Number(tenDigit) + Number(unitDigit)));
+        }
+      }
+    }
+
+    // Cardinals ("twenty" → "20")
     for (const [word, digit] of Object.entries(this.CARDINALS)) {
       t = t.replace(new RegExp(`\\b${word}\\b`, "gi"), digit);
     }
-
-    // Compound spoken numbers: "20 3" → "23", "30 5" → "35" etc.
-    t = t.replace(
-      /\b(10|20|30|40|50|60|70|80|90)\s+(\d)\b/g,
-      (_, tens, ones) => (parseInt(tens) + parseInt(ones)).toString(),
-    );
 
     return t;
   }

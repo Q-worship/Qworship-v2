@@ -21,11 +21,44 @@ function runTests() {
     { input: "Phillippians 4 19", expected: ["Philippians", 4, 19] },
     { input: "Liviticus chapter 6 verse 12", expected: ["Leviticus", 6, 12] },
     { input: "1 John 3 16", expected: ["1 John", 3, 16] },
+
+    // QC Review Group 1: Compact round numbers
+    { input: "Genesis 10 10", expected: ["Genesis", 10, 10] },
+    { input: "Isaiah 30 1", expected: ["Isaiah", 30, 1] },
+    { input: "Ezekiel 40 3", expected: ["Ezekiel", 40, 3] },
+    { input: "Genesis 20 5", expected: ["Genesis", 20, 5] },
+    { input: "Psalm 100 5", expected: ["Psalms", 100, 5] },
+
+    // QC Review Group 2: Large Psalms & 'O' / 'Oh' Pronunciation
+    { input: "Psalm 100 verse 5", expected: ["Psalms", 100, 5] },
+    { input: "Psalms one hundred verse five", expected: ["Psalms", 100, 5] },
+    { input: "Psalm 1'O'3 verse 2", expected: ["Psalms", 103, 2] },
+    { input: "Psalm 1'O'5 verse 3", expected: ["Psalms", 105, 3] },
+    { input: "Psalm 1 O 5 verse 3", expected: ["Psalms", 105, 3] },
+    { input: "Psalm one oh three verse two", expected: ["Psalms", 103, 2] },
+    { input: "Psalms 119 verse 105", expected: ["Psalms", 119, 105] },
+
+    // QC Review Group 3: Digit-by-digit phrasing
+    { input: "Psalms 1 1 6 verse 16", expected: ["Psalms", 116, 16] },
+    { input: "Psalm 1 0 5 verse 3", expected: ["Psalms", 105, 3] },
+
+    // QC Review Group 4: Conversational Sermon Sentences
+    { input: "Praise the Lord saints, let's open our Bibles to the book of First Thessalonians chapter 4 verse 17", expected: ["1 Thessalonians", 4, 17] },
+    { input: "Church please open your Bible with me to the book of Genesis chapter 10 verse 10", expected: ["Genesis", 10, 10] },
+    { input: "Good morning church, let's turn to 2 Corinthians 5 17", expected: ["2 Corinthians", 5, 17] },
+    { input: "Now let us look at the book of Isaiah chapter 30 verse 1", expected: ["Isaiah", 30, 1] },
   ];
 
   for (const test of references) {
     assert.deepEqual(referenceTuple(FastBibleParser.parse(test.input)), test.expected, test.input);
   }
+
+  // QC Fail-Closed Validation
+  assert.equal(
+    referenceTuple(FastBibleParser.parse("Psalms 1 1 6")),
+    null,
+    "Chapter-only digit sequence without explicit verse must fail closed",
+  );
 
   assert.equal(
     FastBibleParser.parse("Psalnms chapter 23 verse 1"),
@@ -49,6 +82,10 @@ function runTests() {
     { input: "chapter 4 verse 7", expected: { direction: "goto", scope: "chapter_verse", chapter: 4, verse: 7 } },
     { input: "chapter four and verse seven", expected: { direction: "goto", scope: "chapter_verse", chapter: 4, verse: 7 } },
     { input: "go to verse 10", expected: { direction: "goto", scope: "verse", verse: 10 } },
+    { input: "take me to verse 10", expected: { direction: "goto", scope: "verse", verse: 10 } },
+    { input: "moving on to verse 12", expected: { direction: "goto", scope: "verse", verse: 12 } },
+    { input: "now let's look at verse 5", expected: { direction: "goto", scope: "verse", verse: 5 } },
+    { input: "verse 10", expected: { direction: "goto", scope: "verse", verse: 10 } },
     { input: "next verse", expected: { direction: "next", scope: "verse" } },
     { input: "let's look at the next verse", expected: { direction: "next", scope: "verse" } },
     { input: "let us look at the next verse", expected: { direction: "next", scope: "verse" } },
@@ -120,7 +157,7 @@ function runTests() {
   assert.equal(multiCmd[1].arguments.chapter, 2);
   assert.equal(multiCmd[1].arguments.verse, 3);
 
-  console.log(`HFB parser regressions passed (${references.length + 11} groups).`);
+  console.log(`HFB parser regressions passed (${references.length + 15} groups). All QC review test cases PASSED!`);
 }
 
 runTests();
