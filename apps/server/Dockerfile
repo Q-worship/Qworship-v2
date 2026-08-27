@@ -1,7 +1,9 @@
 FROM node:20-alpine
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm - pinned so this layer's cache invalidates on version bumps and
+# builds stay deterministic (avoids resolving a different pnpm each build, which
+# previously kept an older cached pnpm around even after workspace config changes)
+RUN npm install -g pnpm@10.33.0
 
 WORKDIR /app
 
