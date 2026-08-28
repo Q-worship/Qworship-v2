@@ -165,7 +165,7 @@ export function ReferJoinPage() {
 
               <div className="refer-form-field">
                 <label htmlFor="product">Product</label>
-                <select id="product" name="product" defaultValue="">
+                <select id="product" name="product" defaultValue="" required>
                   <option value="" disabled>
                     Please select the Divine Digital Product you will like to promote or be a referrer for
                   </option>
