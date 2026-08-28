@@ -21,7 +21,7 @@ const ReferralRequestSchema = new Schema<IReferralRequest>(
   {
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
+    email: { type: String, required: true, lowercase: true, trim: true, unique: true },
     country: { type: String, required: true },
     state: { type: String },
     phoneNumber: { type: String, required: true },

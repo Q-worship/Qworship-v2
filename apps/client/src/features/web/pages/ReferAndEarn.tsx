@@ -29,7 +29,7 @@ export function ReferAndEarn() {
   }, [location])
 
   return (
-    <div className="antialiased min-h-screen flex flex-col">
+    <div className="refer-and-earn-page antialiased min-h-screen flex flex-col">
       <ReferNavbar />
       <main className="flex-1">
         <ReferHeroSection />

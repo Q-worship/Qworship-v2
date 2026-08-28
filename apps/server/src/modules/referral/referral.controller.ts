@@ -28,6 +28,13 @@ export const submitReferralRequest = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "First name, last name, email, country, phone number, and product are required" });
     }
 
+    if (await ReferralRequest.findOne({ email })) {
+      return res.status(409).json({ success: false, message: "You have already submitted an application with this email address." });
+    }
+    if (await User.findOne({ email })) {
+      return res.status(409).json({ success: false, message: "An account with this email already exists." });
+    }
+
     const request = await ReferralRequest.create({
       firstName,
       lastName,
@@ -41,6 +48,9 @@ export const submitReferralRequest = async (req: Request, res: Response) => {
 
     return res.status(201).json({ success: true, id: request._id });
   } catch (error: any) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ success: false, message: "You have already submitted an application with this email address." });
+    }
     console.error("[Referral] submit error:", error);
     return res.status(500).json({ success: false, message: "Unable to submit your application. Please try again." });
   }

@@ -89,3 +89,10 @@ export const COUNTRY_NAME_TO_DIAL_CODE: Record<string, string> = Object.fromEntr
     })
     .filter((entry): entry is [string, string] => entry !== null),
 )
+
+/** Resolves an ISO 3166-1 alpha-2 code (e.g. from a geolocation lookup) to the same display name used in COUNTRY_OPTIONS. */
+export function countryNameFromIsoCode(code: string | undefined | null): string | undefined {
+  if (!code) return undefined
+  const upper = code.trim().toUpperCase()
+  return (ISO_COUNTRY_CODES as readonly string[]).includes(upper) ? codeToName(upper) : undefined
+}

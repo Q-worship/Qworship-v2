@@ -278,7 +278,11 @@ export const completeFirstLogin = async (req: Request, res: Response) => {
     await user.save();
     notifyPasswordChange(user._id).catch(() => {});
 
-    const nextStep = user.role === 'admin' || user.role === 'superadmin' ? '/super-admin' : '/dashboard';
+    const nextStep = user.role === 'admin' || user.role === 'superadmin'
+      ? '/super-admin'
+      : user.role === 'referee'
+        ? '/refer-and-earn/dashboard'
+        : '/dashboard';
     return res.json({ success: true, token: createToken(user), user: publicUser(user), nextStep });
   } catch (error) {
     console.error('Complete first login error:', error);

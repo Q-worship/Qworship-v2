@@ -7,7 +7,7 @@ import { Footer } from '@/components/layout/Footer'
 import { ReferNavbar } from '@/components/sections/ReferNavbar'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { images } from '@/lib/theme'
-import { COUNTRY_OPTIONS, COUNTRY_NAME_TO_DIAL_CODE } from '@/lib/countries'
+import { COUNTRY_OPTIONS, COUNTRY_NAME_TO_DIAL_CODE, countryNameFromIsoCode } from '@/lib/countries'
 
 const PRODUCTS = [
   { id: 'qworship', label: 'Q-worship' },
@@ -21,10 +21,37 @@ export function ReferJoinPage() {
   const { toast } = useToast()
   const [country, setCountry] = useState(DEFAULT_COUNTRY)
   const [submitting, setSubmitting] = useState(false)
+  const [userPickedCountry, setUserPickedCountry] = useState(false)
 
   const dialCode = useMemo(() => COUNTRY_NAME_TO_DIAL_CODE[country] || '+—', [country])
 
   useRevealOnScroll()
+
+  useEffect(() => {
+    if (userPickedCountry) return
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+
+    fetch('https://ipapi.co/json/', { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (userPickedCountry || !data?.country_code) return
+        const detected = countryNameFromIsoCode(data.country_code)
+        if (detected && COUNTRY_OPTIONS.includes(detected)) {
+          setCountry(detected)
+        }
+      })
+      .catch(() => {
+        // Silently keep the default country if detection is blocked or fails.
+      })
+      .finally(() => clearTimeout(timeout))
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useLayoutEffect(() => {
     if ('scrollRestoration' in history) {
@@ -132,7 +159,10 @@ export function ReferJoinPage() {
                     id="country"
                     name="country"
                     value={country}
-                    onChange={(event) => setCountry(event.target.value)}
+                    onChange={(event) => {
+                      setUserPickedCountry(true)
+                      setCountry(event.target.value)
+                    }}
                   >
                     <optgroup label="All countries in the world">
                       {COUNTRY_OPTIONS.map((name) => (

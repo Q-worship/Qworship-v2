@@ -17,7 +17,7 @@ export function ReferNavbar() {
   return (
     <nav className={`refer-navbar${isSolid ? ' refer-navbar--solid' : ''}`}>
       <SiteContainer className="refer-navbar-inner">
-        <Link href="/" className="refer-navbar-brand" aria-label="Q-Worship home">
+        <Link href="/refer-and-earn" className="refer-navbar-brand" aria-label="Q-Worship Referrer home">
           <img src={images.logo} alt="" className="refer-navbar-logo" />
           <span className="refer-navbar-brand-name">Q-Worship</span>
           <span className="refer-navbar-brand-divider" aria-hidden>
