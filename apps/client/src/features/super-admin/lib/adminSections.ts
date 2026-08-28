@@ -46,6 +46,7 @@ export const ADMIN_SECTION_GROUPS: AdminSectionGroup[] = [
     section: "Referral Analytics",
     items: [
       { id: "referral-requests", label: "Referral Requests", description: "Review and approve referral partner applications" },
+      { id: "referrals", label: "Referrals", description: "Registered referral partner accounts" },
     ],
   },
   {

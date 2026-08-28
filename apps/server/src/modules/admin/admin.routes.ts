@@ -31,7 +31,7 @@ import {
   bulkExtendUserTrials,
 } from "./admin.controller.js";
 import { listRoles, createRole, updateRole, deleteRole } from "./role.controller.js";
-import { listReferralRequests, approveReferralRequest, rejectReferralRequest } from "../referral/referral.controller.js";
+import { listReferralRequests, approveReferralRequest, rejectReferralRequest, listReferees, suspendReferee, resetRefereePassword } from "../referral/referral.controller.js";
 import { protect, authorizeAdmin, requireSuperAdmin, requirePermission } from "../auth/auth.middleware.js";
 import { rateLimit } from "../auth/rate-limit.middleware.js";
 import {
@@ -74,6 +74,9 @@ router.delete("/roles/:id", requireSuperAdmin, deleteRole);
 router.get("/referral-requests", requirePermission("referral-requests"), listReferralRequests);
 router.post("/referral-requests/:id/approve", requirePermission("referral-requests"), approveReferralRequest);
 router.post("/referral-requests/:id/reject", requirePermission("referral-requests"), rejectReferralRequest);
+router.get("/referrals", requirePermission("referrals"), listReferees);
+router.post("/referrals/:id/suspend", requirePermission("referrals"), suspendReferee);
+router.post("/referrals/:id/reset-password", requirePermission("referrals"), rateLimit("referral-reset-password", 20, 60 * 60 * 1000), resetRefereePassword);
 
 // Subscription & Trial Management Routes
 router.get("/subscriptions/users", getAdminSubscriptionUsers);

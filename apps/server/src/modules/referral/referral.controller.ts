@@ -142,3 +142,80 @@ export const rejectReferralRequest = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+function toRefereeRow(user: any) {
+  return {
+    id: user._id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    countryCode: user.countryCode,
+    phoneNumber: user.phoneNumber,
+    isActive: !!user.isActive,
+    mustChangePassword: !!user.mustChangePassword,
+    lastLogin: user.lastLoginAt ?? null,
+    createdAt: user.createdAt,
+  };
+}
+
+export const listReferees = async (req: Request, res: Response) => {
+  try {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const query: any = { role: "referee" };
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(escaped, "i");
+      query.$or = [{ firstName: regex }, { lastName: regex }, { email: regex }];
+    }
+    const referees = await User.find(query).select("-password").sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, referees: referees.map(toRefereeRow) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const suspendReferee = async (req: Request, res: Response) => {
+  try {
+    const target = await User.findOne({ _id: req.params.id, role: "referee" });
+    if (!target) return res.status(404).json({ success: false, message: "Referral partner account not found" });
+    target.isActive = !target.isActive;
+    await target.save();
+    return res.json({ success: true, referee: toRefereeRow(target) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const resetRefereePassword = async (req: Request, res: Response) => {
+  try {
+    const target = await User.findOne({ _id: req.params.id, role: "referee" });
+    if (!target) return res.status(404).json({ success: false, message: "Referral partner account not found" });
+
+    const tempPassword = generateTempPassword();
+    target.password = await bcrypt.hash(tempPassword, 12);
+    target.mustChangePassword = true;
+    await target.save();
+
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+    let emailSent = true;
+    try {
+      await sendAdminCredentialsEmail(target.email, target.firstName, tempPassword, {
+        roleName: "Referral Partner",
+        isReset: true,
+        loginUrl: `${frontendUrl}/refer-and-earn/login`,
+      });
+      console.log("[Referral] password reset email sent to", target.email);
+    } catch (emailError: any) {
+      emailSent = false;
+      console.error("[Referral] failed to send password reset email:", emailError.message);
+    }
+
+    return res.json({
+      success: true,
+      emailSent,
+      warning: emailSent ? undefined : "Password was reset, but the notification email failed to send.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

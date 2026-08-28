@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import AdminManagement from "@/features/super-admin/pages/AdminManagement";
 import { ReferralRequestsView } from "@/features/super-admin/pages/ReferralRequestsView";
+import { ReferralsView } from "@/features/super-admin/pages/ReferralsView";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -1215,6 +1216,12 @@ export default function SuperAdminSidebar() {
           icon: UserPlus,
           description: "Review and approve referral partner applications",
         },
+        {
+          id: "referrals",
+          label: "Referrals",
+          icon: Users,
+          description: "Registered referral partner accounts",
+        },
       ],
     },
     {
@@ -1483,6 +1490,8 @@ export default function SuperAdminSidebar() {
       // Referral Analytics
       case "referral-requests":
         return <ReferralRequestsView />;
+      case "referrals":
+        return <ReferralsView />;
 
       // Platform Management
       case "system":
