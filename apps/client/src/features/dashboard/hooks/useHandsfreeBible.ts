@@ -15,6 +15,7 @@ import { apiClient } from "@/lib/api";
 import {
   parseHFBContextNavigation,
   parseHFBReference,
+  scanHFBContextNavigations,
 } from "../lib/hfbFastReferenceParser";
 import { parseBibleVersionCommand } from "../data/bibleTranslations";
 
@@ -533,60 +534,69 @@ export const useHandsfreeBible = ({
     confidence = 0,
     isFinal = false,
   ): boolean => {
-    const navigation = parseHFBContextNavigation(text);
-    if (!navigation) return false;
-    // Both chapter and verse must be present and valid integers
-    if (
-      !Number.isInteger(navigation.chapter) || navigation.chapter < 1 ||
-      !Number.isInteger(navigation.verse) || navigation.verse < 1
-    ) {
-      return false;
-    }
+    const navigations = scanHFBContextNavigations(text);
+    if (!navigations.length) return false;
 
     const current = useBibleProjectionStore.getState().currentVerse ||
       currentVerseContextRef.current;
     if (!current?.book) return false;
 
-    const key = `${current.book}|${navigation.chapter}|${navigation.verse}`;
-    const now = performance.now();
+    let handledAny = false;
+    for (const navigation of navigations) {
+      if (
+        !Number.isInteger(navigation.chapter) || navigation.chapter < 1 ||
+        !Number.isInteger(navigation.verse) || navigation.verse < 1
+      ) {
+        continue;
+      }
 
-    // Confidence scoring on interims:
-    // High confidence (>= 0.85) -> 1 frame. Moderate (>= 0.65) -> 2 frames.
-    const previous = pendingInterimRef.current;
-    const sameCandidate = previous.key === key && now - previous.at < 1500;
-    const count = sameCandidate ? previous.count + 1 : 1;
-    pendingInterimRef.current = {
-      key,
-      count,
-      at: now,
-      firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
-    };
+      const key = `${current.book}|${navigation.chapter}|${navigation.verse}`;
+      const now = performance.now();
 
-    const requiredResults = isFinal ? 1 : confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
-    if (count < requiredResults) return true;
+      // If this exact command was already executed recently in this stream, skip to the next command
+      if (
+        lastContextNavigationRef.current.key === key &&
+        now - lastContextNavigationRef.current.at < 1500
+      ) {
+        handledAny = true;
+        continue;
+      }
 
-    if (
-      lastContextNavigationRef.current.key === key &&
-      now - lastContextNavigationRef.current.at < 1200
-    ) return true;
+      const previous = pendingInterimRef.current;
+      const sameCandidate = previous.key === key && now - previous.at < 1500;
+      const count = sameCandidate ? previous.count + 1 : 1;
+      pendingInterimRef.current = {
+        key,
+        count,
+        at: now,
+        firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
+      };
 
-    lastContextNavigationRef.current = { key, at: now };
-    console.info(
-      `[HFB] Client contextual navigation: ${current.book} ${navigation.chapter}:${navigation.verse} (conf: ${confidence.toFixed(2)})`,
-    );
-    void executeNavigation(
-      "jump_to_chapter_verse",
-      undefined,
-      navigation.verse,
-      undefined,
-      undefined,
-      navigation.chapter,
-    );
-    return true;
+      const requiredResults = isFinal ? 1 : confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+      if (count < requiredResults) {
+        return true; // Still confirming frames for this unexecuted command
+      }
+
+      lastContextNavigationRef.current = { key, at: now };
+      console.info(
+        `[HFB] Client contextual navigation: ${current.book} ${navigation.chapter}:${navigation.verse} (conf: ${confidence.toFixed(2)})`,
+      );
+      void executeNavigation(
+        "jump_to_chapter_verse",
+        undefined,
+        navigation.verse,
+        undefined,
+        undefined,
+        navigation.chapter,
+      );
+      return true;
+    }
+
+    return handledAny;
   };
 
-  const NEXT_VERSE_RE = /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse|go next|forward|next one)\b/i;
-  const PREV_VERSE_RE = /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse|go back|back one)\b/i;
+  const NEXT_VERSE_RE = /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse)\b/i;
+  const PREV_VERSE_RE = /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse)\b/i;
   const NEXT_CHAP_RE = /\b(?:next chapter|following chapter)\b/i;
   const PREV_CHAP_RE = /\b(?:previous chapter|last chapter|go back a chapter)\b/i;
 

@@ -208,24 +208,14 @@ export class FastBibleParser {
    * before the shorter bare-word patterns ("next", "previous").
    */
   private static readonly NAV_PATTERNS: Array<{ re: RegExp; cmd: any }> = [
-    // ── Next verse (all variants) ────────────────────────────────────────────
+    // ── Next verse (explicit variants only) ───────────────────────────────────
     {
-      re: /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse|go next|forward|next one)\b/i,
+      re: /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse)\b/i,
       cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } },
     },
-    // Bare "next" — must be a standalone word to avoid false positives
+    // ── Previous verse (explicit variants only) ───────────────────────────────
     {
-      re: /^next$/i,
-      cmd: { name: "navigate_bible", arguments: { direction: "next", scope: "verse" } },
-    },
-    // ── Previous verse (all variants) ────────────────────────────────────────
-    {
-      re: /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse|go back|back one)\b/i,
-      cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } },
-    },
-    // Bare "previous" — must be a standalone word to avoid false positives
-    {
-      re: /^previous$/i,
+      re: /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse)\b/i,
       cmd: { name: "navigate_bible", arguments: { direction: "prev", scope: "verse" } },
     },
     // ── Chapter navigation ────────────────────────────────────────────────────

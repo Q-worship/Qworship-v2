@@ -94,36 +94,52 @@ const contextualChapterVersePattern = new RegExp(
 );
 
 /**
- * Parse a chapter+verse command that intentionally omits the book.
- * Ensures a complete reference such as "Genesis chapter 4 verse 7" is not
- * mistaken for contextual navigation by checking for book names prior to "chapter".
+ * Scan all chapter+verse commands in a transcript that intentionally omit the book.
+ * Returns an ordered array of all valid occurrences.
  */
-export function parseHFBContextNavigation(
+export function scanHFBContextNavigations(
   text: string,
-): HFBContextNavigation | null {
+): Array<HFBContextNavigation & { index: number; text: string }> {
   const clean = text
     .toLowerCase()
     .replace(/[!?;,.:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const match = clean.match(contextualChapterVersePattern);
-  if (!match) return null;
+  const results: Array<HFBContextNavigation & { index: number; text: string }> = [];
+  const matcher = new RegExp(contextualChapterVersePattern.source, "gi");
+  let match: RegExpExecArray | null;
 
-  // Check if a recognized book name precedes "chapter"
-  const prefix = clean.slice(0, match.index ?? 0);
-  if (prefix.trim().length > 0) {
-    for (const [alias] of aliases) {
-      if (new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(prefix)) {
-        return null; // Complete reference with book, not contextual navigation
+  while ((match = matcher.exec(clean)) !== null) {
+    const prefix = clean.slice(0, match.index).trim();
+    let hasPrecedingBook = false;
+    if (prefix.length > 0) {
+      for (const [alias] of aliases) {
+        if (new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i").test(prefix)) {
+          hasPrecedingBook = true;
+          break;
+        }
       }
+    }
+    if (hasPrecedingBook) continue;
+
+    const chapter = parseNumber(match[1]);
+    const verse = parseNumber(match[2]);
+    if (
+      Number.isInteger(chapter) && chapter >= 1 && chapter <= 150 &&
+      Number.isInteger(verse) && verse >= 1 && verse <= 176
+    ) {
+      results.push({ chapter, verse, index: match.index, text: match[0] });
     }
   }
 
-  const chapter = parseNumber(match[1]);
-  const verse = parseNumber(match[2]);
-  if (!Number.isInteger(chapter) || chapter < 1 || chapter > 150 ||
-      !Number.isInteger(verse) || verse < 1 || verse > 176) return null;
-  return { chapter, verse };
+  return results;
+}
+
+export function parseHFBContextNavigation(
+  text: string,
+): HFBContextNavigation | null {
+  const all = scanHFBContextNavigations(text);
+  return all.length > 0 ? all[all.length - 1] : null;
 }
 
 export function parseHFBReference(text: string): HFBParsedReference | null {
