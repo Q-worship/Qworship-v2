@@ -31,7 +31,8 @@ import {
   bulkExtendUserTrials,
 } from "./admin.controller.js";
 import { listRoles, createRole, updateRole, deleteRole } from "./role.controller.js";
-import { protect, authorizeAdmin, requireSuperAdmin } from "../auth/auth.middleware.js";
+import { listReferralRequests, approveReferralRequest, rejectReferralRequest } from "../referral/referral.controller.js";
+import { protect, authorizeAdmin, requireSuperAdmin, requirePermission } from "../auth/auth.middleware.js";
 import { rateLimit } from "../auth/rate-limit.middleware.js";
 import {
   getAdminDownloadableFiles,
@@ -68,6 +69,11 @@ router.get("/roles", requireSuperAdmin, listRoles);
 router.post("/roles", requireSuperAdmin, createRole);
 router.patch("/roles/:id", requireSuperAdmin, updateRole);
 router.delete("/roles/:id", requireSuperAdmin, deleteRole);
+
+// Referral Program (granted per-role via requirePermission, not superadmin-only)
+router.get("/referral-requests", requirePermission("referral-requests"), listReferralRequests);
+router.post("/referral-requests/:id/approve", requirePermission("referral-requests"), approveReferralRequest);
+router.post("/referral-requests/:id/reject", requirePermission("referral-requests"), rejectReferralRequest);
 
 // Subscription & Trial Management Routes
 router.get("/subscriptions/users", getAdminSubscriptionUsers);

@@ -1,12 +1,16 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useLocation } from 'wouter'
+import { useMutation } from '@tanstack/react-query'
 import { useToast } from '@/hooks/use-toast'
+import { apiRequest } from '@/lib/queryClient'
+import { useAuthStore } from '@/features/auth/auth.store'
 import { ReferNavbar } from '@/components/sections/ReferNavbar'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
 export function ReferSignInPage() {
-  const [location] = useLocation()
+  const [location, setLocation] = useLocation()
   const { toast } = useToast()
+  const [formData, setFormData] = useState({ username: '', password: '' })
 
   useLayoutEffect(() => {
     if ('scrollRestoration' in history) {
@@ -22,12 +26,49 @@ export function ReferSignInPage() {
     return () => cancelAnimationFrame(frame)
   }, [location])
 
+  const signInMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/auth/signin', formData)
+      return response.json()
+    },
+    onSuccess: (response) => {
+      if (response.user.role !== 'referee') {
+        toast({
+          title: 'Access denied',
+          description: 'This portal is restricted to referral partners only.',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      localStorage.setItem('token', response.token)
+      useAuthStore.getState().setAuth(response.user)
+
+      if (response.user.mustChangePassword) {
+        sessionStorage.setItem('qworship_pending_temp_password', formData.password)
+        setLocation(response.nextStep || '/refer-and-earn/force-password-change')
+        return
+      }
+
+      toast({ title: 'Welcome back', description: "You're signed in to the Q-Worship Referrer portal." })
+      setLocation(response.nextStep || '/refer-and-earn/dashboard')
+    },
+    onError: () => {
+      toast({
+        title: 'Sign-in failed',
+        description: 'Invalid credentials. Please check your username and password.',
+        variant: 'destructive',
+      })
+    },
+  })
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    toast({
-      title: "Sign-in isn't wired up yet",
-      description: "This form isn't connected to a backend yet — we'll follow up once it is.",
-    })
+    if (!formData.username.trim() || !formData.password.trim()) {
+      toast({ title: 'Missing information', description: 'Please enter both username and password.', variant: 'destructive' })
+      return
+    }
+    signInMutation.mutate()
   }
 
   return (
@@ -49,7 +90,15 @@ export function ReferSignInPage() {
             <form className="refer-signin-form" onSubmit={handleSubmit}>
               <div className="refer-form-field">
                 <label htmlFor="username">Username</label>
-                <input id="username" name="username" type="email" placeholder="johndoe@email.com" required />
+                <input
+                  id="username"
+                  name="username"
+                  type="email"
+                  placeholder="johndoe@email.com"
+                  value={formData.username}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, username: event.target.value }))}
+                  required
+                />
               </div>
 
               <div className="refer-form-field">
@@ -64,12 +113,14 @@ export function ReferSignInPage() {
                   name="password"
                   type="password"
                   placeholder="Please provide your password"
+                  value={formData.password}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, password: event.target.value }))}
                   required
                 />
               </div>
 
-              <button type="submit" className="refer-join-submit">
-                Sign in
+              <button type="submit" className="refer-join-submit" disabled={signInMutation.isPending}>
+                {signInMutation.isPending ? 'Signing in…' : 'Sign in'}
               </button>
 
               <p className="refer-join-legal">

@@ -23,6 +23,8 @@ const Guides = lazy(() => import("@/features/web/pages/Guides").then(m => ({ def
 const ReferAndEarn = lazy(() => import("@/features/web/pages/ReferAndEarn").then(m => ({ default: m.ReferAndEarn })));
 const ReferJoinPage = lazy(() => import("@/features/web/pages/ReferJoinPage").then(m => ({ default: m.ReferJoinPage })));
 const ReferSignInPage = lazy(() => import("@/features/web/pages/ReferSignInPage").then(m => ({ default: m.ReferSignInPage })));
+const ReferForcePasswordChangePage = lazy(() => import("@/features/web/pages/ReferForcePasswordChangePage").then(m => ({ default: m.ReferForcePasswordChangePage })));
+const RefereePortalApp = lazy(() => import("@/features/referee-portal/RefereePortalApp"));
 import { Login } from "@/features/web/pages/Login";
 import { SignUp } from "@/features/web/pages/SignUp";
 import { Verify } from "@/features/web/pages/Verify";
@@ -154,6 +156,17 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const RefereeGuard = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+
+  if (!isAuthenticated) return <Redirect to="~/refer-and-earn/login" />;
+  if (user?.role !== 'referee') return <Redirect to="~/refer-and-earn" />;
+  if (user?.mustChangePassword) return <Redirect to="~/refer-and-earn/force-password-change" />;
+
+  return <>{children}</>;
+};
+
 const ProjectGuard = ({ children }: { children: React.ReactNode }) => {
   const selectedProjectId = sessionStorage.getItem('qworship_current_presentation_id');
   return selectedProjectId ? <>{children}</> : <Redirect to="/project-selection" />;
@@ -203,6 +216,12 @@ export const AppRouter = () => {
           <Route path="/refer-and-earn">{(params) => <ReferAndEarn />}</Route>
           <Route path="/refer-and-earn/join">{(params) => <ReferJoinPage />}</Route>
           <Route path="/refer-and-earn/login">{(params) => <ReferSignInPage />}</Route>
+          <Route path="/refer-and-earn/force-password-change">{(params) => <ReferForcePasswordChangePage />}</Route>
+          <Route path="/refer-and-earn/dashboard" nest>
+            <RefereeGuard>
+              <RefereePortalApp />
+            </RefereeGuard>
+          </Route>
           <Route path="/guides/:guideId"><Layout><GuideDetailPage /></Layout></Route>
           <Route path="/guides">{(params) => <Layout><Guides /></Layout>}</Route>
           <Route path="/faqs">{(params) => <Layout><FAQs /></Layout>}</Route>

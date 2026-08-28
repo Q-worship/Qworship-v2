@@ -11192,3 +11192,15 @@ body.mobile-nav-open {
     padding: 1.25rem;
   }
 }
+
+/* Referrer portal (Quiet Momentum design system), ported from the qworship-referrer-portal wireframe */
+.surface { background: #fff; border: 1px solid rgba(255, 255, 255, 0.8); box-shadow: 0 18px 50px rgba(48, 35, 91, 0.07); }
+.surface-soft { background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(250,249,255,.86)); border: 1px solid rgba(255,255,255,.88); box-shadow: 0 16px 38px rgba(54,39,104,.06); }
+.violet-button { background: #8054F6; color: white; box-shadow: 0 10px 20px rgba(128,84,246,.22); transition: transform .16s cubic-bezier(.23,1,.32,1), background-color .16s cubic-bezier(.23,1,.32,1); }
+.violet-button:hover { background: #7247ec; transform: translateY(-1px); }
+.violet-button:active { transform: scale(.97); }
+.metric-number { font-family: "Manrope", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.momentum-line { height: 3px; background: linear-gradient(90deg, #ff2e91 0 18%, #8054f6 18% 70%, rgba(128,84,246,.13) 70%); }
+.page-enter { animation: page-in .34s cubic-bezier(.23,1,.32,1) both; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(128,84,246,.22) transparent; }
+@keyframes page-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }

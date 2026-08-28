@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
 import { useRevealOnScroll } from '@/hooks/useRevealOnScroll'
 import { useToast } from '@/hooks/use-toast'
+import { apiRequest } from '@/lib/queryClient'
 import { Footer } from '@/components/layout/Footer'
 import { ReferNavbar } from '@/components/sections/ReferNavbar'
 import { SiteContainer } from '@/components/layout/SiteContainer'
@@ -19,6 +20,7 @@ export function ReferJoinPage() {
   const [location] = useLocation()
   const { toast } = useToast()
   const [country, setCountry] = useState(DEFAULT_COUNTRY)
+  const [submitting, setSubmitting] = useState(false)
 
   const dialCode = useMemo(() => COUNTRY_NAME_TO_DIAL_CODE[country] || '+—', [country])
 
@@ -38,12 +40,39 @@ export function ReferJoinPage() {
     return () => cancelAnimationFrame(frame)
   }, [location])
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    toast({
-      title: 'Application received',
-      description: "This form isn't connected to a backend yet — we'll follow up once it is.",
-    })
+    const formData = new FormData(event.currentTarget)
+    const phoneNumber = String(formData.get('phoneNumber') || '').trim()
+    const payload = {
+      firstName: String(formData.get('firstName') || '').trim(),
+      lastName: String(formData.get('lastName') || '').trim(),
+      email: String(formData.get('email') || '').trim(),
+      country: String(formData.get('country') || '').trim(),
+      state: String(formData.get('state') || '').trim(),
+      phoneNumber: phoneNumber ? `${dialCode} ${phoneNumber}` : '',
+      product: String(formData.get('product') || ''),
+      about: String(formData.get('about') || '').trim(),
+    }
+
+    setSubmitting(true)
+    try {
+      await apiRequest('POST', '/api/referrals/apply', payload)
+      toast({
+        title: 'Application received',
+        description: "Thanks for applying — our team will review your details and get back to you.",
+      })
+      event.currentTarget.reset()
+      setCountry(DEFAULT_COUNTRY)
+    } catch (error: any) {
+      toast({
+        title: "Couldn't submit your application",
+        description: error?.message?.replace(/^\d+:\s*/, '') || 'Please check your details and try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -158,8 +187,8 @@ export function ReferJoinPage() {
                 />
               </div>
 
-              <button type="submit" className="refer-join-submit">
-                Submit
+              <button type="submit" className="refer-join-submit" disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Submit'}
               </button>
 
               <p className="refer-join-legal">

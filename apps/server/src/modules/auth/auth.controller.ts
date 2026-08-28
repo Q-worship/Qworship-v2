@@ -218,9 +218,12 @@ export const signIn = async (req: Request, res: Response) => {
     }
 
     const nextStep = user.mustChangePassword
-      ? '/admin/force-password-change'
+      ? (user.role === 'referee' ? '/refer-and-earn/force-password-change' : '/admin/force-password-change')
       : user.role === 'admin' || user.role === 'superadmin'
-        ? '/super-admin' : user.onboardingStatus === 'completed' ? '/project-selection' : '/onboarding';
+        ? '/super-admin'
+        : user.role === 'referee'
+          ? '/refer-and-earn/dashboard'
+          : user.onboardingStatus === 'completed' ? '/project-selection' : '/onboarding';
     return res.json({ success: true, token: createToken(user), user: publicUser(user), admin: user.role !== 'user' ? { adminType: user.role } : undefined, nextStep });
   } catch (error) {
     console.error('Sign-in error:', error);
