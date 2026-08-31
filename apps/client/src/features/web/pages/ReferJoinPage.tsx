@@ -231,7 +231,7 @@ export function ReferJoinPage() {
                 <label htmlFor="product">Product</label>
                 <select id="product" name="product" defaultValue="" required>
                   <option value="" disabled>
-                    Please select the Divine Digital Product you will like to promote or be a referrer for
+                    Please Select a digital product
                   </option>
                   {PRODUCTS.map((product) => (
                     <option key={product.id} value={product.id}>

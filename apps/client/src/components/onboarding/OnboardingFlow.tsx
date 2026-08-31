@@ -205,17 +205,6 @@ export function OnboardingFlow() {
     }
   }
 
-  const skipButton =
-    step === 4 && phase === 'welcome' ? (
-      <button
-        type="button"
-        className="onboarding-step__skip onboarding-step__skip--inline"
-        onClick={() => void handleReachPlans()}
-      >
-        Skip
-      </button>
-    ) : null
-
   return (
     <div className="onboarding-page">
       <DashboardBackdrop />
@@ -224,7 +213,7 @@ export function OnboardingFlow() {
 
       {phase === 'welcome' ? (
         <OnboardingOverlay visible>
-          <OnboardingModal slide={slide} topRight={skipButton}>
+          <OnboardingModal slide={slide}>
             {renderWelcomeStep()}
           </OnboardingModal>
         </OnboardingOverlay>

@@ -1686,7 +1686,6 @@ main {
 
 .custom-scrollbar::-webkit-scrollbar,
 .onboarding-dropdown__menu--scrollable::-webkit-scrollbar,
-.onboarding-step__content::-webkit-scrollbar,
 .onboarding-modal::-webkit-scrollbar,
 .onboarding-overlay__content::-webkit-scrollbar,
 .onboarding-wide-modal::-webkit-scrollbar,
@@ -1698,7 +1697,6 @@ main {
 
 .custom-scrollbar::-webkit-scrollbar-thumb,
 .onboarding-dropdown__menu--scrollable::-webkit-scrollbar-thumb,
-.onboarding-step__content::-webkit-scrollbar-thumb,
 .onboarding-modal::-webkit-scrollbar-thumb,
 .onboarding-overlay__content::-webkit-scrollbar-thumb,
 .onboarding-wide-modal::-webkit-scrollbar-thumb,
@@ -1710,7 +1708,6 @@ main {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover,
 .onboarding-dropdown__menu--scrollable::-webkit-scrollbar-thumb:hover,
-.onboarding-step__content::-webkit-scrollbar-thumb:hover,
 .onboarding-modal::-webkit-scrollbar-thumb:hover,
 .onboarding-overlay__content::-webkit-scrollbar-thumb:hover,
 .onboarding-wide-modal::-webkit-scrollbar-thumb:hover,
@@ -1721,13 +1718,35 @@ main {
 
 .custom-scrollbar::-webkit-scrollbar-track,
 .onboarding-dropdown__menu--scrollable::-webkit-scrollbar-track,
-.onboarding-step__content::-webkit-scrollbar-track,
 .onboarding-modal::-webkit-scrollbar-track,
 .onboarding-overlay__content::-webkit-scrollbar-track,
 .onboarding-wide-modal::-webkit-scrollbar-track,
 .project-selection__list::-webkit-scrollbar-track,
 .chatbot-messages::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Onboarding step content: scrollbar stays invisible until the panel is hovered/scrolled, rather than always-on. */
+.onboarding-step__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.onboarding-step__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.onboarding-step__content::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.onboarding-step__content:hover::-webkit-scrollbar-thumb,
+.onboarding-step__content:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.onboarding-step__content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .reveal {
@@ -6095,6 +6114,31 @@ body.mobile-nav-open {
   gap: 0.75rem;
 }
 
+.refer-navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.refer-navbar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #17122b;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.refer-navbar-toggle:hover {
+  background: rgba(142, 32, 193, 0.08);
+}
+
 .refer-navbar-brand {
   display: inline-flex;
   align-items: center;
@@ -6177,14 +6221,69 @@ body.mobile-nav-open {
 }
 
 @media (max-width: 640px) {
-  .refer-navbar-btn {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8125rem;
+  .refer-navbar-toggle {
+    display: inline-flex;
+  }
+
+  .refer-navbar-actions .refer-navbar-btn {
+    display: none;
   }
 
   .refer-navbar-brand-label {
     display: none;
   }
+}
+
+.refer-mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  top: 5rem;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  cursor: default;
+  background: rgba(23, 18, 43, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.refer-mobile-nav-drawer {
+  position: fixed;
+  top: 5rem;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(23, 18, 43, 0.08);
+  box-shadow: 0 16px 32px -20px rgba(23, 18, 43, 0.3);
+  padding: 1.25rem 1.5rem 1.5rem;
+  animation: refer-mobile-nav-slide-down 0.22s ease-out;
+}
+
+@keyframes refer-mobile-nav-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.refer-mobile-nav-link {
+  width: 100%;
+  text-align: center;
+  padding: 0.75rem 1.125rem;
+  font-size: 0.9375rem;
+}
+
+body.refer-mobile-nav-open {
+  overflow: hidden;
 }
 
 .about-core-beliefs-section--light {
@@ -6269,6 +6368,10 @@ body.mobile-nav-open {
 }
 
 @media (max-width: 640px) {
+  .refer-hero-heading {
+    font-size: clamp(1.375rem, 6.5vw, 1.75rem);
+  }
+
   .refer-hero-heading-line {
     white-space: normal;
   }
@@ -9823,7 +9926,7 @@ body.mobile-nav-open {
 .onboarding-step__content {
   flex: 1;
   min-height: 0;
-  overflow-y: scroll;
+  overflow-y: auto;
   overflow-x: hidden;
   padding-right: 0;
 }
@@ -9880,6 +9983,10 @@ body.mobile-nav-open {
   font-size: 0.875rem;
   font-weight: 600;
   color: #a78bfa;
+}
+
+.onboarding-step__instruction--spaced {
+  margin-top: 1.75rem;
 }
 
 .onboarding-step__form {

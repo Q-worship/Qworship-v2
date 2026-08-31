@@ -64,7 +64,7 @@ export function ReferralSourceStep({
           </div>
         </div>
 
-        <p className="onboarding-step__instruction">How did you get to know about Q-worship?</p>
+        <p className="onboarding-step__instruction onboarding-step__instruction--spaced">How did you get to know about Q-worship?</p>
 
         <div className="onboarding-features">
           <div className="onboarding-features__column">
