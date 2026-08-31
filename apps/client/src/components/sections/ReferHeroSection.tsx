@@ -30,13 +30,14 @@ export function ReferHeroSection() {
               </span>
             </h1>
 
-            <p className="refer-hero-body">
+            <p className="refer-hero-body refer-hero-body--lines">
               {referHeroCopy.bodyLines.map((line) => (
                 <span key={line} className="refer-hero-body-line">
                   {line}
                 </span>
               ))}
             </p>
+            <p className="refer-hero-body refer-hero-body--flow">{referHeroCopy.body}</p>
 
             <Link href={REFER_JOIN_PATH} className="refer-hero-cta">
               {referHeroCopy.cta}
