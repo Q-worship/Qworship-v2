@@ -135,6 +135,8 @@ interface HFBStore {
   clearAllState: () => void;
 }
 
+let latestChapterFetchSequence = 0;
+
 export const useHFBStore = create<HFBStore>((set, get) => ({
   hfbVersion: 'KJV',
   setHfbVersion: (version) => set({ hfbVersion: version }),
@@ -228,6 +230,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
   }),
 
   fetchHFBChapter: async (book, chapter, version, highlightVerse) => {
+    const fetchSeq = ++latestChapterFetchSequence;
     set({ hfbBookName: book, hfbChapter: chapter, hfbChapterLoading: true, hfbChapterVerses: [] });
     try {
       const vKey = version.toLowerCase();
@@ -238,6 +241,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       const memEndTime = performance.now();
       
       if (ramVerses && ramVerses.length > 0) {
+        if (fetchSeq !== latestChapterFetchSequence) return;
         set({ hfbChapterVerses: ramVerses as any[], hfbChapterLoading: false });
         if (highlightVerse !== undefined) {
            set({ hfbActiveVerseNum: highlightVerse });
@@ -252,6 +256,8 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
         .where({ version: vKey, book: book, chapter })
         .toArray();
       const endTime = performance.now();
+
+      if (fetchSeq !== latestChapterFetchSequence) return;
 
       if (localVerses && localVerses.length > 0) {
         // QC65 defensive check: if ALL cached verses have empty text, the cache
@@ -273,6 +279,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
             text: v.text || '',
           }));
 
+          if (fetchSeq !== latestChapterFetchSequence) return;
           set({ hfbChapterVerses: mappedVerses, hfbChapterLoading: false });
           if (highlightVerse !== undefined) {
              set({ hfbActiveVerseNum: highlightVerse });
@@ -291,6 +298,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       const resp = await apiClient.post('/bible/search', {
         book, chapter, verseStart: 1, verseEnd: 150, version: vKey
       });
+      if (fetchSeq !== latestChapterFetchSequence) return;
       const data = resp.data;
       if (data?.success && data?.result) {
         const verses = (data.result.verses as any[]).map((v: any) => ({
@@ -318,14 +326,17 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
         const ramVerses = verses.map((v: any) => ({ number: v.number, text: v.text }));
         useBibleRAMCache.getState().setChapterInRam(vKey, book, chapter, ramVerses);
 
+        if (fetchSeq !== latestChapterFetchSequence) return;
         set({ hfbChapterVerses: verses, hfbChapterLoading: false });
         if (highlightVerse !== undefined) {
            set({ hfbActiveVerseNum: highlightVerse });
         }
       } else {
+        if (fetchSeq !== latestChapterFetchSequence) return;
         set({ hfbChapterLoading: false });
       }
     } catch (e) {
+      if (fetchSeq !== latestChapterFetchSequence) return;
       console.error("[HFB Store] Fetch Error:", e);
       set({ hfbChapterLoading: false });
     }

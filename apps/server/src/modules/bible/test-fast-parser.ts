@@ -47,6 +47,20 @@ function runTests() {
     { input: "Church please open your Bible with me to the book of Genesis chapter 10 verse 10", expected: ["Genesis", 10, 10] },
     { input: "Good morning church, let's turn to 2 Corinthians 5 17", expected: ["2 Corinthians", 5, 17] },
     { input: "Now let us look at the book of Isaiah chapter 30 verse 1", expected: ["Isaiah", 30, 1] },
+
+    // QC Review Group 5: Filler Words Before Verse ("and in verse", "and in Verse")
+    { input: "Genesis chapter 10 and in verse 3", expected: ["Genesis", 10, 3] },
+    { input: "Romans 1 and in verse 5", expected: ["Romans", 1, 5] },
+    { input: "Psalms 1 1 9 and in verse 105", expected: ["Psalms", 119, 105] },
+
+    // QC Review Group 6: Compact whole tens
+    { input: "Matthew 20 1", expected: ["Matthew", 20, 1] },
+    { input: "Genesis 40 7", expected: ["Genesis", 40, 7] },
+
+    // QC Review Group 7: Letter 'O' & 0 digit sequences in Psalms
+    { input: "Psalms 1 O 5 verse 2", expected: ["Psalms", 105, 2] },
+    { input: "Psalms 1 0 5 verse 2", expected: ["Psalms", 105, 2] },
+    { input: "Psalm 1 O 3 verse 1", expected: ["Psalms", 103, 1] },
   ];
 
   for (const test of references) {

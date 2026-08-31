@@ -423,9 +423,23 @@ export function setupAudioSocket(server: Server) {
       const commands = FastBibleParser.scanForCommands(text);
       if (!commands.length) return false;
 
+      const occurrenceEntries = commandOccurrenceEntries(commands, turnSequence);
+      // Approach A: On streaming interims (!isFinal), only execute the active tail command.
+      // Historical commands earlier in the string were already processed and should not be re-evaluated.
+      const targetEntries = isFinal
+        ? occurrenceEntries
+        : [occurrenceEntries[occurrenceEntries.length - 1]];
+
+      // Pre-warm book context from any earlier full reference in the string
+      for (const entry of occurrenceEntries) {
+        if (entry.command.name === "project_bible_reference" && entry.command.arguments?.book) {
+          partialState.book = entry.command.arguments.book;
+        }
+      }
+
       let acceptedAny = false;
       const now = Date.now();
-      for (const { command, occurrenceKey } of commandOccurrenceEntries(commands, turnSequence)) {
+      for (const { command, occurrenceKey } of targetEntries) {
         const lastExecuted = executedOccurrences.get(occurrenceKey);
         if (lastExecuted && now - lastExecuted < EXECUTED_OCCURRENCE_TTL_MS) continue;
         if (

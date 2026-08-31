@@ -102,9 +102,12 @@ export const useHandsfreeBible = ({
     key: "",
     at: 0,
   });
+  const executedContextNavigationsRef = useRef<Set<string>>(new Set());
+  const lastTranscriptTextRef = useRef<string>("");
   const localLookupSequenceRef = useRef(0);
   const lastServerProjectionSequenceRef = useRef(0);
   const projectionGenerationRef = useRef(0);
+  const lastProjectionTimestampRef = useRef(0);
   const navigationRequestSequenceRef = useRef(0);
   const executeNavigationRef = useRef<(
     commandType: string,
@@ -202,6 +205,13 @@ export const useHandsfreeBible = ({
       return;
     }
 
+    if (data?.serverDetectedAt && lastProjectionTimestampRef.current > 0) {
+      if (data.serverDetectedAt < lastProjectionTimestampRef.current - 400) {
+        console.info(`[HFB] Stale server projection suppressed: ${projectionKey} (${data.serverDetectedAt} < ${lastProjectionTimestampRef.current})`);
+        return;
+      }
+    }
+
     if (projectionKey === lastProjectedRef.current.key &&
         now - lastProjectedRef.current.at < 5000) {
       return;
@@ -212,6 +222,7 @@ export const useHandsfreeBible = ({
     }
     projectionGenerationRef.current += 1;
     lastProjectedRef.current = { key: projectionKey, at: now };
+    lastProjectionTimestampRef.current = Date.now();
 
     const currentVerseContext = { book, chapter, verse: verseNum };
     currentVerseContextRef.current = currentVerseContext;
@@ -537,12 +548,19 @@ export const useHandsfreeBible = ({
     const navigations = scanHFBContextNavigations(text);
     if (!navigations.length) return false;
 
-    const current = useBibleProjectionStore.getState().currentVerse ||
-      currentVerseContextRef.current;
-    if (!current?.book) return false;
+    // Approach A: On streaming interims, strictly target the active tail command
+    const targetNavigations = isFinal
+      ? navigations
+      : [navigations[navigations.length - 1]];
+
+    const parsedRef = parseHFBReference(text);
+    const bookName = parsedRef?.book ||
+      useBibleProjectionStore.getState().currentVerse?.book ||
+      currentVerseContextRef.current?.book;
+    if (!bookName) return false;
 
     let handledAny = false;
-    for (const navigation of navigations) {
+    for (const navigation of targetNavigations) {
       if (
         !Number.isInteger(navigation.chapter) || navigation.chapter < 1 ||
         !Number.isInteger(navigation.verse) || navigation.verse < 1
@@ -550,14 +568,11 @@ export const useHandsfreeBible = ({
         continue;
       }
 
-      const key = `${current.book}|${navigation.chapter}|${navigation.verse}`;
+      const key = `${bookName}|${navigation.chapter}|${navigation.verse}`;
       const now = performance.now();
 
-      // If this exact command was already executed recently in this stream, skip to the next command
-      if (
-        lastContextNavigationRef.current.key === key &&
-        now - lastContextNavigationRef.current.at < 1500
-      ) {
+      // If this exact command was already executed in this stream, skip to subsequent commands
+      if (executedContextNavigationsRef.current.has(key)) {
         handledAny = true;
         continue;
       }
@@ -577,9 +592,10 @@ export const useHandsfreeBible = ({
         return true; // Still confirming frames for this unexecuted command
       }
 
+      executedContextNavigationsRef.current.add(key);
       lastContextNavigationRef.current = { key, at: now };
       console.info(
-        `[HFB] Client contextual navigation: ${current.book} ${navigation.chapter}:${navigation.verse} (conf: ${confidence.toFixed(2)})`,
+        `[HFB] Client contextual navigation: ${bookName} ${navigation.chapter}:${navigation.verse} (conf: ${confidence.toFixed(2)})`,
       );
       void executeNavigation(
         "jump_to_chapter_verse",
@@ -681,6 +697,13 @@ export const useHandsfreeBible = ({
       }
       resetInactivityTimer();
       setMicrophoneStatus("Processing");
+
+      // If transcript was reset/shortened, clear executed set for new turn
+      if (text.length < lastTranscriptTextRef.current.length - 10) {
+        executedContextNavigationsRef.current.clear();
+      }
+      lastTranscriptTextRef.current = text;
+
       useHFBStore.getState().setHfbCurrentPartial(text, metadata?.detectedReferences);
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
@@ -695,6 +718,8 @@ export const useHandsfreeBible = ({
     onFinalTranscript: (text) => {
       resetInactivityTimer();
       setMicrophoneStatus("Listening");
+      executedContextNavigationsRef.current.clear();
+      lastTranscriptTextRef.current = "";
       useHFBStore.getState().setHfbCurrentPartial(""); // Clear partial when final arrives
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
@@ -736,11 +761,17 @@ export const useHandsfreeBible = ({
       );
     },
     onReferenceStage: ({ book, chapter }) => {
-      // Predictively hydrate the chapter while the speaker is still saying the
-      // verse number. This makes the eventual lookup a synchronous RAM hit.
-      void useHFBStore.getState().fetchHFBChapter(
-        book, chapter, selectedBibleVersionRef.current,
-      );
+      // Predictively pre-warm RAM cache in the background without modifying Center Stage UI
+      const version = selectedBibleVersionRef.current.toLowerCase();
+      void db.verses
+        .where({ version, book, chapter })
+        .toArray()
+        .then((verses) => {
+          if (verses && verses.length > 0) {
+            useBibleRAMCache.getState().setChapterInRam(version, book, chapter, verses as any);
+          }
+        })
+        .catch(() => {});
     },
     onError: (message) => {
       connectionAttemptRef.current += 1;

@@ -66,26 +66,26 @@ export class FastBibleParser {
     extract: (m: RegExpMatchArray) => { rawBook: string; chapter: string; verse?: string; verseEnd?: string } | null;
     confidence: number;
   }> = [
-    // "Matthew chapter 1 verse 5" / "Matthew chapter one verse five"
+    // "Matthew chapter 1 verse 5" / "Genesis chapter 10 and in verse 3" / "Romans 1 and in verse 5"
     {
-      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+chapter\s+(\w+)(?:\s+(?:and\s+in|and\s+then\s+in|and\s+also|and\s+at|and\s+from|and\s+reading\s+from|now\s+in|and|in|at))?\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.95,
     },
-    // Digit-by-digit sequence before verse keyword: "Psalms 1 1 6 verse 16" -> Psalms 116:16
+    // Digit-by-digit sequence before verse keyword: "Psalms 1 1 6 verse 16" -> Psalms 116:16 / "Psalms 1 0 5 verse 2" / "Psalms 1 O 5 verse 2"
     {
-      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+((?:\d\s+){2,5})verse\s+(\d+)(?:\s+(?:to|through|and)\s+(\d+))?\b/gi,
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+((?:(?:\d|[oO])\s+){1,5})(?:(?:and\s+in|and\s+then\s+in|and\s+also|and\s+at|and\s+from|and\s+reading\s+from|now\s+in|and|in|at)\s+)?verse\s+(\d+)(?:\s+(?:to|through|and)\s+(\d+))?\b/gi,
       extract: (m) => ({
         rawBook: m[1],
-        chapter: m[2].trim().split(/\s+/).join(""),
+        chapter: m[2].trim().replace(/\b[oO]\b/g, "0").split(/\s+/).join(""),
         verse: m[3],
         verseEnd: m[4],
       }),
       confidence: 0.96,
     },
-    // "1st Kings 2 verse 2" / "Romans 8 verse 12" — chapter cue omitted
+    // "1st Kings 2 verse 2" / "Romans 8 verse 12" / "Romans 1 and in verse 5" — chapter cue omitted
     {
-      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\w+)\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
+      re: /\b([1-3]?\s*[a-z]+(?:\s+of\s+[a-z]+)?)\s+(\w+)(?:\s+(?:and\s+in|and\s+then\s+in|and\s+also|and\s+at|and\s+from|and\s+reading\s+from|now\s+in|and|in|at))?\s+verse\s+(\w+)(?:\s+(?:to|through|and)\s+(\w+))?\b/gi,
       extract: (m) => ({ rawBook: m[1], chapter: m[2], verse: m[3], verseEnd: m[4] }),
       confidence: 0.94,
     },
@@ -599,8 +599,9 @@ export class FastBibleParser {
     t = t.replace(/\b([1-3])(?:st|nd|rd)\b/gi, "$1");
 
     // 'O' / 'Oh' in numeric / phonetic patterns:
-    // e.g. "1'O'3", "1'o'5", "1 O 3", "1 o 5", "one oh three", "one o three"
+    // e.g. "1'O'3", "1'o'5", "1 O 3", "1 o 5", "1 0 5", "one oh three", "one o three"
     t = t.replace(/\b1\s*['’]?\s*(?:o|oh)\s*['’]?\s*(\d)\b/gi, "10$1");
+    t = t.replace(/\b([1-9])\s+[oO0]\s+([0-9])\b/g, "$10$2");
     t = t.replace(/\bone\s+['’]?\s*(?:o|oh)\s*['’]?\s*(one|two|three|four|five|six|seven|eight|nine)\b/gi, (_, unit) => {
       const uMap: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
       return `10${uMap[unit.toLowerCase()] || unit}`;

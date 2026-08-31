@@ -57,13 +57,14 @@ const tens: Record<string, number> = {
 
 const parseNumber = (value: string): number => {
   let cleanValue = value.toLowerCase().trim();
-  cleanValue = cleanValue.replace(/\b1\s*['’]?\s*(?:o|oh)\s*['’]?\s*(\d)\b/g, "10$1");
+  cleanValue = cleanValue.replace(/\b1\s*['’]?\s*(?:o|oh|0)\s*['’]?\s*(\d)\b/g, "10$1");
+  cleanValue = cleanValue.replace(/\b([1-9])\s+[oO0]\s+([0-9])\b/g, "$10$2");
   cleanValue = cleanValue.replace(/\bone\s+['’]?\s*(?:o|oh)\s*['’]?\s*(one|two|three|four|five|six|seven|eight|nine)\b/g, (_, unit) => {
     const uMap: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
     return `10${uMap[unit] || unit}`;
   });
   if (/^\d+$/.test(cleanValue)) return Number(cleanValue);
-  if (/^(\d\s+)+\d$/.test(cleanValue)) return Number(cleanValue.replace(/\s+/g, ""));
+  if (/^(\d\s+){1,4}\d$/.test(cleanValue)) return Number(cleanValue.replace(/\s+/g, ""));
 
   const words = cleanValue.replace(/-/g, " ").split(/\s+/).filter(w => w !== "and");
   let total = 0;
@@ -77,11 +78,12 @@ const parseNumber = (value: string): number => {
 };
 
 const numberWords = "(?:\\d+|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?)";
+const fillerWords = "(?:(?:and\\s+in|and\\s+then\\s+in|and\\s+also|and\\s+at|and\\s+from|and\\s+reading\\s+from|now\\s+in|and|in|at)\\s+)?";
 
 const patterns = [
-  new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(${numberWords})\\s+verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
-  new RegExp(`\\b(${bookAlternation})\\s+((?:\\d\\s+){2,5})verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
-  new RegExp(`\\b(${bookAlternation})\\s+(${numberWords})\\s+verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
+  new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(${numberWords})\\s+${fillerWords}verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
+  new RegExp(`\\b(${bookAlternation})\\s+((?:(?:\\d|[oO])\\s+){1,5})${fillerWords}verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
+  new RegExp(`\\b(${bookAlternation})\\s+(${numberWords})\\s+${fillerWords}verse\\s+(${numberWords})(?:\\s+(?:to|through|and)\\s+(${numberWords}))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(\\d+)\\s*[:.]\\s*(\\d+)(?:\\s*[-–—]\\s*(\\d+))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+chapter\\s+(\\d+)\\s+(\\d+)(?:\\s+(?:to|through|and)\\s+(\\d+))?\\b`, "i"),
   new RegExp(`\\b(${bookAlternation})\\s+(\\d+)\\s+(\\d+)(?:\\s+(?:to|through|and)\\s+(\\d+))?\\b`, "i"),
@@ -89,7 +91,7 @@ const patterns = [
 ];
 
 const contextualChapterVersePattern = new RegExp(
-  `\\bchapter\\s+(${numberWords})\\s+(?:and\\s+)?(?:verse\\s+)?(${numberWords})\\b`,
+  `\\bchapter\\s+(${numberWords})\\s+${fillerWords}(?:verse\\s+)?(${numberWords})\\b`,
   "i",
 );
 
