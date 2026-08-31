@@ -9980,7 +9980,8 @@ body.refer-mobile-nav-open {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 0;
+  padding-right: 0.75rem;
+  margin-right: -0.75rem;
 }
 
 .onboarding-step__heading {
