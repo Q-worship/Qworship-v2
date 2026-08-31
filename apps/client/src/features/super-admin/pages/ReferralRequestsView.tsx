@@ -28,6 +28,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
+import { ReferralRequestProfileView } from './ReferralRequestProfileView';
 
 interface ReferralRequestRow {
   _id: string;
@@ -48,7 +49,7 @@ const PRODUCT_LABELS: Record<string, string> = { qworship: 'Q-worship', 'go-gree
 export function ReferralRequestsView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject'; request: ReferralRequestRow } | null>(null);
-  const [detailRequest, setDetailRequest] = useState<ReferralRequestRow | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data, isLoading, refetch } = useQuery<{ success: boolean; requests: ReferralRequestRow[] }>({
@@ -113,6 +114,10 @@ export function ReferralRequestsView() {
     if (status === 'rejected') return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">Rejected</Badge>;
     return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">Pending</Badge>;
   };
+
+  if (viewingId) {
+    return <ReferralRequestProfileView requestId={viewingId} onBack={() => setViewingId(null)} />;
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -221,17 +226,20 @@ export function ReferralRequestsView() {
                 filtered.map((request) => (
                   <tr key={request._id} className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
+                      <button
+                        onClick={() => setViewingId(request._id)}
+                        className="flex items-center text-left transition hover:opacity-80"
+                      >
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/40 dark:to-blue-800/40 flex items-center justify-center shadow-sm">
                             <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-white">{request.firstName} {request.lastName}</div>
+                          <div className="text-sm font-semibold text-gray-900 hover:underline dark:text-white">{request.firstName} {request.lastName}</div>
                           <div className="text-sm text-gray-500 dark:text-gray-300">{request.email}</div>
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600 dark:text-gray-300">
                       {PRODUCT_LABELS[request.product] || request.product}
@@ -248,7 +256,7 @@ export function ReferralRequestsView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50">
-                          <DropdownMenuItem onClick={() => setDetailRequest(request)} className="text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                          <DropdownMenuItem onClick={() => setViewingId(request._id)} className="text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                             <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
@@ -281,26 +289,6 @@ export function ReferralRequestsView() {
           </table>
         </div>
       </div>
-
-      <AlertDialog open={!!detailRequest} onOpenChange={(open) => !open && setDetailRequest(null)}>
-        <AlertDialogContent className="sm:max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>{detailRequest?.firstName} {detailRequest?.lastName}</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-left text-sm">
-                <p><span className="font-semibold text-gray-700 dark:text-gray-300">Email:</span> {detailRequest?.email}</p>
-                <p><span className="font-semibold text-gray-700 dark:text-gray-300">Country:</span> {detailRequest?.country}{detailRequest?.state ? `, ${detailRequest.state}` : ''}</p>
-                <p><span className="font-semibold text-gray-700 dark:text-gray-300">Phone:</span> {detailRequest?.phoneNumber}</p>
-                <p><span className="font-semibold text-gray-700 dark:text-gray-300">Product:</span> {detailRequest ? PRODUCT_LABELS[detailRequest.product] : ''}</p>
-                {detailRequest?.about && <p><span className="font-semibold text-gray-700 dark:text-gray-300">About:</span> {detailRequest.about}</p>}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Close</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <AlertDialogContent>

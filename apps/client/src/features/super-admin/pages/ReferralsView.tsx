@@ -3,7 +3,6 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
@@ -29,16 +28,8 @@ import {
   KeyRound,
   ShieldOff,
   ShieldCheck,
-  Mail,
-  Phone,
-  MapPin,
-  CalendarDays,
-  Clock3,
-  Briefcase,
-  MessageSquareText,
-  UserCog,
-  X,
 } from 'lucide-react';
+import { RefereeProfileView } from './RefereeProfileView';
 
 interface RefereeRow {
   id: string;
@@ -53,23 +44,10 @@ interface RefereeRow {
   createdAt: string;
 }
 
-interface RefereeApplication {
-  id: string;
-  country?: string;
-  state?: string;
-  product: 'qworship' | 'go-green';
-  about?: string;
-  appliedAt: string;
-  approvedAt?: string;
-  approvedBy?: { firstName?: string; lastName?: string; email?: string } | null;
-}
-
-const PRODUCT_LABELS: Record<string, string> = { qworship: 'Q-worship', 'go-green': 'Go-Green' };
-
 export function ReferralsView() {
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmAction, setConfirmAction] = useState<{ type: 'suspend' | 'reactivate' | 'reset-password'; referee: RefereeRow } | null>(null);
-  const [detailReferee, setDetailReferee] = useState<RefereeRow | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data, isLoading, refetch } = useQuery<{ success: boolean; referees: RefereeRow[] }>({
@@ -77,11 +55,6 @@ export function ReferralsView() {
   });
 
   const referees = data?.referees || [];
-
-  const { data: detailData, isLoading: detailLoading } = useQuery<{ success: boolean; referee: RefereeRow; application: RefereeApplication | null }>({
-    queryKey: [`/api/admin/referrals/${detailReferee?.id}`],
-    enabled: !!detailReferee,
-  });
 
   const filtered = referees.filter((referee) => {
     const term = searchTerm.toLowerCase();
@@ -99,7 +72,7 @@ export function ReferralsView() {
     },
     onSuccess: (data) => {
       refetch();
-      if (detailReferee) queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${detailReferee.id}`] });
+      if (viewingId) queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${viewingId}`] });
       setConfirmAction(null);
       toast({
         title: data.referee?.isActive ? 'Referral partner reactivated' : 'Referral partner suspended',
@@ -124,7 +97,7 @@ export function ReferralsView() {
     },
     onSuccess: (data) => {
       refetch();
-      if (detailReferee) queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${detailReferee.id}`] });
+      if (viewingId) queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${viewingId}`] });
       setConfirmAction(null);
       toast({
         title: 'Password reset',
@@ -147,6 +120,10 @@ export function ReferralsView() {
     if (referee.mustChangePassword) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">Pending setup</Badge>;
     return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700">Active</Badge>;
   };
+
+  if (viewingId) {
+    return <RefereeProfileView refereeId={viewingId} onBack={() => setViewingId(null)} />;
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -255,17 +232,20 @@ export function ReferralsView() {
                 filtered.map((referee) => (
                   <tr key={referee.id} className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
+                      <button
+                        onClick={() => setViewingId(referee.id)}
+                        className="flex items-center text-left transition hover:opacity-80"
+                      >
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/40 dark:to-blue-800/40 flex items-center justify-center shadow-sm">
                             <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-white">{referee.firstName} {referee.lastName}</div>
+                          <div className="text-sm font-semibold text-gray-900 hover:underline dark:text-white">{referee.firstName} {referee.lastName}</div>
                           <div className="text-sm text-gray-500 dark:text-gray-300">{referee.email}</div>
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-600 dark:text-gray-300">
                       {referee.phoneNumber || '—'}
@@ -282,7 +262,7 @@ export function ReferralsView() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50">
-                          <DropdownMenuItem onClick={() => setDetailReferee(referee)} className="text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                          <DropdownMenuItem onClick={() => setViewingId(referee.id)} className="text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                             <Eye className="mr-2 h-4 w-4" />
                             View Details
                           </DropdownMenuItem>
@@ -321,147 +301,6 @@ export function ReferralsView() {
           </table>
         </div>
       </div>
-
-      <Dialog open={!!detailReferee} onOpenChange={(open) => !open && setDetailReferee(null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto rounded-[24px] p-0 sm:max-w-[640px]">
-          {detailReferee && (
-            <div>
-              <DialogTitle className="sr-only">{detailReferee.firstName} {detailReferee.lastName} — Referral Partner Profile</DialogTitle>
-              <div className="relative overflow-hidden rounded-t-[24px] bg-[#29242f] p-6 text-white">
-                <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#ff2e91] via-[#8054F6] to-[#c9bcff]" />
-                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#8054F6]/20" />
-                <button
-                  onClick={() => setDetailReferee(null)}
-                  aria-label="Close"
-                  className="absolute right-4 top-5 grid h-8 w-8 place-items-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white"
-                >
-                  <X size={16} />
-                </button>
-                <div className="relative flex items-center gap-4">
-                  <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white text-lg font-extrabold text-[#282330] shadow-sm">
-                    {(detailReferee.firstName?.[0] || '') + (detailReferee.lastName?.[0] || '')}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-xl font-extrabold">{detailReferee.firstName} {detailReferee.lastName}</div>
-                    <div className="mt-1 flex items-center gap-1.5 truncate text-sm text-[#c9c1cf]"><Mail size={13} />{detailReferee.email}</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {!detailReferee.isActive ? (
-                        <Badge variant="outline" className="border-red-300 bg-red-500/15 text-red-200">Suspended</Badge>
-                      ) : detailReferee.mustChangePassword ? (
-                        <Badge variant="outline" className="border-amber-300 bg-amber-500/15 text-amber-200">Pending setup</Badge>
-                      ) : (
-                        <Badge variant="outline" className="border-emerald-300 bg-emerald-500/15 text-emerald-200">Active</Badge>
-                      )}
-                      {detailData?.application && (
-                        <Badge variant="outline" className="border-white/30 bg-white/10 text-white">
-                          {PRODUCT_LABELS[detailData.application.product] || detailData.application.product}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6">
-                {detailLoading ? (
-                  <div className="flex flex-col items-center gap-3 py-10">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#8054F6] border-t-transparent" />
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Loading profile…</p>
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    <section>
-                      <p className="text-[10px] font-bold uppercase tracking-[.12em] text-gray-500 dark:text-gray-400">Account</p>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
-                          <Phone size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                          <div><div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Phone</div><div className="text-sm font-semibold text-gray-900 dark:text-white">{detailReferee.phoneNumber || '—'}</div></div>
-                        </div>
-                        <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
-                          <MapPin size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                          <div><div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Country</div><div className="text-sm font-semibold text-gray-900 dark:text-white">{detailData?.application?.country || detailReferee.countryCode || '—'}{detailData?.application?.state ? `, ${detailData.application.state}` : ''}</div></div>
-                        </div>
-                        <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
-                          <CalendarDays size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                          <div><div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Account created</div><div className="text-sm font-semibold text-gray-900 dark:text-white">{new Date(detailReferee.createdAt).toLocaleDateString()}</div></div>
-                        </div>
-                        <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
-                          <Clock3 size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                          <div><div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Last sign-in</div><div className="text-sm font-semibold text-gray-900 dark:text-white">{detailReferee.lastLogin ? new Date(detailReferee.lastLogin).toLocaleDateString() : 'Never'}</div></div>
-                        </div>
-                      </div>
-                    </section>
-
-                    {detailData?.application && (
-                      <section>
-                        <p className="text-[10px] font-bold uppercase tracking-[.12em] text-gray-500 dark:text-gray-400">Application</p>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
-                            <Briefcase size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                            <div><div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Applied</div><div className="text-sm font-semibold text-gray-900 dark:text-white">{new Date(detailData.application.appliedAt).toLocaleDateString()}</div></div>
-                          </div>
-                          {detailData.application.approvedAt && (
-                            <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-gray-800">
-                              <UserCog size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                              <div>
-                                <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Approved</div>
-                                <div className="text-sm font-semibold text-gray-900 dark:text-white">{new Date(detailData.application.approvedAt).toLocaleDateString()}</div>
-                                {detailData.application.approvedBy && (
-                                  <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                                    by {detailData.application.approvedBy.firstName} {detailData.application.approvedBy.lastName}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {detailData.application.about && (
-                          <div className="mt-3 flex items-start gap-3 rounded-xl bg-gray-50 p-4 dark:bg-gray-800">
-                            <MessageSquareText size={16} className="mt-0.5 shrink-0 text-[#8054F6]" />
-                            <div>
-                              <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">About</div>
-                              <p className="mt-1 text-sm leading-6 text-gray-700 dark:text-gray-300">{detailData.application.about}</p>
-                            </div>
-                          </div>
-                        )}
-                      </section>
-                    )}
-
-                    <div className="flex flex-wrap justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-                      <Button
-                        variant="outline"
-                        onClick={() => setConfirmAction({ type: 'reset-password', referee: detailReferee })}
-                      >
-                        <KeyRound className="mr-2 h-4 w-4" />
-                        Reset Password
-                      </Button>
-                      {detailReferee.isActive ? (
-                        <Button
-                          variant="outline"
-                          className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400"
-                          onClick={() => setConfirmAction({ type: 'suspend', referee: detailReferee })}
-                        >
-                          <ShieldOff className="mr-2 h-4 w-4" />
-                          Suspend
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          className="border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400"
-                          onClick={() => setConfirmAction({ type: 'reactivate', referee: detailReferee })}
-                        >
-                          <ShieldCheck className="mr-2 h-4 w-4" />
-                          Reactivate
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <AlertDialogContent>
