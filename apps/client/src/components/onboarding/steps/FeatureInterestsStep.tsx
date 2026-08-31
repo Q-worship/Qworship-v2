@@ -73,7 +73,7 @@ export function FeatureInterestsStep({
 
       <div className="onboarding-step__actions">
         <button type="button" className="onboarding-step__cta" onClick={onNext}>
-          Continue to Plans
+          Continue
         </button>
         <button type="button" className="onboarding-step__link" onClick={onBack}>
           Back

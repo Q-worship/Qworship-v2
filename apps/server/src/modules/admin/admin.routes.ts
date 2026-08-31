@@ -31,7 +31,7 @@ import {
   bulkExtendUserTrials,
 } from "./admin.controller.js";
 import { listRoles, createRole, updateRole, deleteRole } from "./role.controller.js";
-import { listReferralRequests, approveReferralRequest, rejectReferralRequest, listReferees, getRefereeDetail, suspendReferee, resetRefereePassword } from "../referral/referral.controller.js";
+import { listReferralRequests, approveReferralRequest, rejectReferralRequest, listReferees, getRefereeDetail, suspendReferee, resetRefereePassword, getReferredOrganizationsForAdmin } from "../referral/referral.controller.js";
 import { protect, authorizeAdmin, requireSuperAdmin, requirePermission } from "../auth/auth.middleware.js";
 import { rateLimit } from "../auth/rate-limit.middleware.js";
 import {
@@ -76,6 +76,7 @@ router.post("/referral-requests/:id/approve", requirePermission("referral-reques
 router.post("/referral-requests/:id/reject", requirePermission("referral-requests"), rejectReferralRequest);
 router.get("/referrals", requirePermission("referrals"), listReferees);
 router.get("/referrals/:id", requirePermission("referrals"), getRefereeDetail);
+router.get("/referrals/:id/organizations", requirePermission("referrals"), getReferredOrganizationsForAdmin);
 router.post("/referrals/:id/suspend", requirePermission("referrals"), suspendReferee);
 router.post("/referrals/:id/reset-password", requirePermission("referrals"), rateLimit("referral-reset-password", 20, 60 * 60 * 1000), resetRefereePassword);
 

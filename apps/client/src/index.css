@@ -9779,7 +9779,7 @@ body.mobile-nav-open {
 
 .onboarding-progress__bars {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
 }
 
@@ -10216,6 +10216,15 @@ body.mobile-nav-open {
   line-height: 1.2;
   white-space: normal;
   color: rgba(255, 255, 255, 0.9);
+}
+
+.onboarding-checkbox--disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.onboarding-checkbox--disabled .onboarding-checkbox__box {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Right showcase panel */

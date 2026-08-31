@@ -49,6 +49,37 @@ export async function savePreferences(req: Request, res: Response) {
   if (!Array.isArray(selectedFeatures) || !selectedFeatures.every(value => typeof value === 'string') || selectedFeatures.length > 30) {
     return res.status(400).json({ success: false, message: 'Selected features must be a valid list' });
   }
+
+  const rawReferralCode = req.body.referralCode;
+  const referralCode = typeof rawReferralCode === 'string' ? rawReferralCode.trim().toUpperCase() : '';
+  const hearAboutUsSource = req.body.hearAboutUsSource;
+
+  let referee = null;
+  if (referralCode) {
+    referee = await User.findOne({ referralCode, role: 'referee' });
+    if (!referee) {
+      return res.status(400).json({ success: false, message: "We couldn't find that referral code. Check it and try again, or leave it blank." });
+    }
+  } else if (hearAboutUsSource !== undefined) {
+    if (!Array.isArray(hearAboutUsSource) || !hearAboutUsSource.every(value => typeof value === 'string') || hearAboutUsSource.length > 10) {
+      return res.status(400).json({ success: false, message: 'How you heard about us must be a valid list' });
+    }
+  }
+
+  const organization = await Organization.findOne({ ownerId: user._id });
+  if (organization) {
+    if (referee) {
+      organization.referredBy = referee._id as any;
+      organization.referralCodeUsed = referralCode;
+      organization.hearAboutUsSource = [];
+    } else if (Array.isArray(hearAboutUsSource)) {
+      organization.hearAboutUsSource = [...new Set(hearAboutUsSource.map((value: string) => value.trim()).filter(Boolean))];
+      organization.referredBy = undefined;
+      organization.referralCodeUsed = undefined;
+    }
+    await organization.save();
+  }
+
   user.selectedFeatures = [...new Set(selectedFeatures.map(value => value.trim()).filter(Boolean))];
   user.onboardingStatus = 'preferences';
   await user.save();

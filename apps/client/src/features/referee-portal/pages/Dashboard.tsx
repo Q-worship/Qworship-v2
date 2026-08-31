@@ -1,16 +1,27 @@
 /** Quiet Momentum dashboard: progress-first hierarchy with one clear share action and transparent money states. */
 import MetricCard from "../components/MetricCard";
 import StatusPill from "../components/StatusPill";
-import { activities, churches, earningsTrend } from "../data/mockData";
+import { activities, earningsTrend } from "../data/mockData";
 import { getReferralCode, getReferralLink } from "../lib/referralCode";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Building2, Check, CircleDollarSign, Clock3, Copy, Link2, MousePointerClick, QrCode, Sparkles, WalletCards } from "lucide-react";
+import { ArrowRight, Building2, Check, CircleDollarSign, Clock3, Copy, Link2, Loader2, MousePointerClick, QrCode, Sparkles, WalletCards } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "../lib/toast";
 import { Link } from "wouter";
 import MomentumArtwork from "../components/MomentumArtwork";
 import { useAuthStore } from "@/features/auth/auth.store";
+
+interface ReferredChurch {
+  id: string;
+  church: string;
+  city: string;
+  country: string;
+  plan: string;
+  status: string;
+  date: string;
+}
 
 const journey = [{ label: "Visited", value: 246, color: "bg-[#e8e1ff] text-[#6f49d8]" }, { label: "Interested", value: 58, color: "bg-[#ddd1ff] text-[#6540cf]" }, { label: "In trial", value: 31, color: "bg-[#c7b4ff] text-[#5933c6]" }, { label: "Paying", value: 18, color: "bg-[#8054F6] text-white" }];
 
@@ -19,6 +30,10 @@ export default function Dashboard() {
   const user = useAuthStore((state) => state.user);
   const referralCode = useMemo(() => getReferralCode(user), [user]);
   const referralLink = useMemo(() => getReferralLink(referralCode), [referralCode]);
+  const { data: churchesData, isLoading: churchesLoading } = useQuery<{ success: boolean; churches: ReferredChurch[] }>({
+    queryKey: ["/api/referrals/my-organizations"],
+  });
+  const churches = churchesData?.churches || [];
   async function copyLink() { await navigator.clipboard.writeText(referralLink); setCopied(true); toast.success("Referral link copied"); window.setTimeout(() => setCopied(false), 1700); }
   return <div>
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold tracking-[.15em] text-[#8054F6] uppercase">Wednesday, 26 August</p><h1 className="mt-2 text-[32px] font-extrabold sm:text-[38px]">Your referrals are moving forward.</h1><p className="mt-2 max-w-2xl text-sm text-[#75717f]">See what changed, help the next church begin, and keep a clear view of what you can withdraw.</p></div><Button asChild className="violet-button h-11 rounded-xl px-5 font-bold"><Link href="/referrals">View all churches <ArrowRight className="ml-2" size={17} /></Link></Button></div>
@@ -44,6 +59,6 @@ export default function Dashboard() {
       <article className="surface rounded-[24px] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Latest activity</p><h2 className="mt-2 text-xl font-extrabold">What changed</h2></div><Link href="/notifications" className="text-xs font-bold text-[#8054F6] hover:underline">All updates</Link></div><div className="mt-5 space-y-1">{activities.map((item, index) => <div key={item.title} className="flex gap-3 border-b border-[#f0edf5] py-3 last:border-0"><span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone === "pink" ? "bg-[#ff2e91]" : item.tone === "green" ? "bg-emerald-500" : "bg-[#8054F6]"}`} /><div className="min-w-0 flex-1"><div className="text-[13px] font-bold text-[#312e36]">{item.title}</div><div className="mt-1 text-[11px] text-[#888391]">{item.detail}</div></div><span className="text-[10px] text-[#aaa5b1]">{item.time}</span></div>)}</div></article>
     </section>
 
-    <section className="surface mt-5 overflow-hidden rounded-[24px]"><div className="flex items-center justify-between px-5 py-5 sm:px-6"><div><p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Churches to watch</p><h2 className="mt-2 text-xl font-extrabold">Latest referral journeys</h2></div><Button asChild variant="outline" className="rounded-xl bg-white"><Link href="/referrals">View all <ArrowRight className="ml-2" size={15} /></Link></Button></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#faf9fd] text-[10px] font-bold tracking-[.1em] text-[#918c99] uppercase"><tr><th className="px-6 py-3">Church</th><th className="px-4 py-3">Journey status</th><th className="px-4 py-3">Plan</th><th className="px-4 py-3">Next step</th><th className="px-6 py-3 text-right">Open</th></tr></thead><tbody>{churches.slice(0, 5).map(church => <tr key={church.id} className="border-t border-[#f0edf5] text-[13px] transition hover:bg-[#fbfaff]"><td className="px-6 py-4"><div className="font-bold text-[#302d35]">{church.church}</div><div className="mt-1 text-[11px] text-[#95909d]">{church.city}, {church.country}</div></td><td className="px-4 py-4"><StatusPill label={church.status} /></td><td className="px-4 py-4 font-semibold text-[#625e69]">{church.plan}</td><td className="px-4 py-4 text-[#77727f]">{church.nextStep}</td><td className="px-6 py-4 text-right"><Link href={`/referrals/${church.id}`} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8054F6] transition hover:bg-[#eee9ff]" aria-label={`Open ${church.church}`}><ArrowRight size={16} /></Link></td></tr>)}</tbody></table></div></section>
+    <section className="surface mt-5 overflow-hidden rounded-[24px]"><div className="flex items-center justify-between px-5 py-5 sm:px-6"><div><p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Churches to watch</p><h2 className="mt-2 text-xl font-extrabold">Latest churches you referred</h2></div><Button asChild variant="outline" className="rounded-xl bg-white"><Link href="/referrals">View all <ArrowRight className="ml-2" size={15} /></Link></Button></div><div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left"><thead className="bg-[#faf9fd] text-[10px] font-bold tracking-[.1em] text-[#918c99] uppercase"><tr><th className="px-6 py-3">Church</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Plan</th><th className="px-6 py-3">Introduced</th></tr></thead><tbody>{churchesLoading ? <tr><td colSpan={4} className="px-6 py-12 text-center"><Loader2 className="mx-auto animate-spin text-[#8054F6]" size={22}/></td></tr> : churches.length === 0 ? <tr><td colSpan={4} className="px-6 py-12 text-center text-sm text-[#8b8693]">No churches have signed up with your referral code yet.</td></tr> : churches.slice(0, 5).map(church => <tr key={church.id} className="border-t border-[#f0edf5] text-[13px] transition hover:bg-[#fbfaff]"><td className="px-6 py-4"><div className="font-bold text-[#302d35]">{church.church}</div><div className="mt-1 text-[11px] text-[#95909d]">{church.city}{church.city && church.country ? ", " : ""}{church.country}</div></td><td className="px-4 py-4"><StatusPill label={church.status} /></td><td className="px-4 py-4 font-semibold capitalize text-[#625e69]">{church.plan}</td><td className="px-6 py-4 text-[#77727f]">{new Date(church.date).toLocaleDateString()}</td></tr>)}</tbody></table></div></section>
   </div>;
 }

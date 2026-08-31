@@ -19,8 +19,9 @@ import { ProjectSelectionView } from './ProjectSelectionView'
 import { WelcomeStep } from './steps/WelcomeStep'
 import { ChurchInfoStep, type ChurchInfoData } from './steps/ChurchInfoStep'
 import { FeatureInterestsStep } from './steps/FeatureInterestsStep'
+import { ReferralSourceStep } from './steps/ReferralSourceStep'
 
-type OnboardingWelcomeStep = 1 | 2 | 3
+type OnboardingWelcomeStep = 1 | 2 | 3 | 4
 
 type OnboardingPhase =
   | 'welcome'
@@ -50,6 +51,9 @@ export function OnboardingFlow() {
   const [step, setStep] = useState<OnboardingWelcomeStep>(1)
   const [churchInfo, setChurchInfo] = useState<ChurchInfoData>(initialChurchInfo)
   const [selectedFeatures, setSelectedFeatures] = useState<OnboardingFeatureId[]>([])
+  const [referralCode, setReferralCode] = useState('')
+  const [hearAboutUsSource, setHearAboutUsSource] = useState<string[]>([])
+  const [referralError, setReferralError] = useState('')
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
@@ -91,11 +95,18 @@ export function OnboardingFlow() {
   const handleReachPlans = async () => {
     setIsSaving(true)
     setError('')
+    setReferralError('')
     try {
-      await saveOnboardingPreferences(selectedFeatures)
+      const trimmedCode = referralCode.trim()
+      await saveOnboardingPreferences(selectedFeatures, trimmedCode ? { referralCode: trimmedCode } : { hearAboutUsSource })
       setPhase('plans')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to save preferences')
+      const message = reason instanceof Error ? reason.message : 'Unable to save preferences'
+      if (referralCode.trim()) {
+        setReferralError(message)
+      } else {
+        setError(message)
+      }
     } finally {
       setIsSaving(false)
     }
@@ -132,11 +143,27 @@ export function OnboardingFlow() {
     )
   }
 
+  const toggleSource = (source: string) => {
+    setHearAboutUsSource((current) =>
+      current.includes(source)
+        ? current.filter((item) => item !== source)
+        : [...current, source],
+    )
+  }
+
+  const handleReferralCodeChange = (value: string) => {
+    setReferralCode(value)
+    setReferralError('')
+    if (value.trim()) {
+      setHearAboutUsSource([])
+    }
+  }
+
   if (phase === 'complete') {
     return <ProjectSelectionView />
   }
 
-  const slide = onboardingSlides[step - 1]
+  const slide = onboardingSlides[Math.min(step, 3) - 1]
 
   const renderWelcomeStep = () => {
     switch (step) {
@@ -156,8 +183,21 @@ export function OnboardingFlow() {
           <FeatureInterestsStep
             selectedFeatures={selectedFeatures}
             onToggleFeature={toggleFeature}
-            onNext={handleReachPlans}
+            onNext={() => setStep(4)}
             onBack={() => setStep(2)}
+          />
+        )
+      case 4:
+        return (
+          <ReferralSourceStep
+            referralCode={referralCode}
+            onReferralCodeChange={handleReferralCodeChange}
+            hearAboutUsSource={hearAboutUsSource}
+            onToggleSource={toggleSource}
+            onNext={() => void handleReachPlans()}
+            onBack={() => setStep(3)}
+            error={referralError}
+            isSaving={isSaving}
           />
         )
       default:
@@ -166,7 +206,7 @@ export function OnboardingFlow() {
   }
 
   const skipButton =
-    step === 3 && phase === 'welcome' ? (
+    step === 4 && phase === 'welcome' ? (
       <button
         type="button"
         className="onboarding-step__skip onboarding-step__skip--inline"

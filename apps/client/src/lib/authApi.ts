@@ -51,6 +51,7 @@ export interface AuthUser {
   firstName?: string
   lastName?: string
   role?: string
+  referralCode?: string
   organizationName?: string
   emailVerified?: boolean
   onboardingStatus?: 'pending' | 'organization' | 'preferences' | 'completed'
@@ -353,8 +354,13 @@ export function saveOnboardingOrganization(payload: ChurchInfoPayload) {
   return authFetch<{ success: boolean }>('/onboarding/organization', { method: 'PUT', headers: bearerHeaders(), body: JSON.stringify(payload) })
 }
 
-export function saveOnboardingPreferences(selectedFeatures: string[]) {
-  return authFetch<{ success: boolean }>('/onboarding/preferences', { method: 'PUT', headers: bearerHeaders(), body: JSON.stringify({ selectedFeatures }) })
+export interface ReferralSourcePayload {
+  referralCode?: string
+  hearAboutUsSource?: string[]
+}
+
+export function saveOnboardingPreferences(selectedFeatures: string[], referralSource?: ReferralSourcePayload) {
+  return authFetch<{ success: boolean }>('/onboarding/preferences', { method: 'PUT', headers: bearerHeaders(), body: JSON.stringify({ selectedFeatures, ...referralSource }) })
 }
 
 export function completeOnboarding() {

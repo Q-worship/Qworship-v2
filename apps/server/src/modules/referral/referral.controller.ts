@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { ReferralRequest } from "./referral.model.js";
 import { User } from "../auth/auth.model.js";
+import { Organization } from "../organization/organization.model.js";
 import { sendAdminCredentialsEmail } from "../auth/email.service.js";
 
 function normalizeEmail(value: unknown) {
@@ -11,6 +12,11 @@ function normalizeEmail(value: unknown) {
 
 function generateTempPassword() {
   return randomBytes(12).toString("base64url");
+}
+
+export function generateReferralCode() {
+  const suffix = randomBytes(6).toString("base64url").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return `QW-${suffix}`;
 }
 
 export const submitReferralRequest = async (req: Request, res: Response) => {
@@ -95,6 +101,7 @@ export const approveReferralRequest = async (req: Request, res: Response) => {
       countryCode: request.country,
       phoneNumber: request.phoneNumber,
       role: "referee",
+      referralCode: generateReferralCode(),
       isActive: true,
       emailVerified: true,
       mustChangePassword: true,
@@ -151,6 +158,7 @@ function toRefereeRow(user: any) {
     lastName: user.lastName,
     countryCode: user.countryCode,
     phoneNumber: user.phoneNumber,
+    referralCode: user.referralCode ?? null,
     isActive: !!user.isActive,
     mustChangePassword: !!user.mustChangePassword,
     lastLogin: user.lastLoginAt ?? null,
@@ -217,6 +225,44 @@ export const suspendReferee = async (req: Request, res: Response) => {
     target.isActive = !target.isActive;
     await target.save();
     return res.json({ success: true, referee: toRefereeRow(target) });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+async function listReferredOrganizations(refereeId: string) {
+  const organizations = await Organization.find({ referredBy: refereeId })
+    .sort({ createdAt: -1 })
+    .select("name city country subscriptionType subscriptionStatus createdAt")
+    .lean();
+  return organizations.map((org: any) => ({
+    id: org._id,
+    church: org.name,
+    city: org.city || "",
+    country: org.country || "",
+    plan: org.subscriptionType,
+    status: org.subscriptionStatus,
+    date: org.createdAt,
+  }));
+}
+
+export const getReferredOrganizationsForAdmin = async (req: Request, res: Response) => {
+  try {
+    const referee = await User.findOne({ _id: req.params.id, role: "referee" });
+    if (!referee) return res.status(404).json({ success: false, message: "Referral partner account not found" });
+    const churches = await listReferredOrganizations(req.params.id);
+    return res.json({ success: true, churches });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getMyReferredOrganizations = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+    const churches = await listReferredOrganizations(String(user._id));
+    return res.json({ success: true, churches });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }

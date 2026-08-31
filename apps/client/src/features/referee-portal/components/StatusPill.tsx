@@ -14,6 +14,11 @@ const tones: Record<string, string> = {
   Paid: "bg-sky-50 text-sky-700 border-sky-100",
   Reversed: "bg-rose-50 text-rose-700 border-rose-100",
   Processing: "bg-amber-50 text-amber-700 border-amber-100",
+  // Real Organization.subscriptionStatus values (referred-church data, distinct from the fictional pipeline labels above)
+  trial: "bg-violet-50 text-violet-700 border-violet-100",
+  active: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  inactive: "bg-slate-100 text-slate-600 border-slate-200",
+  cancelled: "bg-rose-50 text-rose-700 border-rose-100",
 };
 
 export default function StatusPill({ label, className }: { label: string; className?: string }) {

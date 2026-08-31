@@ -14,6 +14,9 @@ export interface IOrganization extends Document {
   subscriptionType: "free" | "basic" | "premium" | "enterprise";
   subscriptionStatus: "active" | "inactive" | "trial" | "cancelled";
   ownerId: mongoose.Types.ObjectId;
+  referredBy?: mongoose.Types.ObjectId;
+  referralCodeUsed?: string;
+  hearAboutUsSource?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +44,9 @@ const OrganizationSchema = new Schema<IOrganization>(
       default: "trial",
     },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    referredBy: { type: Schema.Types.ObjectId, ref: "User" },
+    referralCodeUsed: { type: String },
+    hearAboutUsSource: { type: [String], default: [] },
   },
   { timestamps: true },
 );

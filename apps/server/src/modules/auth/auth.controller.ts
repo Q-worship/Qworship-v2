@@ -6,6 +6,7 @@ import { User } from './auth.model.js';
 import { EmailVerification } from './email-verification.model.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from './email.service.js';
 import { notifyPasswordChange } from '../notifications/notification.service.js';
+import { generateReferralCode } from '../referral/referral.controller.js';
 import {
   DEFAULT_PINNED_BIBLE_VERSIONS,
   isBibleVersionCode,
@@ -33,6 +34,7 @@ function publicUser(user: any) {
     lastName: user.lastName,
     phoneNumber: user.phoneNumber,
     countryCode: user.countryCode,
+    referralCode: user.referralCode,
     role: user.role,
     roleId: user.roleId?._id ?? user.roleId ?? null,
     mustChangePassword: !!user.mustChangePassword,
@@ -216,6 +218,7 @@ export const signIn = async (req: Request, res: Response) => {
 
     if (user.role !== 'user') {
       user.lastLoginAt = new Date();
+      if (user.role === 'referee' && !user.referralCode) user.referralCode = generateReferralCode();
       await user.save();
     }
 
