@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { churches } from "../../referee-portal/data/mockData";
+import StatusPill from "../../referee-portal/components/StatusPill";
 import {
   ArrowLeft,
   Mail,
@@ -33,6 +35,9 @@ import {
   User,
   Hourglass,
   Activity,
+  Building2,
+  CircleDollarSign,
+  Link2,
 } from 'lucide-react';
 
 interface RefereeRow {
@@ -198,9 +203,10 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid h-auto grid-cols-3 gap-1 rounded-xl border border-gray-200 bg-white/80 p-1 shadow-sm dark:border-gray-700/50 dark:bg-gray-800/50">
+        <TabsList className="grid h-auto grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-white/80 p-1 shadow-sm dark:border-gray-700/50 dark:bg-gray-800/50 sm:grid-cols-4">
           <TabsTrigger value="overview" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><User className="h-4 w-4" />Overview</TabsTrigger>
           <TabsTrigger value="application" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Briefcase className="h-4 w-4" />Application</TabsTrigger>
+          <TabsTrigger value="referrals" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Building2 className="h-4 w-4" />Referred Clients</TabsTrigger>
           <TabsTrigger value="actions" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><UserCog className="h-4 w-4" />Security &amp; Actions</TabsTrigger>
         </TabsList>
 
@@ -251,6 +257,67 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">No linked application was found for this account.</p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="referrals" className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400"><Building2 className="h-5 w-5" /></div>
+                <div><div className="text-xl font-bold text-gray-900 dark:text-white">{churches.length}</div><div className="text-xs text-gray-500 dark:text-gray-400">Churches referred</div></div>
+              </CardContent>
+            </Card>
+            <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="rounded-lg bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"><ShieldCheck className="h-5 w-5" /></div>
+                <div><div className="text-xl font-bold text-gray-900 dark:text-white">{churches.filter((c) => c.status === 'Active subscriber').length}</div><div className="text-xs text-gray-500 dark:text-gray-400">Active subscribers</div></div>
+              </CardContent>
+            </Card>
+            <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="rounded-lg bg-purple-100 p-2 text-purple-600 dark:bg-purple-600/20 dark:text-purple-400"><CircleDollarSign className="h-5 w-5" /></div>
+                <div><div className="text-xl font-bold text-gray-900 dark:text-white">${churches.reduce((sum, c) => sum + c.monthlyCommission, 0).toFixed(2)}</div><div className="text-xs text-gray-500 dark:text-gray-400">Monthly commission</div></div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100"><Link2 className="h-5 w-5" />Referral pipeline</CardTitle>
+              <CardDescription className="text-gray-500 dark:text-gray-400">Churches this referral partner has introduced to Q-Worship</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left">
+                  <thead className="bg-gray-50 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+                    <tr>
+                      <th className="px-6 py-3">Church</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Plan</th>
+                      <th className="px-4 py-3">Source</th>
+                      <th className="px-4 py-3">Introduced</th>
+                      <th className="px-6 py-3">Monthly commission</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {churches.map((church) => (
+                      <tr key={church.id} className="text-sm hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-gray-900 dark:text-white">{church.church}</div>
+                          <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{church.city}, {church.country}</div>
+                        </td>
+                        <td className="px-4 py-4"><StatusPill label={church.status} /></td>
+                        <td className="px-4 py-4 text-gray-700 dark:text-gray-300">{church.plan}</td>
+                        <td className="px-4 py-4 text-gray-500 dark:text-gray-400">{church.source}</td>
+                        <td className="px-4 py-4 text-gray-500 dark:text-gray-400">{church.date}</td>
+                        <td className="px-6 py-4 font-semibold text-gray-900 dark:text-white">{church.monthlyCommission > 0 ? `$${church.monthlyCommission.toFixed(2)}` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
