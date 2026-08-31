@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 interface AuthState {
   isAuthenticated: boolean;
-  user: null | { id: string; username?: string; role?: string; email: string; firstName?: string; lastName?: string; onboardingStatus?: string; trialStatus?: string; trialEndDate?: string; subscriptionStatus?: string; roleId?: string | null; mustChangePassword?: boolean; permissions?: string[]; };
+  user: null | { id: string; username?: string; role?: string; email: string; firstName?: string; lastName?: string; phoneNumber?: string; countryCode?: string; onboardingStatus?: string; trialStatus?: string; trialEndDate?: string; subscriptionStatus?: string; roleId?: string | null; mustChangePassword?: boolean; permissions?: string[]; };
   setAuth: (user: AuthState['user']) => void;
   logout: () => void;
 }

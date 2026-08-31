@@ -1,19 +1,24 @@
 /** Quiet Momentum dashboard: progress-first hierarchy with one clear share action and transparent money states. */
 import MetricCard from "../components/MetricCard";
 import StatusPill from "../components/StatusPill";
-import { activities, churches, earningsTrend, referralCode, referralLink } from "../data/mockData";
+import { activities, churches, earningsTrend } from "../data/mockData";
+import { getReferralCode, getReferralLink } from "../lib/referralCode";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Building2, Check, CircleDollarSign, Clock3, Copy, Link2, MousePointerClick, QrCode, Sparkles, WalletCards } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "../lib/toast";
 import { Link } from "wouter";
 import MomentumArtwork from "../components/MomentumArtwork";
+import { useAuthStore } from "@/features/auth/auth.store";
 
 const journey = [{ label: "Visited", value: 246, color: "bg-[#e8e1ff] text-[#6f49d8]" }, { label: "Interested", value: 58, color: "bg-[#ddd1ff] text-[#6540cf]" }, { label: "In trial", value: 31, color: "bg-[#c7b4ff] text-[#5933c6]" }, { label: "Paying", value: 18, color: "bg-[#8054F6] text-white" }];
 
 export default function Dashboard() {
   const [copied, setCopied] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const referralCode = useMemo(() => getReferralCode(user), [user]);
+  const referralLink = useMemo(() => getReferralLink(referralCode), [referralCode]);
   async function copyLink() { await navigator.clipboard.writeText(referralLink); setCopied(true); toast.success("Referral link copied"); window.setTimeout(() => setCopied(false), 1700); }
   return <div>
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold tracking-[.15em] text-[#8054F6] uppercase">Wednesday, 26 August</p><h1 className="mt-2 text-[32px] font-extrabold sm:text-[38px]">Your referrals are moving forward.</h1><p className="mt-2 max-w-2xl text-sm text-[#75717f]">See what changed, help the next church begin, and keep a clear view of what you can withdraw.</p></div><Button asChild className="violet-button h-11 rounded-xl px-5 font-bold"><Link href="/referrals">View all churches <ArrowRight className="ml-2" size={17} /></Link></Button></div>

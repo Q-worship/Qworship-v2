@@ -54,7 +54,7 @@ export default function PayoutMethodManager({ open, onOpenChange, methods, onMet
   function confirmRemove(){if(!removeCandidate)return;onMethodsChange(methods.filter(item=>item.id!==removeCandidate.id));toast.success(`${removeCandidate.provider} removed`);setRemoveCandidate(null)}
   function copyReference(){if(!created)return;navigator.clipboard.writeText(created.id.toUpperCase());toast.success("Verification reference copied")}
 
-  return <><Dialog open={open} onOpenChange={(value)=>{if(!value)close();else onOpenChange(true)}}><DialogContent className="max-h-[94vh] overflow-y-auto rounded-[26px] p-0 sm:max-w-[860px]">
+  return <><Dialog open={open} onOpenChange={(value)=>{if(!value)close();else onOpenChange(true)}}><DialogContent className="referee-portal-dialog max-h-[94vh] overflow-y-auto rounded-[26px] p-0 sm:max-w-[860px]">
     <div className="h-[3px] bg-gradient-to-r from-[#ff2e91] via-[#8054F6] to-[#c8bbff]"/>
     <div className="p-6 sm:p-8">
       {stage!=="list"&&stage!=="success"&&<div className="mb-6"><div className="flex items-center justify-between text-[10px] font-bold text-[#8d8694]"><span>ADD PAYOUT METHOD</span><span>STEP {step} OF 3</span></div><div className="mt-2 grid grid-cols-3 gap-2">{[1,2,3].map(item=><span key={item} className={`h-1.5 rounded-full ${item<=step?"bg-[#8054F6]":"bg-[#ebe7f2]"}`}/>)}</div></div>}

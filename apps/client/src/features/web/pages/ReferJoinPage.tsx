@@ -8,6 +8,7 @@ import { ReferNavbar } from '@/components/sections/ReferNavbar'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { images } from '@/lib/theme'
 import { COUNTRY_OPTIONS, COUNTRY_NAME_TO_DIAL_CODE, countryNameFromIsoCode } from '@/lib/countries'
+import { MaterialIcon } from '@/components/ui/MaterialIcon'
 
 const PRODUCTS = [
   { id: 'qworship', label: 'Q-worship' },
@@ -22,6 +23,8 @@ export function ReferJoinPage() {
   const [country, setCountry] = useState(DEFAULT_COUNTRY)
   const [submitting, setSubmitting] = useState(false)
   const [userPickedCountry, setUserPickedCountry] = useState(false)
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const dialCode = useMemo(() => COUNTRY_NAME_TO_DIAL_CODE[country] || '+—', [country])
 
@@ -82,24 +85,33 @@ export function ReferJoinPage() {
       about: String(formData.get('about') || '').trim(),
     }
 
+    setSubmitError(null)
     setSubmitting(true)
     try {
       await apiRequest('POST', '/api/referrals/apply', payload)
+      setSubmittedEmail(payload.email)
       toast({
         title: 'Application received',
         description: "Thanks for applying — our team will review your details and get back to you.",
       })
-      event.currentTarget.reset()
-      setCountry(DEFAULT_COUNTRY)
     } catch (error: any) {
+      const message = error?.message?.replace(/^\d+:\s*/, '') || 'Please check your details and try again.'
+      setSubmitError(message)
       toast({
         title: "Couldn't submit your application",
-        description: error?.message?.replace(/^\d+:\s*/, '') || 'Please check your details and try again.',
+        description: message,
         variant: 'destructive',
       })
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const submitAnother = () => {
+    setSubmittedEmail(null)
+    setSubmitError(null)
+    setCountry(DEFAULT_COUNTRY)
+    setUserPickedCountry(false)
   }
 
   return (
@@ -131,10 +143,32 @@ export function ReferJoinPage() {
 
         <section className="refer-join-form-section reveal">
           <SiteContainer>
+            {submittedEmail ? (
+              <div className="refer-join-success">
+                <span className="refer-join-success-icon">
+                  <MaterialIcon name="check_circle" filled />
+                </span>
+                <h2 className="refer-join-form-heading font-headline font-bold">Application received</h2>
+                <p className="refer-join-success-body">
+                  Thanks for applying, we've sent a confirmation to <strong>{submittedEmail}</strong>. Our
+                  team will review your details and get back to you soon.
+                </p>
+                <button type="button" className="refer-join-submit refer-join-submit--secondary" onClick={submitAnother}>
+                  Submit another application
+                </button>
+              </div>
+            ) : (
             <form className="refer-join-form" onSubmit={handleSubmit}>
               <h2 className="refer-join-form-heading font-headline font-bold">
                 Please provide the following details
               </h2>
+
+              {submitError && (
+                <div className="refer-join-error" role="alert">
+                  <MaterialIcon name="error" />
+                  <span>{submitError}</span>
+                </div>
+              )}
 
               <div className="refer-form-row">
                 <div className="refer-form-field">
@@ -226,6 +260,7 @@ export function ReferJoinPage() {
                 <a href="#">Privacy Policy</a> and <a href="#">User Agreement</a>.
               </p>
             </form>
+            )}
           </SiteContainer>
         </section>
       </main>

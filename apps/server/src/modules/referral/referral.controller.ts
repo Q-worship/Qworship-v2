@@ -174,6 +174,42 @@ export const listReferees = async (req: Request, res: Response) => {
   }
 };
 
+export const getRefereeDetail = async (req: Request, res: Response) => {
+  try {
+    const referee = await User.findOne({ _id: req.params.id, role: "referee" }).select("-password").lean();
+    if (!referee) return res.status(404).json({ success: false, message: "Referral partner account not found" });
+
+    const application = await ReferralRequest.findOne({ refereeUserId: referee._id })
+      .populate("reviewedBy", "firstName lastName email")
+      .lean();
+
+    return res.json({
+      success: true,
+      referee: toRefereeRow(referee),
+      application: application
+        ? {
+            id: application._id,
+            country: application.country,
+            state: application.state,
+            product: application.product,
+            about: application.about,
+            appliedAt: application.createdAt,
+            approvedAt: application.reviewedAt,
+            approvedBy: application.reviewedBy
+              ? {
+                  firstName: (application.reviewedBy as any).firstName,
+                  lastName: (application.reviewedBy as any).lastName,
+                  email: (application.reviewedBy as any).email,
+                }
+              : null,
+          }
+        : null,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const suspendReferee = async (req: Request, res: Response) => {
   try {
     const target = await User.findOne({ _id: req.params.id, role: "referee" });

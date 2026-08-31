@@ -6798,6 +6798,51 @@ body.mobile-nav-open {
   transform: translateY(-2px);
 }
 
+.refer-join-submit--secondary {
+  background: #17122b;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.refer-join-error {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: 0.5rem;
+  background: #fdecea;
+  color: #a1180f;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.875rem 1rem;
+}
+
+.refer-join-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 3rem 1.5rem;
+}
+
+.refer-join-success-icon {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 999px;
+  background: #eafbf1;
+  color: #16a34a;
+  font-size: 2.25rem;
+}
+
+.refer-join-success-body {
+  max-width: 32rem;
+  color: #4a4560;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
 .refer-join-legal {
   text-align: center;
   font-size: 0.8125rem;
@@ -11208,3 +11253,10 @@ body.mobile-nav-open {
 .page-enter { animation: page-in .34s cubic-bezier(.23,1,.32,1) both; }
 .scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(128,84,246,.22) transparent; }
 @keyframes page-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+/* The shared Input component defaults to white text for the app's dark-themed surfaces; override it
+   for the referee portal's light backgrounds (in-page and, via this marker class, its portaled dialogs). */
+.referee-portal-shell input,
+.referee-portal-dialog input {
+  color: #17122b;
+}

@@ -31,6 +31,8 @@ function publicUser(user: any) {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    phoneNumber: user.phoneNumber,
+    countryCode: user.countryCode,
     role: user.role,
     roleId: user.roleId?._id ?? user.roleId ?? null,
     mustChangePassword: !!user.mustChangePassword,

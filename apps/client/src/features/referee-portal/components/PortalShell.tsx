@@ -45,7 +45,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function PortalShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#f4f3ff] text-[#24222a]">
+    <div className="referee-portal-shell min-h-screen bg-[#f4f3ff] text-[#24222a]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[238px] border-r border-[#ebe8f5] bg-white/90 backdrop-blur-xl lg:block"><NavContent /></aside>
       <div className="lg:pl-[238px]">
         <header className="sticky top-0 z-20 flex h-[76px] items-center gap-4 border-b border-[#ebe8f5] bg-[#f4f3ff]/88 px-4 backdrop-blur-xl sm:px-7 lg:px-9">
