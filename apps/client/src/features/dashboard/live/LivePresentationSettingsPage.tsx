@@ -250,6 +250,28 @@ function GradientBuilder({
 }
 
 // ── ColorPickerField ──────────────────────────────────────────────────────────
+// Mirrors the live console's own getReferencePositionClass
+// (features/dashboard/live/useLivePresentationState.ts) so the preview here
+// matches exactly what the real projected output does for each position.
+function getReferencePositionClass(position: string) {
+  switch (position) {
+    case "top-left":
+      return "top-4 left-4 text-left";
+    case "top-center":
+      return "top-4 left-1/2 -translate-x-1/2 text-center";
+    case "top-right":
+      return "top-4 right-4 text-right";
+    case "bottom-left":
+      return "bottom-4 left-4 text-left";
+    case "bottom-center":
+      return "bottom-4 left-1/2 -translate-x-1/2 text-center";
+    case "bottom-right":
+      return "bottom-4 right-4 text-right";
+    default:
+      return "top-4 left-1/2 -translate-x-1/2 text-center";
+  }
+}
+
 function ColorPickerField({
   label,
   value,
@@ -498,14 +520,29 @@ export function LivePresentationSettingsPage({
   const descBoxRef = useRef<HTMLDivElement>(null);
   const descTextRef = useRef<HTMLDivElement>(null);
 
+  const liveReferenceRef = useRef<HTMLDivElement>(null);
+
   const liveBaseRem = activeSize.previewRem * 0.45;
+  const liveReferenceBaseRem = liveBaseRem * 0.5;
   useAutoFitTextSize(
     previewBoxRef,
     liveCardRef,
     (factor) => {
       if (liveTextRef.current) liveTextRef.current.style.fontSize = `${liveBaseRem * factor}rem`;
+      if (liveReferenceRef.current) liveReferenceRef.current.style.fontSize = `${liveReferenceBaseRem * factor}rem`;
     },
-    [editTarget, settings.hideTextBox, liveBaseRem, activeSettings.fontFamily, activeSettings.bold, activeSettings.italic],
+    [
+      editTarget,
+      settings.hideTextBox,
+      liveBaseRem,
+      activeSettings.fontFamily,
+      activeSettings.bold,
+      activeSettings.italic,
+      settings.referenceFontFamily,
+      settings.referenceBold,
+      settings.referenceItalic,
+      settings.referencePosition,
+    ],
   );
 
   const titleBaseRem = activeSize.previewRem * 0.45;
@@ -987,32 +1024,59 @@ export function LivePresentationSettingsPage({
               )}
 
               {editTarget === "live" ? (
-                <div
-                  ref={liveCardRef}
-                  className={`relative z-10 ${
-                    settings.hideTextBox
-                      ? ""
-                      : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
-                  }`}
-                >
+                <>
                   <div
-                    ref={liveTextRef}
-                    className="text-center whitespace-pre-wrap leading-relaxed"
-                    style={{
-                      color: activeSettings.fontColor,
-                      fontFamily: activeSettings.fontFamily,
-                      fontWeight: activeSettings.bold ? 700 : 300,
-                      fontStyle: activeSettings.italic ? "italic" : "normal",
-                    }}
+                    ref={liveCardRef}
+                    className={`relative z-10 ${
+                      settings.hideTextBox
+                        ? ""
+                        : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
+                    }`}
                   >
-                    For God so loved the world that he gave his one and only
-                    Son, that whoever believes in him shall not perish but have
-                    eternal life.
-                    <div className="text-[0.5em] opacity-80 mt-2 font-medium tracking-wide">
+                    <div
+                      ref={liveTextRef}
+                      className="text-center whitespace-pre-wrap leading-relaxed"
+                      style={{
+                        color: activeSettings.fontColor,
+                        fontFamily: activeSettings.fontFamily,
+                        fontWeight: activeSettings.bold ? 700 : 300,
+                        fontStyle: activeSettings.italic ? "italic" : "normal",
+                      }}
+                    >
+                      For God so loved the world that he gave his one and only
+                      Son, that whoever believes in him shall not perish but have
+                      eternal life.
+                    </div>
+                    {settings.referencePosition === "top-center" && (
+                      <div
+                        ref={liveReferenceRef}
+                        className="mt-2 text-center font-medium tracking-wide"
+                        style={{
+                          color: settings.referenceFontColor,
+                          fontFamily: settings.referenceFontFamily,
+                          fontWeight: settings.referenceBold ? 700 : 400,
+                          fontStyle: settings.referenceItalic ? "italic" : "normal",
+                        }}
+                      >
+                        John 3:16 — KJV
+                      </div>
+                    )}
+                  </div>
+                  {settings.referencePosition !== "top-center" && (
+                    <div
+                      ref={liveReferenceRef}
+                      className={`absolute z-10 font-medium tracking-wide ${getReferencePositionClass(settings.referencePosition)}`}
+                      style={{
+                        color: settings.referenceFontColor,
+                        fontFamily: settings.referenceFontFamily,
+                        fontWeight: settings.referenceBold ? 700 : 400,
+                        fontStyle: settings.referenceItalic ? "italic" : "normal",
+                      }}
+                    >
                       John 3:16 — KJV
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               ) : (
                 <div className="relative z-10 w-full h-full flex flex-col items-center justify-center gap-2">
                   {(!defaultScreenSettings.titleHidden || revealHidden) && (
