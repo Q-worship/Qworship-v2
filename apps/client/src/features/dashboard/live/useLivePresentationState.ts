@@ -1141,29 +1141,26 @@ export function useLivePresentationState() {
     }
   };
 
-  // Position classes for the Bible reference text (John 3:16, etc). Unlike
-  // getPositionClass above, "top-center" is a real option here since it's
-  // the default in-flow placement (stacked above the verse) rather than a
-  // fallback — callers only apply this class when moving the reference out
-  // of that default flow.
+  // The Bible reference (John 3:16, etc) is positioned relative to the verse
+  // content, not pinned to the screen edges: "top"/"bottom" picks which side
+  // of the verse it sits on (with the same small gap either way — callers
+  // place it before or after the content in DOM order using
+  // isReferenceBottomPosition below), and "left"/"center"/"right" is purely
+  // horizontal alignment within that row via flex self-align + text-align.
   const getReferencePositionClass = (position: string) => {
     switch (position) {
       case "top-left":
-        return "top-8 left-8 text-left";
-      case "top-center":
-        return "top-8 left-1/2 -translate-x-1/2 text-center";
-      case "top-right":
-        return "top-8 right-8 text-right";
       case "bottom-left":
-        return "bottom-8 left-8 text-left";
-      case "bottom-center":
-        return "bottom-8 left-1/2 -translate-x-1/2 text-center";
+        return "self-start text-left";
+      case "top-right":
       case "bottom-right":
-        return "bottom-8 right-8 text-right";
+        return "self-end text-right";
       default:
-        return "top-8 left-1/2 -translate-x-1/2 text-center";
+        return "self-center text-center";
     }
   };
+
+  const isReferenceBottomPosition = (position: string) => position.startsWith("bottom");
 
   // Auto advance slides functionality
   useEffect(() => {
@@ -2938,6 +2935,7 @@ export function useLivePresentationState() {
     setTotalSlides,
     getPositionClass,
     getReferencePositionClass,
+    isReferenceBottomPosition,
     showTimestamp,
     isBibleWidgetOpen,
     setShowSlideCounter,

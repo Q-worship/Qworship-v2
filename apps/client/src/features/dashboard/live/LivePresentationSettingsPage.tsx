@@ -8,6 +8,7 @@ import {
   type DefaultScreenSettings,
 } from "@/stores/useLiveConsoleSettingsStore";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
+import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
 import { BackgroundMediaPicker } from "@/features/mainPresentation/BackgroundMediaPicker";
 import {
   Select,
@@ -250,26 +251,26 @@ function GradientBuilder({
 }
 
 // ── ColorPickerField ──────────────────────────────────────────────────────────
-// Mirrors the live console's own getReferencePositionClass
-// (features/dashboard/live/useLivePresentationState.ts) so the preview here
-// matches exactly what the real projected output does for each position.
+// Mirrors the live console's own getReferencePositionClass /
+// isReferenceBottomPosition (features/dashboard/live/useLivePresentationState.ts):
+// the reference sits directly above/below the verse (same small gap either
+// way, chosen by DOM order in the JSX below) - these only pick the
+// left/center/right alignment within that row.
 function getReferencePositionClass(position: string) {
   switch (position) {
     case "top-left":
-      return "top-4 left-4 text-left";
-    case "top-center":
-      return "top-4 left-1/2 -translate-x-1/2 text-center";
-    case "top-right":
-      return "top-4 right-4 text-right";
     case "bottom-left":
-      return "bottom-4 left-4 text-left";
-    case "bottom-center":
-      return "bottom-4 left-1/2 -translate-x-1/2 text-center";
+      return "self-start text-left";
+    case "top-right":
     case "bottom-right":
-      return "bottom-4 right-4 text-right";
+      return "self-end text-right";
     default:
-      return "top-4 left-1/2 -translate-x-1/2 text-center";
+      return "self-center text-center";
   }
+}
+
+function isReferenceBottomPosition(position: string) {
+  return position.startsWith("bottom");
 }
 
 function ColorPickerField({
@@ -323,18 +324,12 @@ function FontFamilySelect({
       <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
         <SelectValue />
       </SelectTrigger>
-      <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-        <SelectItem value="'Inter', sans-serif">Inter</SelectItem>
-        <SelectItem value="'Roboto', sans-serif">Roboto</SelectItem>
-        <SelectItem value="'Playfair Display', serif">
-          Playfair Display
-        </SelectItem>
-        <SelectItem value="'Montserrat', sans-serif">
-          Montserrat
-        </SelectItem>
-        <SelectItem value="'Open Sans', sans-serif">
-          Open Sans
-        </SelectItem>
+      <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white max-h-72">
+        {FONT_OPTIONS.map((font) => (
+          <SelectItem key={font} value={font}>
+            {font}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
@@ -1024,7 +1019,6 @@ export function LivePresentationSettingsPage({
               )}
 
               {editTarget === "live" ? (
-                <>
                   <div
                     ref={liveCardRef}
                     className={`relative z-10 ${
@@ -1033,6 +1027,20 @@ export function LivePresentationSettingsPage({
                         : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
                     }`}
                   >
+                    {!isReferenceBottomPosition(settings.referencePosition) && (
+                      <div
+                        ref={liveReferenceRef}
+                        className={`mb-2 font-medium tracking-wide ${getReferencePositionClass(settings.referencePosition)}`}
+                        style={{
+                          color: settings.referenceFontColor,
+                          fontFamily: settings.referenceFontFamily,
+                          fontWeight: settings.referenceBold ? 700 : 400,
+                          fontStyle: settings.referenceItalic ? "italic" : "normal",
+                        }}
+                      >
+                        John 3:16 — KJV
+                      </div>
+                    )}
                     <div
                       ref={liveTextRef}
                       className="text-center whitespace-pre-wrap leading-relaxed"
@@ -1047,10 +1055,10 @@ export function LivePresentationSettingsPage({
                       Son, that whoever believes in him shall not perish but have
                       eternal life.
                     </div>
-                    {settings.referencePosition === "top-center" && (
+                    {isReferenceBottomPosition(settings.referencePosition) && (
                       <div
                         ref={liveReferenceRef}
-                        className="mt-2 text-center font-medium tracking-wide"
+                        className={`mt-2 font-medium tracking-wide ${getReferencePositionClass(settings.referencePosition)}`}
                         style={{
                           color: settings.referenceFontColor,
                           fontFamily: settings.referenceFontFamily,
@@ -1062,21 +1070,6 @@ export function LivePresentationSettingsPage({
                       </div>
                     )}
                   </div>
-                  {settings.referencePosition !== "top-center" && (
-                    <div
-                      ref={liveReferenceRef}
-                      className={`absolute z-10 font-medium tracking-wide ${getReferencePositionClass(settings.referencePosition)}`}
-                      style={{
-                        color: settings.referenceFontColor,
-                        fontFamily: settings.referenceFontFamily,
-                        fontWeight: settings.referenceBold ? 700 : 400,
-                        fontStyle: settings.referenceItalic ? "italic" : "normal",
-                      }}
-                    >
-                      John 3:16 — KJV
-                    </div>
-                  )}
-                </>
               ) : (
                 <div className="relative z-10 w-full h-full flex flex-col items-center justify-center gap-2">
                   {(!defaultScreenSettings.titleHidden || revealHidden) && (

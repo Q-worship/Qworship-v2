@@ -19,6 +19,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     liveProjection,
     getSlideStyle,
     getReferencePositionClass,
+    isReferenceBottomPosition,
     slides,
     currentSlide,
     animationKey,
@@ -151,6 +152,31 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     ],
   );
 
+  const referenceIsBottom = isReferenceBottomPosition(editorState.referenceStyle.position);
+  const referenceAlignClass = getReferencePositionClass(editorState.referenceStyle.position);
+  const referenceStyleProps = {
+    fontFamily: editorState.referenceStyle.fontFamily || liveConsoleReferenceFontFamily,
+    color: editorState.referenceStyle.color || liveConsoleReferenceFontColor,
+    fontWeight: (editorState.referenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" as const : "normal" as const,
+    fontStyle: (editorState.referenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" as const : "normal" as const,
+  };
+  const songBibleReferenceEl = (
+    <h2
+      ref={songBibleReferenceRef}
+      className={`${referenceIsBottom ? "mt-2" : "mb-2"} ${referenceAlignClass}`}
+      style={referenceStyleProps}>
+      {currentSongProjection?.title}
+    </h2>
+  );
+  const deckBibleReferenceEl = (
+    <h1
+      ref={deckBibleReferenceRef}
+      className={`${referenceIsBottom ? "mt-2" : "mb-6"} ${referenceAlignClass}`}
+      style={referenceStyleProps}>
+      {slides[currentSlide - 1]?.title}
+    </h1>
+  );
+
   return (
     <div
           ref={screenRef}
@@ -175,23 +201,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               <div ref={songBibleMeasureRef} className="flex flex-col items-center">
                 {/* Title and section - for songs, show section below title; for Bible, show only the reference */}
                 {projectionType === "bible" ? (
-                  <h2
-                    ref={songBibleReferenceRef}
-                    className={`mb-2 ${
-                      editorState.referenceStyle.position !== "top-center"
-                        ? `absolute ${getReferencePositionClass(editorState.referenceStyle.position)}`
-                        : ""
-                    }`}
-                    style={{
-                      fontFamily:
-                        editorState.referenceStyle.fontFamily ||
-                        liveConsoleReferenceFontFamily,
-                      color: editorState.referenceStyle.color || liveConsoleReferenceFontColor,
-                      fontWeight: (editorState.referenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" : "normal",
-                      fontStyle: (editorState.referenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" : "normal",
-                    }}>
-                    {currentSongProjection.title}
-                  </h2>
+                  !referenceIsBottom && songBibleReferenceEl
                 ) : (
                   <div className="mb-6" style={{ textAlign: slideAlignment }}>
                     <h2 ref={songBibleReferenceRef} className="text-white mb-2 font-bold">
@@ -246,6 +256,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     currentSongProjection.lyrics
                   )}
                 </div>
+                {projectionType === "bible" && referenceIsBottom && songBibleReferenceEl}
                 {/* For Bible projections, show version below the scripture text */}
                 {projectionType === "bible" &&
                   currentSongProjection.sectionTitle && (
@@ -438,23 +449,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                 </>
               ) : slides[currentSlide - 1].type === "bible" ? (
                 <div ref={deckBibleMeasureRef} className="flex flex-col items-center">
-                  <h1
-                    ref={deckBibleReferenceRef}
-                    className={`mb-6 ${
-                      editorState.referenceStyle.position !== "top-center"
-                        ? `absolute ${getReferencePositionClass(editorState.referenceStyle.position)}`
-                        : ""
-                    }`}
-                    style={{
-                      fontFamily:
-                        editorState.referenceStyle.fontFamily ||
-                        liveConsoleReferenceFontFamily,
-                      color: editorState.referenceStyle.color || liveConsoleReferenceFontColor,
-                      fontWeight: (editorState.referenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" : "normal",
-                      fontStyle: (editorState.referenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" : "normal",
-                    }}>
-                    {slides[currentSlide - 1].title}
-                  </h1>
+                  {!referenceIsBottom && deckBibleReferenceEl}
                   <div
                     ref={deckBibleContentRef}
                     className="text-white whitespace-pre-line leading-relaxed font-light tracking-wide"
@@ -480,6 +475,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     }}>
                     {slides[currentSlide - 1].content}
                   </div>
+                  {referenceIsBottom && deckBibleReferenceEl}
                 </div>
               ) : slides[currentSlide - 1].type === "announcement" ? (
                 <>
