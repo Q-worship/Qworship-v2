@@ -3685,4 +3685,5 @@ export const images = {
     '/Photos/ReferAndEarn/carousel-lyrics.webp',
   ],
   referPastor: '/Photos/ReferAndEarn/carousel-pastor.webp',
+  referThanksTick: '/Photos/ReferAndEarn/thanks-tick.png',
 }

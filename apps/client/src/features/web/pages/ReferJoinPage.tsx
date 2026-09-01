@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast'
 import { apiRequest } from '@/lib/queryClient'
 import { Footer } from '@/components/layout/Footer'
 import { ReferNavbar } from '@/components/sections/ReferNavbar'
+import { ReferHowItWorksSection } from '@/components/sections/ReferHowItWorksSection'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { images } from '@/lib/theme'
 import { COUNTRY_OPTIONS, COUNTRY_NAME_TO_DIAL_CODE, countryNameFromIsoCode } from '@/lib/countries'
@@ -107,13 +108,6 @@ export function ReferJoinPage() {
     }
   }
 
-  const submitAnother = () => {
-    setSubmittedEmail(null)
-    setSubmitError(null)
-    setCountry(DEFAULT_COUNTRY)
-    setUserPickedCountry(false)
-  }
-
   return (
     <div className="antialiased min-h-screen flex flex-col">
       <ReferNavbar />
@@ -145,17 +139,13 @@ export function ReferJoinPage() {
           <SiteContainer>
             {submittedEmail ? (
               <div className="refer-join-success">
-                <span className="refer-join-success-icon">
-                  <MaterialIcon name="check_circle" filled />
-                </span>
-                <h2 className="refer-join-form-heading font-headline font-bold">Application received</h2>
+                <img src={images.referThanksTick} alt="" className="refer-join-success-icon" />
+                <h2 className="refer-join-form-heading font-headline font-bold">Thank you for applying</h2>
                 <p className="refer-join-success-body">
-                  Thanks for applying, we've sent a confirmation to <strong>{submittedEmail}</strong>. Our
-                  team will review your details and get back to you soon.
+                  Thank you for submitting your request to be a Divine Digital Technologies referral
+                  partner. Our team will review your application and get in touch soon. In the meantime,
+                  feel free to explore <a href="/">Qworship.com</a>
                 </p>
-                <button type="button" className="refer-join-submit refer-join-submit--secondary" onClick={submitAnother}>
-                  Submit another application
-                </button>
               </div>
             ) : (
             <form className="refer-join-form" onSubmit={handleSubmit}>
@@ -263,6 +253,8 @@ export function ReferJoinPage() {
             )}
           </SiteContainer>
         </section>
+
+        {submittedEmail ? <ReferHowItWorksSection /> : null}
       </main>
       <Footer />
     </div>

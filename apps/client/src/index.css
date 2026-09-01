@@ -6981,14 +6981,8 @@ body.refer-mobile-nav-open {
 }
 
 .refer-join-success-icon {
-  display: grid;
-  place-items: center;
-  width: 4rem;
-  height: 4rem;
-  border-radius: 999px;
-  background: #eafbf1;
-  color: #16a34a;
-  font-size: 2.25rem;
+  width: 6.5rem;
+  height: 6.5rem;
 }
 
 .refer-join-success-body {
@@ -6996,6 +6990,15 @@ body.refer-mobile-nav-open {
   color: #4a4560;
   font-size: 1rem;
   line-height: 1.6;
+}
+
+.refer-join-success-body a {
+  color: #8e20c1;
+  font-weight: 600;
+}
+
+.refer-join-success-body a:hover {
+  text-decoration: underline;
 }
 
 .refer-join-legal {
