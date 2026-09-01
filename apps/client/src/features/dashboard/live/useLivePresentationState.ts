@@ -1120,6 +1120,30 @@ export function useLivePresentationState() {
     }
   };
 
+  // Position classes for the Bible reference text (John 3:16, etc). Unlike
+  // getPositionClass above, "top-center" is a real option here since it's
+  // the default in-flow placement (stacked above the verse) rather than a
+  // fallback — callers only apply this class when moving the reference out
+  // of that default flow.
+  const getReferencePositionClass = (position: string) => {
+    switch (position) {
+      case "top-left":
+        return "top-8 left-8 text-left";
+      case "top-center":
+        return "top-8 left-1/2 -translate-x-1/2 text-center";
+      case "top-right":
+        return "top-8 right-8 text-right";
+      case "bottom-left":
+        return "bottom-8 left-8 text-left";
+      case "bottom-center":
+        return "bottom-8 left-1/2 -translate-x-1/2 text-center";
+      case "bottom-right":
+        return "bottom-8 right-8 text-right";
+      default:
+        return "top-8 left-1/2 -translate-x-1/2 text-center";
+    }
+  };
+
   // Auto advance slides functionality
   useEffect(() => {
     if (
@@ -2887,6 +2911,7 @@ export function useLivePresentationState() {
     setObsSettings,
     setTotalSlides,
     getPositionClass,
+    getReferencePositionClass,
     showTimestamp,
     isBibleWidgetOpen,
     setShowSlideCounter,

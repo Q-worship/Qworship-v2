@@ -14,9 +14,11 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     getSlideTransitionClass,
     slideAlignment,
     getTextSizeClass,
+    slideTextSize,
     editorState,
     liveProjection,
     getSlideStyle,
+    getReferencePositionClass,
     slides,
     currentSlide,
     animationKey,
@@ -77,10 +79,78 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     [defaultScreenDescription, defaultScreenDescriptionBoxWidthPct, defaultScreenDescriptionBoxHeightPct, defaultDescBaseRem, defaultScreenFontFamily, defaultScreenItalic],
   );
 
+  // Song/Bible projection box: shrink reference + content + version together
+  // so the whole group fits the box instead of clipping top/bottom.
+  const songBibleBoxRef = useRef<HTMLDivElement>(null);
+  const songBibleMeasureRef = useRef<HTMLDivElement>(null);
+  const songBibleReferenceRef = useRef<HTMLHeadingElement>(null);
+  const songBibleContentRef = useRef<HTMLDivElement>(null);
+  const songBibleVersionRef = useRef<HTMLSpanElement>(null);
+
+  const songBibleBaseRem = TEXT_SIZE_MAX_REM[slideTextSize] ?? 3;
+  useAutoFitTextSize(
+    songBibleBoxRef,
+    songBibleMeasureRef,
+    (factor) => {
+      const fontSize = `${songBibleBaseRem * factor}rem`;
+      if (songBibleReferenceRef.current) songBibleReferenceRef.current.style.fontSize = fontSize;
+      if (songBibleContentRef.current) songBibleContentRef.current.style.fontSize = fontSize;
+      if (songBibleVersionRef.current) songBibleVersionRef.current.style.fontSize = fontSize;
+    },
+    [
+      currentSongProjection?.title,
+      currentSongProjection?.lyrics,
+      currentSongProjection?.sectionTitle,
+      projectionType,
+      songBibleBaseRem,
+      contentFixedArea,
+      slidesTransparent,
+      editorState.styleFontFamily,
+      editorState.selectedFont,
+      editorState.isBold,
+      editorState.isItalic,
+      editorState.referenceStyle?.fontFamily,
+      editorState.referenceStyle?.isBold,
+      editorState.referenceStyle?.isItalic,
+    ],
+  );
+
+  // Dashboard-authored "bible" slides (type === "bible" in the slides list)
+  // hit a separate rendering path from the live-search projection above but
+  // share the same clipping bug — apply the same reference+content auto-fit.
+  const deckBibleBoxRef = useRef<HTMLDivElement>(null);
+  const deckBibleMeasureRef = useRef<HTMLDivElement>(null);
+  const deckBibleReferenceRef = useRef<HTMLHeadingElement>(null);
+  const deckBibleContentRef = useRef<HTMLDivElement>(null);
+
+  const currentDeckSlide = slides[currentSlide - 1];
+  useAutoFitTextSize(
+    deckBibleBoxRef,
+    deckBibleMeasureRef,
+    (factor) => {
+      const fontSize = `${songBibleBaseRem * factor}rem`;
+      if (deckBibleReferenceRef.current) deckBibleReferenceRef.current.style.fontSize = fontSize;
+      if (deckBibleContentRef.current) deckBibleContentRef.current.style.fontSize = fontSize;
+    },
+    [
+      currentDeckSlide?.title,
+      currentDeckSlide?.content,
+      currentDeckSlide?.type,
+      songBibleBaseRem,
+      contentFixedArea,
+      slidesTransparent,
+      editorState.styleFontFamily,
+      editorState.selectedFont,
+      editorState.referenceStyle?.fontFamily,
+      editorState.referenceStyle?.isBold,
+      editorState.referenceStyle?.isItalic,
+    ],
+  );
+
   return (
     <div
           ref={screenRef}
-          className={`text-center max-w-6xl max-h-[92vh] overflow-hidden flex flex-col justify-center relative ${contentFixedArea ? "h-[85vh]" : ""}`}>
+          className={`text-center max-w-[90vw] max-h-[92vh] overflow-hidden flex flex-col justify-center relative ${contentFixedArea ? "h-[85vh]" : ""}`}>
           {/* Content is conditionally rendered based on activeMode from display mode store */}
           {/* Song/Bible Projection - only show when mode matches */}
           {currentSongProjection &&
@@ -90,86 +160,107 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               projectionType === "bible")) ? (
             /* Live Song/Bible Projection for Congregation */
             <div
+              ref={songBibleBoxRef}
               key={`song-projection-${animationKey}`}
-              className={`${slidesTransparent ? "" : "bg-black/60 backdrop-blur-sm"} rounded-2xl p-12 ${slidesTransparent ? "" : "border border-white/10 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}
+              className={`${slidesTransparent ? "" : "bg-black/60 backdrop-blur-sm"} rounded-2xl p-12 ${slidesTransparent ? "" : "border border-white/10 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${slidesTransparent ? "max-h-[92vh]" : contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}
               style={
                 slidesTransparent
                   ? { backgroundColor: "transparent", backgroundImage: "none" }
                   : {}
               }>
-              {/* Title and section - for songs, show section below title; for Bible, show only title */}
-              <div className="mb-6" style={{ textAlign: slideAlignment }}>
-                <h2
-                  className={`text-white mb-2 font-bold ${getTextSizeClass()}`}>
-                  {currentSongProjection.title}
-                </h2>
-                {projectionType !== "bible" && (
-                  <h3
-                    className={`text-blue-300 font-medium ${getTextSizeClass()}`}>
-                    {currentSongProjection.sectionTitle}
-                  </h3>
-                )}
-              </div>
-              {/* Content text (lyrics or scripture) */}
-              <div
-                className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
-                style={{
-                  fontFamily:
-                    editorState.styleFontFamily ||
-                    editorState.selectedFont ||
-                    liveConsoleFontFamily,
-                  color:
-                    editorState.styleColor ||
-                    editorState.textColor ||
-                    liveConsoleFontColor,
-                  fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
-                  fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
-                  textDecoration:
-                    `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
-                    "none",
-                  textShadow: editorState.styleTextShadow || "",
-                  letterSpacing: editorState.styleLetterSpacing || "",
-                  textTransform: (editorState.styleTextTransform as any) || "",
-                  textAlign: slideAlignment,
-                }}>
-                {projectionType === "song" && pacingLineIdx >= 0 ? (
-                  currentSongProjection.lyrics.split("\n").map((line, lineIdx) => (
-                    <div
-                      key={lineIdx}
-                      style={{
-                        color: line.trim() === ""
-                          ? "transparent"
-                          : lineIdx <= pacingLineIdx
-                            ? "#fbbf24" // Amber highlight color
-                            : (editorState.styleColor || editorState.textColor || liveConsoleFontColor),
-                        minHeight: "1.2em",
-                        transition: "color 0.15s ease",
-                      }}
-                    >
-                      {line || "\u00A0"}
-                    </div>
-                  ))
+              <div ref={songBibleMeasureRef} className="flex flex-col items-center">
+                {/* Title and section - for songs, show section below title; for Bible, show only the reference */}
+                {projectionType === "bible" ? (
+                  <h2
+                    ref={songBibleReferenceRef}
+                    className={`mb-2 ${
+                      editorState.referenceStyle.position !== "top-center"
+                        ? `absolute ${getReferencePositionClass(editorState.referenceStyle.position)}`
+                        : ""
+                    }`}
+                    style={{
+                      fontFamily:
+                        editorState.referenceStyle.fontFamily ||
+                        editorState.styleFontFamily ||
+                        editorState.selectedFont ||
+                        liveConsoleFontFamily,
+                      color: editorState.referenceStyle.color || "#ffffff",
+                      fontWeight: editorState.referenceStyle.isBold ? "bold" : "normal",
+                      fontStyle: editorState.referenceStyle.isItalic ? "italic" : "normal",
+                    }}>
+                    {currentSongProjection.title}
+                  </h2>
                 ) : (
-                  currentSongProjection.lyrics
-                )}
-              </div>
-              {/* For Bible projections, show version below the scripture text */}
-              {projectionType === "bible" &&
-                currentSongProjection.sectionTitle && (
-                  <div className="mt-6" style={{ textAlign: slideAlignment }}>
-                    <span
-                      className={`text-blue-300 font-medium ${getTextSizeClass()}`}>
+                  <div className="mb-6" style={{ textAlign: slideAlignment }}>
+                    <h2 ref={songBibleReferenceRef} className="text-white mb-2 font-bold">
+                      {currentSongProjection.title}
+                    </h2>
+                    <h3 className={`text-blue-300 font-medium ${getTextSizeClass()}`}>
                       {currentSongProjection.sectionTitle}
-                    </span>
+                    </h3>
                   </div>
                 )}
+                {/* Content text (lyrics or scripture) */}
+                <div
+                  ref={songBibleContentRef}
+                  className="text-white whitespace-pre-line leading-relaxed font-light tracking-wide"
+                  style={{
+                    fontFamily:
+                      editorState.styleFontFamily ||
+                      editorState.selectedFont ||
+                      liveConsoleFontFamily,
+                    color:
+                      editorState.styleColor ||
+                      editorState.textColor ||
+                      liveConsoleFontColor,
+                    fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                    fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
+                    textDecoration:
+                      `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
+                      "none",
+                    textShadow: editorState.styleTextShadow || "",
+                    letterSpacing: editorState.styleLetterSpacing || "",
+                    textTransform: (editorState.styleTextTransform as any) || "",
+                    textAlign: slideAlignment,
+                  }}>
+                  {projectionType === "song" && pacingLineIdx >= 0 ? (
+                    currentSongProjection.lyrics.split("\n").map((line, lineIdx) => (
+                      <div
+                        key={lineIdx}
+                        style={{
+                          color: line.trim() === ""
+                            ? "transparent"
+                            : lineIdx <= pacingLineIdx
+                              ? "#fbbf24" // Amber highlight color
+                              : (editorState.styleColor || editorState.textColor || liveConsoleFontColor),
+                          minHeight: "1.2em",
+                          transition: "color 0.15s ease",
+                        }}
+                      >
+                        {line || "\u00A0"}
+                      </div>
+                    ))
+                  ) : (
+                    currentSongProjection.lyrics
+                  )}
+                </div>
+                {/* For Bible projections, show version below the scripture text */}
+                {projectionType === "bible" &&
+                  currentSongProjection.sectionTitle && (
+                    <div className="mt-6" style={{ textAlign: slideAlignment }}>
+                      <span ref={songBibleVersionRef} className="text-blue-300 font-medium">
+                        {currentSongProjection.sectionTitle}
+                      </span>
+                    </div>
+                  )}
+              </div>
             </div>
           ) : liveProjection &&
             (activeMode === "hfb-bible" || activeMode === "on-screen-bible") ? (
             /* Live Scripture Projection for Congregation - only when Bible mode is active */
             <div
               key={`scripture-projection-${animationKey}`}
-              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}
+              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${slidesTransparent ? "max-h-[92vh]" : contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}
               style={getSlideStyle()}>
               <div
                 className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
@@ -283,8 +374,9 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             ) : (
             /* Non-media slides use the normal padded container */
             <div
+              ref={slides[currentSlide - 1].type === "bible" ? deckBibleBoxRef : undefined}
               key={`slide-${currentSlide}-${animationKey}`}
-              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}>
+              className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${slidesTransparent ? "max-h-[92vh]" : contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}>
               {slides[currentSlide - 1].type === "verse" ||
               slides[currentSlide - 1].type === "chorus" ? (
                 <>
@@ -343,14 +435,29 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   </div>
                 </>
               ) : slides[currentSlide - 1].type === "bible" ? (
-                <>
+                <div ref={deckBibleMeasureRef} className="flex flex-col items-center">
                   <h1
-                    className={`text-white font-bold mb-6 ${getTextSizeClass()}`}
-                    style={{ textAlign: slideAlignment }}>
+                    ref={deckBibleReferenceRef}
+                    className={`mb-6 ${
+                      editorState.referenceStyle.position !== "top-center"
+                        ? `absolute ${getReferencePositionClass(editorState.referenceStyle.position)}`
+                        : ""
+                    }`}
+                    style={{
+                      fontFamily:
+                        editorState.referenceStyle.fontFamily ||
+                        editorState.styleFontFamily ||
+                        editorState.selectedFont ||
+                        liveConsoleFontFamily,
+                      color: editorState.referenceStyle.color || "#ffffff",
+                      fontWeight: editorState.referenceStyle.isBold ? "bold" : "normal",
+                      fontStyle: editorState.referenceStyle.isItalic ? "italic" : "normal",
+                    }}>
                     {slides[currentSlide - 1].title}
                   </h1>
                   <div
-                    className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
+                    ref={deckBibleContentRef}
+                    className="text-white whitespace-pre-line leading-relaxed font-light tracking-wide"
                     style={{
                       fontFamily:
                         editorState.styleFontFamily ||
@@ -370,14 +477,10 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       textTransform:
                         (editorState.styleTextTransform as any) || "",
                       textAlign: slideAlignment,
-                      ...(contentFixedArea && {
-                        maxHeight: "60vh",
-                        overflow: "hidden",
-                      }),
                     }}>
                     {slides[currentSlide - 1].content}
                   </div>
-                </>
+                </div>
               ) : slides[currentSlide - 1].type === "announcement" ? (
                 <>
                   <h1
