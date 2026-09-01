@@ -428,29 +428,54 @@ export function setupAudioSocket(server: Server) {
       if (!commands.length) return false;
 
       const occurrenceEntries = commandOccurrenceEntries(commands, turnSequence);
-      // Approach A: On streaming interims (!isFinal), only execute the active tail command.
-      // Historical commands earlier in the string were already processed and should not be re-evaluated.
-      const targetEntries = isFinal
-        ? occurrenceEntries
-        : [occurrenceEntries[occurrenceEntries.length - 1]];
 
-      // Pre-warm book context from any earlier full reference in the string
-      for (const entry of occurrenceEntries) {
-        if (entry.command.name === "project_bible_reference" && entry.command.arguments?.book) {
-          partialState.book = entry.command.arguments.book;
-        }
+      // 1. Identify all explicit book references in this transcript
+      const bookReferences = occurrenceEntries.filter(
+        (e) => e.command.name === "project_bible_reference" && e.command.arguments?.book,
+      );
+
+      // Book Transition Flush: If multiple distinct books are present in the text (e.g. "Genesis 10:2 ... John 3:16"):
+      // Flush out all prior books so the stream strictly maintains the state of the latest active book.
+      let filteredEntries = occurrenceEntries;
+      if (bookReferences.length > 1) {
+        const lastBookRef = bookReferences[bookReferences.length - 1];
+        const activeBook = lastBookRef.command.arguments.book;
+        const lastBookIndex = occurrenceEntries.indexOf(lastBookRef);
+        // Retain only entries from the latest book onwards
+        filteredEntries = occurrenceEntries.slice(lastBookIndex);
+        partialState.book = activeBook;
+      } else if (bookReferences.length === 1) {
+        partialState.book = bookReferences[0].command.arguments.book;
       }
+
+      // On streaming interims (!isFinal), only execute the active tail command within the active book
+      const targetEntries = isFinal
+        ? filteredEntries
+        : [filteredEntries[filteredEntries.length - 1]];
 
       let acceptedAny = false;
       const now = Date.now();
       for (const { command, occurrenceKey } of targetEntries) {
         const lastExecuted = executedOccurrences.get(occurrenceKey);
         if (lastExecuted && now - lastExecuted < EXECUTED_OCCURRENCE_TTL_MS) continue;
-        if (
-          !isFinal &&
-          command.name === "project_bible_reference" &&
-          !hasExplicitVerse(text, command.arguments?.verse_start ?? 1)
-        ) continue;
+
+        if (!isFinal) {
+          // Rule 1: A book reference MUST have an explicit verse on interim
+          if (
+            command.name === "project_bible_reference" &&
+            !hasExplicitVerse(text, command.arguments?.verse_start ?? 1)
+          ) {
+            continue;
+          }
+          // Rule 2: Chapter-only navigation ("next chapter", "chapter 3") is suppressed on interim
+          if (
+            command.name === "navigate_bible" &&
+            command.arguments?.scope === "chapter"
+          ) {
+            continue;
+          }
+        }
+
         if (
           strictMode &&
           command.name === "project_bible_reference" &&

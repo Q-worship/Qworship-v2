@@ -230,11 +230,13 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
   }),
 
   fetchHFBChapter: async (book, chapter, version, highlightVerse) => {
-    // If the requested chapter is already loaded in Center Stage, just update the active verse highlight
+    // If the requested chapter is already loaded in Center Stage for this EXACT version, just update the active verse highlight
     const current = get();
+    const vKey = version.toLowerCase();
     if (
       current.hfbBookName === book &&
       current.hfbChapter === chapter &&
+      current.hfbVersion?.toLowerCase() === vKey &&
       current.hfbChapterVerses.length > 0
     ) {
       if (highlightVerse !== undefined) {
@@ -247,12 +249,12 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     set({
       hfbBookName: book,
       hfbChapter: chapter,
+      hfbVersion: version.toUpperCase(),
       hfbChapterLoading: true,
       hfbActiveVerseNum: highlightVerse !== undefined ? highlightVerse : null,
       hfbChapterVerses: [],
     });
     try {
-      const vKey = version.toLowerCase();
 
       // 0. Try RAM Cache (0.00ms latency)
       const memStartTime = performance.now();
@@ -260,17 +262,20 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       const memEndTime = performance.now();
       
       if (ramVerses && ramVerses.length > 0) {
-        if (fetchSeq !== latestChapterFetchSequence) return;
-        const normalizedRamVerses = (ramVerses as any[]).map((v: any) => ({
-          number: Number(v.number ?? v.verse ?? 1),
-          text: String(v.text || "").trim(),
-        }));
-        set({ hfbChapterVerses: normalizedRamVerses, hfbChapterLoading: false });
-        if (highlightVerse !== undefined) {
-           set({ hfbActiveVerseNum: highlightVerse });
+        const hasAnyText = ramVerses.some((v: any) => v.text && v.text.trim().length > 0);
+        if (hasAnyText) {
+          if (fetchSeq !== latestChapterFetchSequence) return;
+          const normalizedRamVerses = (ramVerses as any[]).map((v: any) => ({
+            number: Number(v.number ?? v.verse ?? 1),
+            text: String(v.text || "").trim(),
+          }));
+          set({ hfbChapterVerses: normalizedRamVerses, hfbChapterLoading: false });
+          if (highlightVerse !== undefined) {
+             set({ hfbActiveVerseNum: highlightVerse });
+          }
+          console.log(`🚀 [RAM CACHE HFB] Fetched ${book} ${chapter} (${vKey}) in ${(memEndTime - memStartTime).toFixed(2)}ms`);
+          return;
         }
-        console.log(`🚀 [RAM CACHE HFB] Fetched ${book} ${chapter} (${vKey}) in ${(memEndTime - memStartTime).toFixed(2)}ms`);
-        return;
       }
 
       // 1. Try to fetch from Local IndexedDB

@@ -90,13 +90,14 @@ export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
   setChapterInRam: (version: string, book: string, chapter: number, verses: MemoryVerse[]) => {
     set((state) => {
       const dict = { ...state.dictionary };
-      if (!dict[version]) dict[version] = {};
-      if (!dict[version][book]) dict[version][book] = {};
+      const vKey = version.toLowerCase();
+      if (!dict[vKey]) dict[vKey] = {};
+      if (!dict[vKey][book]) dict[vKey][book] = {};
       const normalized = verses.map((v: any) => ({
         number: Number(v.number ?? v.verse ?? 1),
-        text: String(v.text || "").trim(),
+        text: String(v.text ?? v[vKey] ?? "").trim(),
       }));
-      dict[version][book][chapter] = normalized.sort((a, b) => a.number - b.number);
+      dict[vKey][book][chapter] = normalized.sort((a, b) => a.number - b.number);
       return { dictionary: dict };
     });
   },

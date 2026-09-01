@@ -194,7 +194,7 @@ export const useHandsfreeBible = ({
       selectedBibleVersionRef.current
     ).toUpperCase();
     const versionKey = effectiveVersion.toLowerCase();
-    const text = verseData?.[versionKey] || "";
+    const text = verseData?.[versionKey] || verseData?.text || "";
     const projectionKey = `${versionKey}|${book}|${chapter}|${verseNum}`;
     const now = performance.now();
 
@@ -623,9 +623,19 @@ export const useHandsfreeBible = ({
 
     selectedBibleVersionRef.current = normalized;
     setSelectedBibleVersion(normalized);
-    useHFBStore.getState().setHfbVersion(normalized);
+    const hfbState = useHFBStore.getState();
+    hfbState.setHfbVersion(normalized);
     setDetectedCommands(`Switched to ${normalized}`);
+
     const ctx = currentVerseContextRef.current;
+    const book = ctx?.book || hfbState.hfbBookName;
+    const chapter = ctx?.chapter || hfbState.hfbChapter;
+    const verseNum = ctx?.verse || hfbState.hfbActiveVerseNum || 1;
+
+    if (book && chapter) {
+      void hfbState.fetchHFBChapter(book, chapter, normalized, verseNum);
+    }
+
     if (ctx?.book && ctx.chapter && ctx.verse) {
       console.log(
         `[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`,
@@ -660,6 +670,15 @@ export const useHandsfreeBible = ({
       useBibleProjectionStore.getState().currentVerse?.book ||
       currentVerseContextRef.current?.book;
     if (!bookName) return false;
+
+    // Flush out previous book execution memory when a new book appears
+    if (
+      parsedRef?.book &&
+      currentVerseContextRef.current?.book &&
+      parsedRef.book !== currentVerseContextRef.current.book
+    ) {
+      executedContextNavigationsRef.current.clear();
+    }
 
     let handledAny = false;
     for (const navigation of targetNavigations) {
