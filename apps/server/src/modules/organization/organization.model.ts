@@ -13,6 +13,7 @@ export interface IOrganization extends Document {
   size?: number;
   subscriptionType: "free" | "basic" | "premium" | "enterprise";
   subscriptionStatus: "active" | "inactive" | "trial" | "cancelled";
+  activatedAt?: Date;
   ownerId: mongoose.Types.ObjectId;
   referredBy?: mongoose.Types.ObjectId;
   referralCodeUsed?: string;
@@ -43,6 +44,7 @@ const OrganizationSchema = new Schema<IOrganization>(
       enum: ["active", "inactive", "trial", "cancelled"],
       default: "trial",
     },
+    activatedAt: { type: Date },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     referredBy: { type: Schema.Types.ObjectId, ref: "User" },
     referralCodeUsed: { type: String },

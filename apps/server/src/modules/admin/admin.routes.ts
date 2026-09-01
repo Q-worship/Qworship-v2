@@ -31,7 +31,8 @@ import {
   bulkExtendUserTrials,
 } from "./admin.controller.js";
 import { listRoles, createRole, updateRole, deleteRole } from "./role.controller.js";
-import { listReferralRequests, approveReferralRequest, rejectReferralRequest, listReferees, getRefereeDetail, suspendReferee, resetRefereePassword, getReferredOrganizationsForAdmin } from "../referral/referral.controller.js";
+import { listReferralRequests, approveReferralRequest, rejectReferralRequest, listReferees, getRefereeDetail, suspendReferee, resetRefereePassword, getReferredOrganizationsForAdmin, getRefereeFinancialsForAdmin, adminUpdateWithdrawal } from "../referral/referral.controller.js";
+import { adminUpdateOrganizationSubscription } from "../organization/organization.controller.js";
 import { protect, authorizeAdmin, requireSuperAdmin, requirePermission } from "../auth/auth.middleware.js";
 import { rateLimit } from "../auth/rate-limit.middleware.js";
 import {
@@ -79,6 +80,9 @@ router.get("/referrals/:id", requirePermission("referrals"), getRefereeDetail);
 router.get("/referrals/:id/organizations", requirePermission("referrals"), getReferredOrganizationsForAdmin);
 router.post("/referrals/:id/suspend", requirePermission("referrals"), suspendReferee);
 router.post("/referrals/:id/reset-password", requirePermission("referrals"), rateLimit("referral-reset-password", 20, 60 * 60 * 1000), resetRefereePassword);
+router.get("/referrals/:id/financials", requirePermission("referrals"), getRefereeFinancialsForAdmin);
+router.patch("/withdrawals/:id", requirePermission("referrals"), adminUpdateWithdrawal);
+router.patch("/organizations/:id/subscription", requirePermission("referrals"), adminUpdateOrganizationSubscription);
 
 // Subscription & Trial Management Routes
 router.get("/subscriptions/users", getAdminSubscriptionUsers);

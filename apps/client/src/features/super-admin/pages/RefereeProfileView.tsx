@@ -14,6 +14,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import StatusPill from "../../referee-portal/components/StatusPill";
@@ -36,6 +50,11 @@ import {
   Activity,
   Building2,
   Link2,
+  Pencil,
+  Wallet,
+  BadgeDollarSign,
+  CircleDollarSign,
+  Banknote,
 } from 'lucide-react';
 
 interface RefereeRow {
@@ -73,7 +92,45 @@ interface RefereeApplication {
   approvedBy?: { firstName?: string; lastName?: string; email?: string } | null;
 }
 
+interface LedgerEntry {
+  id: string;
+  church: string;
+  period: string;
+  grossAmount: number;
+  commissionAmount: number;
+  status: 'available' | 'paid';
+  createdAt: string;
+}
+
+interface WithdrawalRow {
+  id: string;
+  amount: number;
+  destination: string;
+  status: 'pending' | 'processing' | 'paid' | 'rejected';
+  adminNote?: string;
+  processedAt?: string;
+  createdAt: string;
+}
+
+interface FinancialsSummary {
+  availableBalance: number;
+  withdrawableBalance: number;
+  totalPaid: number;
+  totalEarnedAllTime: number;
+  estimatedThisMonth: number;
+  currentPeriod: string;
+  earningsTrend: { period: string; earned: number }[];
+  ledger: LedgerEntry[];
+  withdrawals: WithdrawalRow[];
+}
+
 const PRODUCT_LABELS: Record<string, string> = { qworship: 'Q-worship', 'go-green': 'Go-Green' };
+const SUBSCRIPTION_TYPES = ['free', 'basic', 'premium', 'enterprise'] as const;
+const SUBSCRIPTION_STATUSES = ['trial', 'active', 'inactive', 'cancelled'] as const;
+
+function formatMoney(value: number) {
+  return `$${value.toFixed(2)}`;
+}
 
 function daysBetween(a: string | Date, b: string | Date) {
   const ms = new Date(b).getTime() - new Date(a).getTime();
@@ -88,6 +145,9 @@ function formatDate(value?: string | null) {
 export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; onBack: () => void }) {
   const { toast } = useToast();
   const [confirmAction, setConfirmAction] = useState<'suspend' | 'reactivate' | 'reset-password' | null>(null);
+  const [editingChurch, setEditingChurch] = useState<ReferredChurch | null>(null);
+  const [editSubscriptionType, setEditSubscriptionType] = useState<string>('free');
+  const [editSubscriptionStatus, setEditSubscriptionStatus] = useState<string>('trial');
 
   const { data, isLoading } = useQuery<{ success: boolean; referee: RefereeRow; application: RefereeApplication | null }>({
     queryKey: [`/api/admin/referrals/${refereeId}`],
@@ -100,6 +160,46 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
     queryKey: [`/api/admin/referrals/${refereeId}/organizations`],
   });
   const referredChurches = churchesData?.churches || [];
+
+  const { data: financialsData, isLoading: financialsLoading } = useQuery<{ success: boolean } & FinancialsSummary>({
+    queryKey: [`/api/admin/referrals/${refereeId}/financials`],
+  });
+
+  const updateOrgMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingChurch) return null;
+      const response = await apiRequest('PATCH', `/api/admin/organizations/${editingChurch.id}/subscription`, {
+        subscriptionType: editSubscriptionType,
+        subscriptionStatus: editSubscriptionStatus,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${refereeId}/organizations`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${refereeId}/financials`] });
+      setEditingChurch(null);
+      toast({ title: 'Church subscription updated' });
+    },
+    onError: (error: any) => toast({ title: "Couldn't update subscription", description: error?.message?.replace(/^\d+:\s*/, '') || 'Please try again.', variant: 'destructive' }),
+  });
+
+  const markWithdrawalMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'processing' | 'paid' | 'rejected' }) => {
+      const response = await apiRequest('PATCH', `/api/admin/withdrawals/${id}`, { status });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/referrals/${refereeId}/financials`] });
+      toast({ title: 'Withdrawal request updated' });
+    },
+    onError: (error: any) => toast({ title: "Couldn't update withdrawal", description: error?.message?.replace(/^\d+:\s*/, '') || 'Please try again.', variant: 'destructive' }),
+  });
+
+  function openEditChurch(church: ReferredChurch) {
+    setEditingChurch(church);
+    setEditSubscriptionType(church.plan);
+    setEditSubscriptionStatus(church.status);
+  }
 
   const suspendMutation = useMutation({
     mutationFn: async () => {
@@ -217,10 +317,11 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid h-auto grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-white/80 p-1 shadow-sm dark:border-gray-700/50 dark:bg-gray-800/50 sm:grid-cols-4">
+        <TabsList className="grid h-auto grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-white/80 p-1 shadow-sm dark:border-gray-700/50 dark:bg-gray-800/50 sm:grid-cols-5">
           <TabsTrigger value="overview" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><User className="h-4 w-4" />Overview</TabsTrigger>
           <TabsTrigger value="application" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Briefcase className="h-4 w-4" />Application</TabsTrigger>
           <TabsTrigger value="referrals" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Building2 className="h-4 w-4" />Referred Clients</TabsTrigger>
+          <TabsTrigger value="financials" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Wallet className="h-4 w-4" />Financials</TabsTrigger>
           <TabsTrigger value="actions" className="flex h-12 items-center justify-center gap-2 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white"><UserCog className="h-4 w-4" />Security &amp; Actions</TabsTrigger>
         </TabsList>
 
@@ -321,6 +422,7 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3">Plan</th>
                         <th className="px-6 py-3">Introduced</th>
+                        <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -333,6 +435,11 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
                           <td className="px-4 py-4"><StatusPill label={church.status} /></td>
                           <td className="px-4 py-4 capitalize text-gray-700 dark:text-gray-300">{church.plan}</td>
                           <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{formatDate(church.date)}</td>
+                          <td className="px-4 py-4 text-right">
+                            <Button variant="ghost" size="sm" onClick={() => openEditChurch(church)}>
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />Update plan
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -341,6 +448,128 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="financials" className="space-y-6">
+          {financialsLoading ? (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400 dark:text-gray-500" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">Loading financials…</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="rounded-lg bg-emerald-100 p-2 text-emerald-600 dark:bg-emerald-600/20 dark:text-emerald-400"><Wallet className="h-5 w-5" /></div>
+                    <div><div className="text-xl font-bold text-gray-900 dark:text-white">{formatMoney(financialsData?.withdrawableBalance ?? 0)}</div><div className="text-xs text-gray-500 dark:text-gray-400">Available balance</div></div>
+                  </CardContent>
+                </Card>
+                <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400"><CircleDollarSign className="h-5 w-5" /></div>
+                    <div><div className="text-xl font-bold text-gray-900 dark:text-white">{formatMoney(financialsData?.estimatedThisMonth ?? 0)}</div><div className="text-xs text-gray-500 dark:text-gray-400">Estimated this month</div></div>
+                  </CardContent>
+                </Card>
+                <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="rounded-lg bg-purple-100 p-2 text-purple-600 dark:bg-purple-600/20 dark:text-purple-400"><Banknote className="h-5 w-5" /></div>
+                    <div><div className="text-xl font-bold text-gray-900 dark:text-white">{formatMoney(financialsData?.totalPaid ?? 0)}</div><div className="text-xs text-gray-500 dark:text-gray-400">Paid out all-time</div></div>
+                  </CardContent>
+                </Card>
+                <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <div className="rounded-lg bg-amber-100 p-2 text-amber-600 dark:bg-amber-600/20 dark:text-amber-400"><BadgeDollarSign className="h-5 w-5" /></div>
+                    <div><div className="text-xl font-bold text-gray-900 dark:text-white">{formatMoney(financialsData?.totalEarnedAllTime ?? 0)}</div><div className="text-xs text-gray-500 dark:text-gray-400">Earned all-time</div></div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100"><Wallet className="h-5 w-5" />Withdrawal requests</CardTitle>
+                  <CardDescription className="text-gray-500 dark:text-gray-400">Requests this referral partner has submitted against their available balance</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {!financialsData?.withdrawals?.length ? (
+                    <div className="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">No withdrawal requests yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] text-left">
+                        <thead className="bg-gray-50 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+                          <tr>
+                            <th className="px-6 py-3">Amount</th>
+                            <th className="px-4 py-3">Destination</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Requested</th>
+                            <th className="px-4 py-3"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {financialsData.withdrawals.map((withdrawal) => (
+                            <tr key={withdrawal.id} className="text-sm hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                              <td className="px-6 py-4 font-semibold text-gray-900 dark:text-white">{formatMoney(withdrawal.amount)}</td>
+                              <td className="px-4 py-4 text-gray-700 dark:text-gray-300">{withdrawal.destination}</td>
+                              <td className="px-4 py-4"><StatusPill label={withdrawal.status} /></td>
+                              <td className="px-4 py-4 text-gray-500 dark:text-gray-400">{formatDate(withdrawal.createdAt)}</td>
+                              <td className="px-4 py-4 text-right">
+                                {withdrawal.status === 'pending' || withdrawal.status === 'processing' ? (
+                                  <div className="flex justify-end gap-2">
+                                    {withdrawal.status === 'pending' && (
+                                      <Button variant="outline" size="sm" disabled={markWithdrawalMutation.isPending} onClick={() => markWithdrawalMutation.mutate({ id: withdrawal.id, status: 'processing' })}>Mark processing</Button>
+                                    )}
+                                    <Button variant="outline" size="sm" className="border-green-200 text-green-700 hover:bg-green-50 dark:border-green-900 dark:text-green-400" disabled={markWithdrawalMutation.isPending} onClick={() => markWithdrawalMutation.mutate({ id: withdrawal.id, status: 'paid' })}>Mark paid</Button>
+                                    <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400" disabled={markWithdrawalMutation.isPending} onClick={() => markWithdrawalMutation.mutate({ id: withdrawal.id, status: 'rejected' })}>Reject</Button>
+                                  </div>
+                                ) : null}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="dark:border-gray-700 dark:bg-gray-800/80">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100"><BadgeDollarSign className="h-5 w-5" />Commission ledger</CardTitle>
+                  <CardDescription className="text-gray-500 dark:text-gray-400">Monthly commission accrued from this referral partner's active, paying churches</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {!financialsData?.ledger?.length ? (
+                    <div className="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400">No commission has accrued yet — a church must be marked active on a paid plan first.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] text-left">
+                        <thead className="bg-gray-50 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+                          <tr>
+                            <th className="px-6 py-3">Church</th>
+                            <th className="px-4 py-3">Period</th>
+                            <th className="px-4 py-3">Gross</th>
+                            <th className="px-4 py-3">Commission</th>
+                            <th className="px-6 py-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {financialsData.ledger.map((entry) => (
+                            <tr key={entry.id} className="text-sm hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                              <td className="px-6 py-4 font-semibold text-gray-900 dark:text-white">{entry.church}</td>
+                              <td className="px-4 py-4 text-gray-700 dark:text-gray-300">{entry.period}</td>
+                              <td className="px-4 py-4 text-gray-700 dark:text-gray-300">{formatMoney(entry.grossAmount)}</td>
+                              <td className="px-4 py-4 font-semibold text-gray-900 dark:text-white">{formatMoney(entry.commissionAmount)}</td>
+                              <td className="px-6 py-4"><StatusPill label={entry.status} /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="actions" className="space-y-6">
@@ -398,6 +627,50 @@ export function RefereeProfileView({ refereeId, onBack }: { refereeId: string; o
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editingChurch} onOpenChange={(open) => !open && setEditingChurch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update plan &amp; status</DialogTitle>
+          </DialogHeader>
+          {editingChurch && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{editingChurch.church}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Sets the church's real subscription plan and status — this is what starts commission accruing for this referral partner.</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Plan</label>
+                <Select value={editSubscriptionType} onValueChange={setEditSubscriptionType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SUBSCRIPTION_TYPES.map((type) => (
+                      <SelectItem key={type} value={type} className="capitalize">{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</label>
+                <Select value={editSubscriptionStatus} onValueChange={setEditSubscriptionStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SUBSCRIPTION_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingChurch(null)} disabled={updateOrgMutation.isPending}>Cancel</Button>
+            <Button onClick={() => updateOrgMutation.mutate()} disabled={updateOrgMutation.isPending}>
+              {updateOrgMutation.isPending ? 'Saving…' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -5,6 +5,9 @@ import { ReferralRequest } from "./referral.model.js";
 import { User } from "../auth/auth.model.js";
 import { Organization } from "../organization/organization.model.js";
 import { sendAdminCredentialsEmail } from "../auth/email.service.js";
+import { CommissionLedgerEntry } from "./commissionLedger.model.js";
+import { WithdrawalRequest } from "./withdrawalRequest.model.js";
+import { PLAN_MONTHLY_PRICE, computeMonthlyCommission, SubscriptionType } from "../../config/referralCommission.js";
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -297,6 +300,201 @@ export const resetRefereePassword = async (req: Request, res: Response) => {
       emailSent,
       warning: emailSent ? undefined : "Password was reset, but the notification email failed to send.",
     });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+function monthsBetween(start: Date, end: Date): string[] {
+  const periods: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= last) {
+    periods.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return periods;
+}
+
+async function accrueCommissionsForReferee(refereeId: string) {
+  const activeOrgs = await Organization.find({ referredBy: refereeId, subscriptionStatus: "active", activatedAt: { $exists: true } })
+    .select("subscriptionType activatedAt")
+    .lean();
+
+  const now = new Date();
+  for (const org of activeOrgs) {
+    const subscriptionType = org.subscriptionType as SubscriptionType;
+    const commissionAmount = computeMonthlyCommission(subscriptionType);
+    if (commissionAmount <= 0 || !org.activatedAt) continue;
+    const grossAmount = PLAN_MONTHLY_PRICE[subscriptionType] ?? 0;
+    const periods = monthsBetween(org.activatedAt as unknown as Date, now);
+    for (const period of periods) {
+      try {
+        await CommissionLedgerEntry.updateOne(
+          { refereeId, organizationId: org._id, period },
+          { $setOnInsert: { refereeId, organizationId: org._id, period, grossAmount, commissionAmount, status: "available" } },
+          { upsert: true }
+        );
+      } catch (error: any) {
+        if (error?.code !== 11000) throw error;
+      }
+    }
+  }
+}
+
+async function buildEarningsSummary(refereeId: string) {
+  await accrueCommissionsForReferee(refereeId);
+
+  const ledger = await CommissionLedgerEntry.find({ refereeId })
+    .sort({ period: -1 })
+    .populate("organizationId", "name")
+    .lean();
+
+  const round2 = (value: number) => Math.round(value * 100) / 100;
+
+  const availableBalance = ledger.filter((e) => e.status === "available").reduce((sum, e) => sum + e.commissionAmount, 0);
+  const totalPaid = ledger.filter((e) => e.status === "paid").reduce((sum, e) => sum + e.commissionAmount, 0);
+
+  const pendingWithdrawals = await WithdrawalRequest.find({ refereeId, status: { $in: ["pending", "processing"] } }).lean();
+  const reservedAmount = pendingWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+  const withdrawableBalance = Math.max(0, round2(availableBalance - reservedAmount));
+
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const activeOrgs = await Organization.find({ referredBy: refereeId, subscriptionStatus: "active" }).select("subscriptionType").lean();
+  const estimatedThisMonth = activeOrgs.reduce((sum, org) => sum + computeMonthlyCommission(org.subscriptionType as SubscriptionType), 0);
+
+  const trendMap = new Map<string, number>();
+  for (const entry of ledger) {
+    trendMap.set(entry.period, (trendMap.get(entry.period) || 0) + entry.commissionAmount);
+  }
+  const trendPeriods: string[] = [];
+  const cursor = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  for (let i = 0; i < 6; i++) {
+    trendPeriods.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  const earningsTrend = trendPeriods.map((period) => ({ period, earned: round2(trendMap.get(period) || 0) }));
+
+  return {
+    availableBalance: round2(availableBalance),
+    withdrawableBalance,
+    totalPaid: round2(totalPaid),
+    totalEarnedAllTime: round2(availableBalance + totalPaid),
+    estimatedThisMonth: round2(estimatedThisMonth),
+    currentPeriod,
+    earningsTrend,
+    ledger: ledger.slice(0, 24).map((e: any) => ({
+      id: e._id,
+      church: e.organizationId?.name ?? "Unknown church",
+      organizationId: e.organizationId?._id ?? e.organizationId,
+      period: e.period,
+      grossAmount: e.grossAmount,
+      commissionAmount: e.commissionAmount,
+      status: e.status,
+      createdAt: e.createdAt,
+    })),
+  };
+}
+
+async function flipLedgerToPaid(refereeId: string, amount: number) {
+  const rows = await CommissionLedgerEntry.find({ refereeId, status: "available" }).sort({ period: 1 }).lean();
+  let remaining = amount;
+  for (const row of rows) {
+    if (remaining <= 0) break;
+    await CommissionLedgerEntry.updateOne({ _id: row._id }, { $set: { status: "paid" } });
+    remaining -= row.commissionAmount;
+  }
+}
+
+export const getMyEarnings = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+    const summary = await buildEarningsSummary(String(user._id));
+    return res.json({ success: true, ...summary });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const requestWithdrawal = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+
+    const amount = Number(req.body.amount);
+    const destination = typeof req.body.destination === "string" ? req.body.destination.trim() : "";
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: "Enter a valid withdrawal amount" });
+    }
+    if (!destination) {
+      return res.status(400).json({ success: false, message: "Provide a payout destination" });
+    }
+
+    const summary = await buildEarningsSummary(String(user._id));
+    if (amount > summary.withdrawableBalance) {
+      return res.status(400).json({ success: false, message: "Withdrawal amount exceeds your available balance" });
+    }
+
+    const request = await WithdrawalRequest.create({
+      refereeId: user._id,
+      amount: Math.round(amount * 100) / 100,
+      destination,
+      status: "pending",
+    });
+
+    return res.status(201).json({ success: true, request });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getMyWithdrawals = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+    const requests = await WithdrawalRequest.find({ refereeId: user._id }).sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, requests });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getRefereeFinancialsForAdmin = async (req: Request, res: Response) => {
+  try {
+    const referee = await User.findOne({ _id: req.params.id, role: "referee" });
+    if (!referee) return res.status(404).json({ success: false, message: "Referral partner account not found" });
+    const summary = await buildEarningsSummary(req.params.id);
+    const withdrawals = await WithdrawalRequest.find({ refereeId: req.params.id }).sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, ...summary, withdrawals });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const adminUpdateWithdrawal = async (req: Request, res: Response) => {
+  try {
+    const { status, adminNote } = req.body;
+    const allowedStatuses = ["pending", "processing", "paid", "rejected"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    const request = await WithdrawalRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, message: "Withdrawal request not found" });
+
+    const wasPaid = request.status === "paid";
+    request.status = status;
+    if (adminNote !== undefined) request.adminNote = adminNote;
+    if (status === "paid" && !wasPaid) {
+      request.processedAt = new Date();
+      await flipLedgerToPaid(String(request.refereeId), request.amount);
+    }
+    await request.save();
+
+    return res.json({ success: true, request });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }

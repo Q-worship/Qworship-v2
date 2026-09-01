@@ -73,6 +73,44 @@ export const createOrganization = async (req: Request, res: Response) => {
   }
 };
 
+const SUBSCRIPTION_TYPES = ['free', 'basic', 'premium', 'enterprise'];
+const SUBSCRIPTION_STATUSES = ['active', 'inactive', 'trial', 'cancelled'];
+
+export const adminUpdateOrganizationSubscription = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { subscriptionType, subscriptionStatus } = req.body;
+
+    if (subscriptionType !== undefined && !SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+      return res.status(400).json({ success: false, message: 'Invalid subscriptionType' });
+    }
+    if (subscriptionStatus !== undefined && !SUBSCRIPTION_STATUSES.includes(subscriptionStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid subscriptionStatus' });
+    }
+
+    const organization = await Organization.findById(id);
+    if (!organization) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+
+    if (subscriptionType !== undefined) {
+      organization.subscriptionType = subscriptionType;
+    }
+    if (subscriptionStatus !== undefined) {
+      if (subscriptionStatus === 'active' && organization.subscriptionStatus !== 'active') {
+        organization.activatedAt = new Date();
+      }
+      organization.subscriptionStatus = subscriptionStatus;
+    }
+    await organization.save();
+
+    return res.status(200).json({ success: true, organization });
+  } catch (error) {
+    console.error('Error updating organization subscription:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 export const selectPlan = async (req: Request, res: Response) => {
   try {
     const { planType } = req.body;

@@ -1,7 +1,7 @@
 /** Quiet Momentum dashboard: progress-first hierarchy with one clear share action and transparent money states. */
 import MetricCard from "../components/MetricCard";
 import StatusPill from "../components/StatusPill";
-import { activities, earningsTrend } from "../data/mockData";
+import { activities } from "../data/mockData";
 import { getReferralCode, getReferralLink } from "../lib/referralCode";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Building2, Check, CircleDollarSign, Clock3, Copy, Link2, Loader2, MousePointerClick, QrCode, Sparkles, WalletCards } from "lucide-react";
@@ -23,6 +23,16 @@ interface ReferredChurch {
   date: string;
 }
 
+interface EarningsData {
+  withdrawableBalance: number;
+  estimatedThisMonth: number;
+  earningsTrend: { period: string; earned: number }[];
+}
+
+function formatMoney(value: number) {
+  return `$${value.toFixed(2)}`;
+}
+
 const journey = [{ label: "Visited", value: 246, color: "bg-[#e8e1ff] text-[#6f49d8]" }, { label: "Interested", value: 58, color: "bg-[#ddd1ff] text-[#6540cf]" }, { label: "In trial", value: 31, color: "bg-[#c7b4ff] text-[#5933c6]" }, { label: "Paying", value: 18, color: "bg-[#8054F6] text-white" }];
 
 export default function Dashboard() {
@@ -34,15 +44,18 @@ export default function Dashboard() {
     queryKey: ["/api/referrals/my-organizations"],
   });
   const churches = churchesData?.churches || [];
+  const activePaidChurches = churches.filter((c) => c.status === "active").length;
+  const trialsInProgress = churches.filter((c) => c.status === "trial").length;
+  const { data: earnings } = useQuery<EarningsData>({ queryKey: ["/api/referrals/my-earnings"] });
   async function copyLink() { await navigator.clipboard.writeText(referralLink); setCopied(true); toast.success("Referral link copied"); window.setTimeout(() => setCopied(false), 1700); }
   return <div>
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold tracking-[.15em] text-[#8054F6] uppercase">Wednesday, 26 August</p><h1 className="mt-2 text-[32px] font-extrabold sm:text-[38px]">Your referrals are moving forward.</h1><p className="mt-2 max-w-2xl text-sm text-[#75717f]">See what changed, help the next church begin, and keep a clear view of what you can withdraw.</p></div><Button asChild className="violet-button h-11 rounded-xl px-5 font-bold"><Link href="/referrals">View all churches <ArrowRight className="ml-2" size={17} /></Link></Button></div>
 
     <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Available to withdraw" value="$74.20" note="Cleared commission only" icon={WalletCards} trend="+$12.10" />
-      <MetricCard label="Earned this month" value="$48.72" note="Pending and available" icon={CircleDollarSign} accent="pink" trend="8.4%" />
-      <MetricCard label="Active paid churches" value="18" note="Generating recurring income" icon={Building2} accent="green" trend="+2" />
-      <MetricCard label="Trials in progress" value="13" note="Potential future commission" icon={Clock3} accent="amber" />
+      <MetricCard label="Available to withdraw" value={formatMoney(earnings?.withdrawableBalance ?? 0)} note="Cleared commission only" icon={WalletCards} />
+      <MetricCard label="Earned this month" value={formatMoney(earnings?.estimatedThisMonth ?? 0)} note="From active paid churches" icon={CircleDollarSign} accent="pink" />
+      <MetricCard label="Active paid churches" value={String(activePaidChurches)} note="Generating recurring income" icon={Building2} accent="green" />
+      <MetricCard label="Trials in progress" value={String(trialsInProgress)} note="Potential future commission" icon={Clock3} accent="amber" />
     </section>
 
     <section className="mt-5 grid gap-5 xl:grid-cols-[1.22fr_.78fr]">
@@ -55,7 +68,7 @@ export default function Dashboard() {
     </section>
 
     <section className="mt-5 grid gap-5 xl:grid-cols-[1.22fr_.78fr]">
-      <article className="surface rounded-[24px] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Recurring earnings</p><h2 className="mt-2 text-xl font-extrabold">Six-month movement</h2></div><div className="text-right"><div className="metric-number text-lg font-extrabold text-[#8054F6]">$56.40</div><div className="text-[10px] text-[#8c8795]">September forecast</div></div></div><div className="mt-4 h-[230px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={earningsTrend} margin={{ left: -22, right: 6, top: 10, bottom: 0 }}><defs><linearGradient id="earningsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8054F6" stopOpacity={0.24}/><stop offset="100%" stopColor="#8054F6" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid stroke="#eeeaf6" vertical={false} /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#8a8692", fontSize: 11 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: "#aaa6b1", fontSize: 10 }} /><Tooltip contentStyle={{ border: 0, borderRadius: 12, boxShadow: "0 12px 30px rgba(39,31,63,.12)", fontSize: 12 }} formatter={(value) => [`$${value}`, "Earned"]} /><Area type="monotone" dataKey="earned" stroke="#8054F6" strokeWidth={3} fill="url(#earningsFill)" /></AreaChart></ResponsiveContainer></div></article>
+      <article className="surface rounded-[24px] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Recurring earnings</p><h2 className="mt-2 text-xl font-extrabold">Six-month movement</h2></div><div className="text-right"><div className="metric-number text-lg font-extrabold text-[#8054F6]">{formatMoney(earnings?.estimatedThisMonth ?? 0)}</div><div className="text-[10px] text-[#8c8795]">This month</div></div></div><div className="mt-4 h-[230px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={earnings?.earningsTrend ?? []} margin={{ left: -22, right: 6, top: 10, bottom: 0 }}><defs><linearGradient id="earningsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8054F6" stopOpacity={0.24}/><stop offset="100%" stopColor="#8054F6" stopOpacity={0.02}/></linearGradient></defs><CartesianGrid stroke="#eeeaf6" vertical={false} /><XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: "#8a8692", fontSize: 11 }} /><YAxis axisLine={false} tickLine={false} tick={{ fill: "#aaa6b1", fontSize: 10 }} /><Tooltip contentStyle={{ border: 0, borderRadius: 12, boxShadow: "0 12px 30px rgba(39,31,63,.12)", fontSize: 12 }} formatter={(value) => [`$${value}`, "Earned"]} /><Area type="monotone" dataKey="earned" stroke="#8054F6" strokeWidth={3} fill="url(#earningsFill)" /></AreaChart></ResponsiveContainer></div></article>
       <article className="surface rounded-[24px] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Latest activity</p><h2 className="mt-2 text-xl font-extrabold">What changed</h2></div><Link href="/notifications" className="text-xs font-bold text-[#8054F6] hover:underline">All updates</Link></div><div className="mt-5 space-y-1">{activities.map((item, index) => <div key={item.title} className="flex gap-3 border-b border-[#f0edf5] py-3 last:border-0"><span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${item.tone === "pink" ? "bg-[#ff2e91]" : item.tone === "green" ? "bg-emerald-500" : "bg-[#8054F6]"}`} /><div className="min-w-0 flex-1"><div className="text-[13px] font-bold text-[#312e36]">{item.title}</div><div className="mt-1 text-[11px] text-[#888391]">{item.detail}</div></div><span className="text-[10px] text-[#aaa5b1]">{item.time}</span></div>)}</div></article>
     </section>
 
