@@ -230,8 +230,27 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
   }),
 
   fetchHFBChapter: async (book, chapter, version, highlightVerse) => {
+    // If the requested chapter is already loaded in Center Stage, just update the active verse highlight
+    const current = get();
+    if (
+      current.hfbBookName === book &&
+      current.hfbChapter === chapter &&
+      current.hfbChapterVerses.length > 0
+    ) {
+      if (highlightVerse !== undefined) {
+        set({ hfbActiveVerseNum: highlightVerse });
+      }
+      return;
+    }
+
     const fetchSeq = ++latestChapterFetchSequence;
-    set({ hfbBookName: book, hfbChapter: chapter, hfbChapterLoading: true, hfbChapterVerses: [] });
+    set({
+      hfbBookName: book,
+      hfbChapter: chapter,
+      hfbChapterLoading: true,
+      hfbActiveVerseNum: highlightVerse !== undefined ? highlightVerse : null,
+      hfbChapterVerses: [],
+    });
     try {
       const vKey = version.toLowerCase();
 
@@ -242,7 +261,11 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       
       if (ramVerses && ramVerses.length > 0) {
         if (fetchSeq !== latestChapterFetchSequence) return;
-        set({ hfbChapterVerses: ramVerses as any[], hfbChapterLoading: false });
+        const normalizedRamVerses = (ramVerses as any[]).map((v: any) => ({
+          number: Number(v.number ?? v.verse ?? 1),
+          text: String(v.text || "").trim(),
+        }));
+        set({ hfbChapterVerses: normalizedRamVerses, hfbChapterLoading: false });
         if (highlightVerse !== undefined) {
            set({ hfbActiveVerseNum: highlightVerse });
         }
@@ -260,23 +283,19 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       if (fetchSeq !== latestChapterFetchSequence) return;
 
       if (localVerses && localVerses.length > 0) {
-        // QC65 defensive check: if ALL cached verses have empty text, the cache
-        // is stale (e.g. AMP/MSG cached before the data was populated). Treat as
-        // a miss and fall through to the cloud API to get the real data.
         const hasAnyText = localVerses.some((v: any) => v.text && v.text.trim().length > 0);
         if (!hasAnyText) {
           console.warn(`[IndexedDB HFB] All ${localVerses.length} cached verses for ${book} ${chapter} (${vKey}) are empty — treating as cache miss.`);
-          // Purge the stale empty entries so they don't block future fetches
           try {
             await db.verses.where({ version: vKey, book, chapter }).delete();
           } catch (_) { /* non-critical */ }
         } else {
           // Sort verses to ensure correct order
-          localVerses.sort((a: any, b: any) => a.verse - b.verse);
+          localVerses.sort((a: any, b: any) => (a.verse ?? a.number ?? 0) - (b.verse ?? b.number ?? 0));
           
           const mappedVerses = localVerses.map((v: any) => ({
-            number: v.verse,
-            text: v.text || '',
+            number: Number(v.number ?? v.verse ?? 1),
+            text: String(v.text || '').trim(),
           }));
 
           if (fetchSeq !== latestChapterFetchSequence) return;
@@ -291,10 +310,6 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
 
       console.warn(`[Local DB] Verses not found for ${book} ${chapter} (${vKey}). Falling back to Cloud API...`);
       
-      // 2. Fallback to Cloud API if local sync failed or isn't complete
-      // Use apiClient (axios) which correctly resolves to https://api.qworship.com/api
-      // DO NOT use fetch('/api/bible/search') — relative URLs resolve to qworship.com/api
-      // which returns the React SPA HTML, not JSON.
       const resp = await apiClient.post('/bible/search', {
         book, chapter, verseStart: 1, verseEnd: 150, version: vKey
       });
@@ -302,8 +317,8 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       const data = resp.data;
       if (data?.success && data?.result) {
         const verses = (data.result.verses as any[]).map((v: any) => ({
-          number: v.verse,
-          text: v[vKey] || "",
+          number: Number(v.number ?? v.verse ?? 1),
+          text: String(v[vKey] || v.text || "").trim(),
         }));
 
         // --- LAZY SEEDING: Cache to IndexedDB for next time ---
@@ -315,7 +330,6 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
              verse: v.number,
              text: v.text
           }));
-          // Use put to handle potential partial duplicates safely
           await db.verses.bulkPut(dbVerses);
           console.log(`✅ [Lazy Seed] Cached ${book} ${chapter} (${vKey}) to IndexedDB`);
         } catch (dbErr) {
@@ -335,9 +349,9 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
         if (fetchSeq !== latestChapterFetchSequence) return;
         set({ hfbChapterLoading: false });
       }
-    } catch (e) {
+    } catch (err) {
+      console.error(`❌ [HFB] Failed to fetch chapter for ${book} ${chapter}:`, err);
       if (fetchSeq !== latestChapterFetchSequence) return;
-      console.error("[HFB Store] Fetch Error:", e);
       set({ hfbChapterLoading: false });
     }
   },

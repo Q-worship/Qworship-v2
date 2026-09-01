@@ -92,7 +92,11 @@ export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
       const dict = { ...state.dictionary };
       if (!dict[version]) dict[version] = {};
       if (!dict[version][book]) dict[version][book] = {};
-      dict[version][book][chapter] = [...verses].sort((a, b) => a.number - b.number);
+      const normalized = verses.map((v: any) => ({
+        number: Number(v.number ?? v.verse ?? 1),
+        text: String(v.text || "").trim(),
+      }));
+      dict[version][book][chapter] = normalized.sort((a, b) => a.number - b.number);
       return { dictionary: dict };
     });
   },

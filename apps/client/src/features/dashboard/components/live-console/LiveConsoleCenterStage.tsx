@@ -336,20 +336,21 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-1.5 align-start h-max">
-                {hfbStore.hfbChapterVerses.map((verse) => {
-                  const isActive = verse.number === hfbStore.hfbActiveVerseNum;
+                {hfbStore.hfbChapterVerses.map((verse, idx) => {
+                  const verseNumber = Number(verse.number ?? (verse as any).verse ?? idx + 1);
+                  const isActive = verseNumber === hfbStore.hfbActiveVerseNum;
                   return (
                     <div
-                      key={verse.number}
+                      key={verseNumber}
                       ref={isActive ? hfbActiveVerseRef : null}
                       onClick={() => {
-                        const ref = `${hfbStore.hfbBookName} ${hfbStore.hfbChapter}:${verse.number}`;
-                        hfbStore.setHfbActiveVerseNum(verse.number);
+                        const ref = `${hfbStore.hfbBookName} ${hfbStore.hfbChapter}:${verseNumber}`;
+                        hfbStore.setHfbActiveVerseNum(verseNumber);
                         hfbStore.setHfbCurrentProjected({ reference: ref, text: verse.text, version: hfbStore.hfbVersion });
                         useBibleProjectionStore.getState().setVerse({
                           book: hfbStore.hfbBookName,
                           chapter: hfbStore.hfbChapter,
-                          verse: verse.number,
+                          verse: verseNumber,
                           text: verse.text,
                           version: hfbStore.hfbVersion,
                           [hfbStore.hfbVersion.toLowerCase()]: verse.text,
@@ -362,7 +363,7 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                              data: { 
                                 book: hfbStore.hfbBookName, 
                                 chapter: hfbStore.hfbChapter, 
-                                verse: verse.number, 
+                                verse: verseNumber, 
                                 text: verse.text, 
                                 version: hfbStore.hfbVersion, 
                                 reference: ref 
@@ -375,7 +376,7 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                       }`}
                     >
                       <span className={`shrink-0 text-[11px] font-bold mt-0.5 w-4 text-right select-none ${isActive ? 'text-cyan-400' : 'text-gray-600 group-hover:text-gray-400'}`}>
-                        {verse.number}
+                        {verseNumber}
                       </span>
                       <span className={`text-[11px] leading-relaxed ${isActive ? 'text-cyan-200 font-medium' : 'text-gray-300 group-hover:text-white'}`}>
                         {verse.text}

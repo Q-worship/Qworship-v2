@@ -18,6 +18,8 @@ import {
   scanHFBContextNavigations,
 } from "../lib/hfbFastReferenceParser";
 import { parseBibleVersionCommand } from "../data/bibleTranslations";
+import { useBibleRAMCache } from "./useBibleRAMCache";
+import { db } from "@/lib/db";
 
 interface UseHandsfreeBibleProps {
   liveWindow: Window | null;
@@ -90,9 +92,20 @@ export const useHandsfreeBible = ({
   // can pass the NEW version to executeNavigation immediately, before the React
   // state setter (setSelectedBibleVersion) has had a chance to flush.
   const selectedBibleVersionRef = useRef<string>("KJV");
-  const lastProjectedRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
-  const pendingInterimRef = useRef<{ key: string; count: number; at: number; firstSeenAt: number }>({
-    key: "", count: 0, at: 0, firstSeenAt: 0,
+  const lastProjectedRef = useRef<{ key: string; at: number }>({
+    key: "",
+    at: 0,
+  });
+  const pendingInterimRef = useRef<{
+    key: string;
+    count: number;
+    at: number;
+    firstSeenAt: number;
+  }>({
+    key: "",
+    count: 0,
+    at: 0,
+    firstSeenAt: 0,
   });
   const voiceReadyRef = useRef(false);
   const connectionAttemptRef = useRef(0);
@@ -109,14 +122,16 @@ export const useHandsfreeBible = ({
   const projectionGenerationRef = useRef(0);
   const lastProjectionTimestampRef = useRef(0);
   const navigationRequestSequenceRef = useRef(0);
-  const executeNavigationRef = useRef<(
-    commandType: string,
-    direction?: string,
-    targetVerse?: number,
-    offset?: number,
-    overrideVersion?: string,
-    targetChapter?: number,
-  ) => Promise<void>>(async () => undefined);
+  const executeNavigationRef = useRef<
+    (
+      commandType: string,
+      direction?: string,
+      targetVerse?: number,
+      offset?: number,
+      overrideVersion?: string,
+      targetChapter?: number,
+    ) => Promise<void>
+  >(async () => undefined);
 
   useEffect(() => {
     liveWindowRef.current = liveWindow;
@@ -151,7 +166,9 @@ export const useHandsfreeBible = ({
     if (Number.isFinite(data.projectionSequence)) {
       const incomingSequence = Number(data.projectionSequence);
       if (incomingSequence <= lastServerProjectionSequenceRef.current) {
-        console.info(`[HFB] Stale server projection suppressed: ${incomingSequence}`);
+        console.info(
+          `[HFB] Stale server projection suppressed: ${incomingSequence}`,
+        );
         return;
       }
       lastServerProjectionSequenceRef.current = incomingSequence;
@@ -186,7 +203,7 @@ export const useHandsfreeBible = ({
     // confirm it instead of creating duplicate history entries.
     const hfbState = useHFBStore.getState();
     const currentDetection =
-      hfbState.hfbDetectedVerses.find(item => item.isActive) ||
+      hfbState.hfbDetectedVerses.find((item) => item.isActive) ||
       hfbState.hfbDetectedVerses[hfbState.hfbDetectedVerses.length - 1];
     const currentDetectionKey = currentDetection
       ? `${currentDetection.version.toLowerCase()}|${currentDetection.book}|${currentDetection.chapter}|${currentDetection.verseNum}`
@@ -207,17 +224,23 @@ export const useHandsfreeBible = ({
 
     if (data?.serverDetectedAt && lastProjectionTimestampRef.current > 0) {
       if (data.serverDetectedAt < lastProjectionTimestampRef.current - 400) {
-        console.info(`[HFB] Stale server projection suppressed: ${projectionKey} (${data.serverDetectedAt} < ${lastProjectionTimestampRef.current})`);
+        console.info(
+          `[HFB] Stale server projection suppressed: ${projectionKey} (${data.serverDetectedAt} < ${lastProjectionTimestampRef.current})`,
+        );
         return;
       }
     }
 
-    if (projectionKey === lastProjectedRef.current.key &&
-        now - lastProjectedRef.current.at < 5000) {
+    if (
+      projectionKey === lastProjectedRef.current.key &&
+      now - lastProjectedRef.current.at < 5000
+    ) {
       return;
     }
     if (!text.trim()) {
-      console.warn(`[HFB] ${effectiveVersion} text is unavailable for ${book} ${chapter}:${verseNum}`);
+      console.warn(
+        `[HFB] ${effectiveVersion} text is unavailable for ${book} ${chapter}:${verseNum}`,
+      );
       return;
     }
     projectionGenerationRef.current += 1;
@@ -240,7 +263,11 @@ export const useHandsfreeBible = ({
           [versionKey]: text,
         } as any)
       : null;
-    setZustandVerse(verseForStore, `${book} ${chapter}:${verseNum}`, effectiveVersion);
+    setZustandVerse(
+      verseForStore,
+      `${book} ${chapter}:${verseNum}`,
+      effectiveVersion,
+    );
 
     // Integrate with HFB layout store
     const detectedId = Date.now();
@@ -252,17 +279,27 @@ export const useHandsfreeBible = ({
       isActive: true,
       verseNum: verseNum,
       book,
-      chapter
+      chapter,
     });
-    
+
     // Set all other detected verses to inactive
-    useHFBStore.getState().setHfbDetectedVerses(prev => 
-      prev.map(d => ({ ...d, isActive: d.id === detectedId }))
-    );
-    useHFBStore.getState().setHfbCurrentProjected({ reference: `${book} ${chapter}:${verseNum}`, text, version: effectiveVersion });
-    
+    useHFBStore
+      .getState()
+      .setHfbDetectedVerses((prev) =>
+        prev.map((d) => ({ ...d, isActive: d.id === detectedId })),
+      );
+    useHFBStore
+      .getState()
+      .setHfbCurrentProjected({
+        reference: `${book} ${chapter}:${verseNum}`,
+        text,
+        version: effectiveVersion,
+      });
+
     // Asynchronously fetch and display the whole chapter in Center Stage
-    useHFBStore.getState().fetchHFBChapter(book, chapter, effectiveVersion, verseNum);
+    useHFBStore
+      .getState()
+      .fetchHFBChapter(book, chapter, effectiveVersion, verseNum);
 
     if (isHandsfreeBibleOpen) {
       setDisplayMode("hfb-bible");
@@ -297,22 +334,29 @@ export const useHandsfreeBible = ({
       clientProjectionMs: telemetry.clientClickAt
         ? projectedAt - telemetry.clientClickAt
         : telemetry.clientStartedAt
-        ? projectedAt - telemetry.clientStartedAt
-        : undefined,
+          ? projectedAt - telemetry.clientStartedAt
+          : undefined,
       projectedAt,
       reference: `${book} ${chapter}:${verseNum}`,
     };
     console.info("[HFB Latency]", latency);
-    const measuredLatency = latency.clientProjectionMs ?? latency.serverToClientMs;
+    const measuredLatency =
+      latency.clientProjectionMs ?? latency.serverToClientMs;
     if (typeof measuredLatency === "number") {
       useHFBStore.getState().setHfbLatency(measuredLatency, latency.source);
     }
-    window.dispatchEvent(new CustomEvent("qworship:hfb-latency", { detail: latency }));
+    window.dispatchEvent(
+      new CustomEvent("qworship:hfb-latency", { detail: latency }),
+    );
   };
 
   const processInterimLocally = async (
     text: string,
-    metadata?: { confidence?: number; serverReceivedAt?: number; clientReceivedAt: number },
+    metadata?: {
+      confidence?: number;
+      serverReceivedAt?: number;
+      clientReceivedAt: number;
+    },
   ) => {
     const parseStarted = performance.now();
     const parsed = parseHFBReference(text);
@@ -323,49 +367,63 @@ export const useHandsfreeBible = ({
     const previous = pendingInterimRef.current;
     const sameCandidate = previous.key === key && now - previous.at < 1500;
     const count = sameCandidate ? previous.count + 1 : 1;
-    const firstSeenAt = sameCandidate ? previous.firstSeenAt || previous.at : now;
+    const firstSeenAt = sameCandidate
+      ? previous.firstSeenAt || previous.at
+      : now;
     pendingInterimRef.current = { key, count, at: now, firstSeenAt };
 
     const strictMode = useHFBStore.getState().hfbStrictMode;
     const confidence = metadata?.confidence ?? 0;
     const hasStrictCue =
-      /\b(?:bible|show(?:\s+me)?|project|display|open|turn\s+to|go\s+to|take\s+me\s+to|look\s+(?:at|to)|let'?s\s+see|let\s+us\s+see|can\s+we\s+see|read(?:\s+from)?)\b/i.test(text);
+      /\b(?:bible|show(?:\s+me)?|project|display|open|turn\s+to|go\s+to|take\s+me\s+to|look\s+(?:at|to)|let'?s\s+see|let\s+us\s+see|can\s+we\s+see|read(?:\s+from)?)\b/i.test(
+        text,
+      );
     if (strictMode && !hasStrictCue) return;
 
     // Clear, complete references project on their first high-confidence
     // interim. Medium-confidence references need one matching confirmation.
     // Low-confidence hypotheses never control the live presentation.
-    const requiredResults = confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+    const requiredResults =
+      confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
     if (
       count < requiredResults ||
-      (lastProjectedRef.current.key === key && now - lastProjectedRef.current.at < 5000)
-    ) return;
+      (lastProjectedRef.current.key === key &&
+        now - lastProjectedRef.current.at < 5000)
+    )
+      return;
 
     const lookupSequence = ++localLookupSequenceRef.current;
     const projectionGeneration = projectionGenerationRef.current;
     const cached = await resolveCachedHFBVerse(
-      parsed.book, parsed.chapter, parsed.verse, version,
+      parsed.book,
+      parsed.chapter,
+      parsed.verse,
+      version,
     );
     if (!cached) return; // Server RAM result remains the reliable fallback.
     if (
       lookupSequence !== localLookupSequenceRef.current ||
       projectionGeneration !== projectionGenerationRef.current
-    ) return;
+    )
+      return;
 
     const versionKey = version.toLowerCase();
-    handleBibleMatch({
-      commandType: "lookup",
-      result: {
-        book: parsed.book,
-        chapter: parsed.chapter,
-        verses: [{ verse: parsed.verse, [versionKey]: cached.text }],
+    handleBibleMatch(
+      {
+        commandType: "lookup",
+        result: {
+          book: parsed.book,
+          chapter: parsed.chapter,
+          verses: [{ verse: parsed.verse, [versionKey]: cached.text }],
+        },
+        telemetry: {
+          source: `client-${cached.source}`,
+          clientStartedAt: metadata?.clientReceivedAt || Date.now(),
+          parserMs: performance.now() - parseStarted,
+        },
       },
-      telemetry: {
-        source: `client-${cached.source}`,
-        clientStartedAt: metadata?.clientReceivedAt || Date.now(),
-        parserMs: performance.now() - parseStarted,
-      },
-    }, version);
+      version,
+    );
   };
 
   const executeNavigation = async (
@@ -373,7 +431,7 @@ export const useHandsfreeBible = ({
     direction?: string,
     targetVerse?: number,
     offset?: number,
-    overrideVersion?: string,  // QC64: explicit version override for version-switch re-projection
+    overrideVersion?: string, // QC64: explicit version override for version-switch re-projection
     targetChapter?: number,
   ) => {
     let commandText = "";
@@ -399,9 +457,14 @@ export const useHandsfreeBible = ({
 
     // We need to fetch the next/previous verse using the current context
     const globalVerse = useBibleProjectionStore.getState().currentVerse;
-    const currentContext = globalVerse?.book && globalVerse.chapter && globalVerse.verse
-      ? { book: globalVerse.book, chapter: globalVerse.chapter, verse: globalVerse.verse }
-      : currentVerseContextRef.current;
+    const currentContext =
+      globalVerse?.book && globalVerse.chapter && globalVerse.verse
+        ? {
+            book: globalVerse.book,
+            chapter: globalVerse.chapter,
+            verse: globalVerse.verse,
+          }
+        : currentVerseContextRef.current;
     console.log("[HandsfreeBible] executeNavigation triggered", {
       commandType,
       direction,
@@ -429,19 +492,19 @@ export const useHandsfreeBible = ({
     const projectionGeneration = projectionGenerationRef.current;
     try {
       const response = await apiClient.post("/bible/voice-command", {
-          text: commandText,
-          currentBook: currentContext.book,
-          currentChapter: currentContext.chapter,
-          currentVerse: currentContext.verse,
-          currentVersion:
-            overrideVersion?.toLowerCase() ||
-            (currentContext as any).version ||
-            selectedBibleVersionRef.current.toLowerCase(),
-          commandType,
-          direction,
-          targetVerse,
-          targetChapter,
-          offset,
+        text: commandText,
+        currentBook: currentContext.book,
+        currentChapter: currentContext.chapter,
+        currentVerse: currentContext.verse,
+        currentVersion:
+          overrideVersion?.toLowerCase() ||
+          (currentContext as any).version ||
+          selectedBibleVersionRef.current.toLowerCase(),
+        commandType,
+        direction,
+        targetVerse,
+        targetChapter,
+        offset,
       });
 
       console.log("[HandsfreeBible] Fetch status:", response.status);
@@ -458,10 +521,13 @@ export const useHandsfreeBible = ({
         if (data.success && data.result) {
           // QC64 fix: Pass overrideVersion so handleBibleMatch uses the correct
           // version key when looking up text (avoids stale selectedBibleVersion state).
-          handleBibleMatch({
-            result: data.result,
-            commandType: data.commandType,
-          }, overrideVersion);
+          handleBibleMatch(
+            {
+              result: data.result,
+              commandType: data.commandType,
+            },
+            overrideVersion,
+          );
         } else {
           console.warn("[HandsfreeBible] Navigation failed:", data.error);
         }
@@ -483,23 +549,34 @@ export const useHandsfreeBible = ({
 
   useEffect(() => {
     const refreshInvalidatedVersion = (event: Event) => {
-      const versions = (event as CustomEvent<{ versions?: string[] }>).detail?.versions || [];
+      const versions =
+        (event as CustomEvent<{ versions?: string[] }>).detail?.versions || [];
       const activeVersion = selectedBibleVersionRef.current.toLowerCase();
       if (!versions.includes(activeVersion)) return;
       const current = useBibleProjectionStore.getState().currentVerse;
       if (!current?.book || !current.chapter || !current.verse) return;
-      void executeNavigationRef.current(
-        "jump_to_verse", undefined, current.verse, undefined,
-        selectedBibleVersionRef.current,
-      ).catch(() => undefined);
+      void executeNavigationRef
+        .current(
+          "jump_to_verse",
+          undefined,
+          current.verse,
+          undefined,
+          selectedBibleVersionRef.current,
+        )
+        .catch(() => undefined);
     };
-    window.addEventListener("qworship:bible-cache-invalidated", refreshInvalidatedVersion);
-    return () => window.removeEventListener("qworship:bible-cache-invalidated", refreshInvalidatedVersion);
+    window.addEventListener(
+      "qworship:bible-cache-invalidated",
+      refreshInvalidatedVersion,
+    );
+    return () =>
+      window.removeEventListener(
+        "qworship:bible-cache-invalidated",
+        refreshInvalidatedVersion,
+      );
   }, []);
 
-  const {
-    isRecording, volume, startRecording, stopRecording,
-  } =
+  const { isRecording, volume, startRecording, stopRecording } =
     useRawAudioStream();
 
   // Inactivity Timer
@@ -535,8 +612,16 @@ export const useHandsfreeBible = ({
     setDetectedCommands(`Switched to ${normalized}`);
     const ctx = currentVerseContextRef.current;
     if (ctx?.book && ctx.chapter && ctx.verse) {
-      console.log(`[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`);
-      void executeNavigation("jump_to_verse", undefined, ctx.verse, undefined, normalized);
+      console.log(
+        `[HandsfreeBible] Auto-refreshing ${ctx.book} ${ctx.chapter}:${ctx.verse} in ${normalized}`,
+      );
+      void executeNavigation(
+        "jump_to_verse",
+        undefined,
+        ctx.verse,
+        undefined,
+        normalized,
+      );
     }
   };
 
@@ -554,7 +639,8 @@ export const useHandsfreeBible = ({
       : [navigations[navigations.length - 1]];
 
     const parsedRef = parseHFBReference(text);
-    const bookName = parsedRef?.book ||
+    const bookName =
+      parsedRef?.book ||
       useBibleProjectionStore.getState().currentVerse?.book ||
       currentVerseContextRef.current?.book;
     if (!bookName) return false;
@@ -562,8 +648,10 @@ export const useHandsfreeBible = ({
     let handledAny = false;
     for (const navigation of targetNavigations) {
       if (
-        !Number.isInteger(navigation.chapter) || navigation.chapter < 1 ||
-        !Number.isInteger(navigation.verse) || navigation.verse < 1
+        !Number.isInteger(navigation.chapter) ||
+        navigation.chapter < 1 ||
+        !Number.isInteger(navigation.verse) ||
+        navigation.verse < 1
       ) {
         continue;
       }
@@ -587,7 +675,13 @@ export const useHandsfreeBible = ({
         firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
       };
 
-      const requiredResults = isFinal ? 1 : confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+      const requiredResults = isFinal
+        ? 1
+        : confidence >= 0.85
+          ? 1
+          : confidence >= 0.65
+            ? 2
+            : Infinity;
       if (count < requiredResults) {
         return true; // Still confirming frames for this unexecuted command
       }
@@ -611,10 +705,13 @@ export const useHandsfreeBible = ({
     return handledAny;
   };
 
-  const NEXT_VERSE_RE = /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse)\b/i;
-  const PREV_VERSE_RE = /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse)\b/i;
+  const NEXT_VERSE_RE =
+    /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse)\b/i;
+  const PREV_VERSE_RE =
+    /\b(?:show me the previous verse|take me to the previous verse|show me the previous|take me to the previous|previous verse please|move to previous verse|go to previous verse|previous verse)\b/i;
   const NEXT_CHAP_RE = /\b(?:next chapter|following chapter)\b/i;
-  const PREV_CHAP_RE = /\b(?:previous chapter|last chapter|go back a chapter)\b/i;
+  const PREV_CHAP_RE =
+    /\b(?:previous chapter|last chapter|go back a chapter)\b/i;
 
   const processRelativeNavigationLocally = (
     text: string,
@@ -640,7 +737,8 @@ export const useHandsfreeBible = ({
 
     if (!direction) return false;
 
-    const current = useBibleProjectionStore.getState().currentVerse ||
+    const current =
+      useBibleProjectionStore.getState().currentVerse ||
       currentVerseContextRef.current;
     if (!current?.book) return false;
 
@@ -659,13 +757,20 @@ export const useHandsfreeBible = ({
       firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
     };
 
-    const requiredResults = isFinal ? 1 : confidence >= 0.85 ? 1 : confidence >= 0.65 ? 2 : Infinity;
+    const requiredResults = isFinal
+      ? 1
+      : confidence >= 0.85
+        ? 1
+        : confidence >= 0.65
+          ? 2
+          : Infinity;
     if (count < requiredResults) return true;
 
     if (
       lastContextNavigationRef.current.key === key &&
       now - lastContextNavigationRef.current.at < 1200
-    ) return true;
+    )
+      return true;
 
     lastContextNavigationRef.current = { key, at: now };
     console.info(
@@ -679,8 +784,14 @@ export const useHandsfreeBible = ({
   };
 
   const {
-    connect, disconnect, sendPCMData, isConnected, setStrictMode,
-    setBibleVersion, setBibleContext, beginSessionTrace,
+    connect,
+    disconnect,
+    sendPCMData,
+    isConnected,
+    setStrictMode,
+    setBibleVersion,
+    setBibleContext,
+    beginSessionTrace,
   } = useRealtimeSocket({
     onBibleMatch: (data: any) => {
       resetInactivityTimer();
@@ -704,7 +815,9 @@ export const useHandsfreeBible = ({
       }
       lastTranscriptTextRef.current = text;
 
-      useHFBStore.getState().setHfbCurrentPartial(text, metadata?.detectedReferences);
+      useHFBStore
+        .getState()
+        .setHfbCurrentPartial(text, metadata?.detectedReferences);
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
       const conf = metadata?.confidence ?? 0;
@@ -729,7 +842,12 @@ export const useHandsfreeBible = ({
         useHFBStore.getState().addHfbTranscriptLine({
           id: Date.now(),
           text,
-          ts: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          ts: new Date().toLocaleTimeString("en-US", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
         });
       }
     },
@@ -749,7 +867,13 @@ export const useHandsfreeBible = ({
       resetInactivityTimer();
       applyVoiceVersionChange(version);
     },
-    onNavigation: (commandType, direction, targetVerse, offset, targetChapter) => {
+    onNavigation: (
+      commandType,
+      direction,
+      targetVerse,
+      offset,
+      targetChapter,
+    ) => {
       resetInactivityTimer();
       executeNavigation(
         commandType,
@@ -768,7 +892,9 @@ export const useHandsfreeBible = ({
         .toArray()
         .then((verses) => {
           if (verses && verses.length > 0) {
-            useBibleRAMCache.getState().setChapterInRam(version, book, chapter, verses as any);
+            useBibleRAMCache
+              .getState()
+              .setChapterInRam(version, book, chapter, verses as any);
           }
         })
         .catch(() => {});
@@ -794,7 +920,9 @@ export const useHandsfreeBible = ({
       if (status === "connecting") {
         voiceReadyRef.current = false;
         setHfbConnectionStatus(isListeningMode ? "reconnecting" : "connecting");
-        setMicrophoneStatus(isListeningMode ? "Reconnecting voice..." : "Connecting voice...");
+        setMicrophoneStatus(
+          isListeningMode ? "Reconnecting voice..." : "Connecting voice...",
+        );
       } else if (status === "connected") {
         voiceReadyRef.current = true;
         setHfbConnectionStatus("ready");
@@ -802,8 +930,12 @@ export const useHandsfreeBible = ({
       } else if (status === "disconnected") {
         voiceReadyRef.current = false;
         useHFBStore.getState().setHfbCurrentPartial("");
-        setHfbConnectionStatus(isListeningMode ? "reconnecting" : "disconnected");
-        setMicrophoneStatus(isListeningMode ? "Reconnecting voice..." : "Disconnected");
+        setHfbConnectionStatus(
+          isListeningMode ? "reconnecting" : "disconnected",
+        );
+        setMicrophoneStatus(
+          isListeningMode ? "Reconnecting voice..." : "Disconnected",
+        );
       }
     },
     onAudioStatus: () => {
@@ -820,7 +952,8 @@ export const useHandsfreeBible = ({
       !projectedBibleVerse?.book ||
       !projectedBibleVerse.chapter ||
       !projectedBibleVerse.verse
-    ) return;
+    )
+      return;
     setBibleContext({
       book: projectedBibleVerse.book,
       chapter: projectedBibleVerse.chapter,
@@ -841,10 +974,7 @@ export const useHandsfreeBible = ({
       setStrictMode(hfbStrictMode);
       setBibleVersion(hfbVersion);
     }
-  }, [
-    isConnected, hfbStrictMode, hfbVersion,
-    setStrictMode, setBibleVersion,
-  ]);
+  }, [isConnected, hfbStrictMode, hfbVersion, setStrictMode, setBibleVersion]);
 
   // Position recalculation on resize (only if not dragged)
   useEffect(() => {
@@ -872,8 +1002,12 @@ export const useHandsfreeBible = ({
       disconnect();
     }
   }, [
-    isHandsfreeBibleOpen, isPanelActive, isListeningMode,
-    connect, disconnect, isConnected,
+    isHandsfreeBibleOpen,
+    isPanelActive,
+    isListeningMode,
+    connect,
+    disconnect,
+    isConnected,
   ]);
 
   // Clean up socket on unmount ONLY
@@ -965,24 +1099,24 @@ export const useHandsfreeBible = ({
   };
 
   const closeHandsfreeBible = () => {
-      setIsHandsfreeBibleOpen(false);
-      setIsWidgetVisible(false);
-      setHasBeenDragged(false);
+    setIsHandsfreeBibleOpen(false);
+    setIsWidgetVisible(false);
+    setHasBeenDragged(false);
 
-      setDetectedCommands("No commands detected");
-      currentVerseContextRef.current = null;
-      setWidgetVerseData(null);
-      clearZustandProjection();
-      useHFBStore.getState().clearAllState();
+    setDetectedCommands("No commands detected");
+    currentVerseContextRef.current = null;
+    setWidgetVerseData(null);
+    clearZustandProjection();
+    useHFBStore.getState().clearAllState();
 
-      stopRecording();
-      useHFBStore.getState().setHfbCurrentPartial("");
-      clearInactivityTimer();
-      disconnect();
-      setIsListeningMode(false);
-      setIsVoiceConnecting(false);
-      setIsAudioStreaming(false);
-      setIsSleepMode(true);
+    stopRecording();
+    useHFBStore.getState().setHfbCurrentPartial("");
+    clearInactivityTimer();
+    disconnect();
+    setIsListeningMode(false);
+    setIsVoiceConnecting(false);
+    setIsAudioStreaming(false);
+    setIsSleepMode(true);
   };
 
   const toggleHandsfreeBible = () => {
@@ -1052,7 +1186,9 @@ export const useHandsfreeBible = ({
           return;
         }
         console.info("[HFB Latency] Microphone capture started", {
-          clickToCaptureMs: Math.round(performance.now() - listeningRequestedAtRef.current),
+          clickToCaptureMs: Math.round(
+            performance.now() - listeningRequestedAtRef.current,
+          ),
         });
         setIsVoiceConnecting(false);
         setMicrophoneStatus("Listening");
