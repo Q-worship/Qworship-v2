@@ -222,10 +222,14 @@ export const useHandsfreeBible = ({
       return;
     }
 
-    if (data?.serverDetectedAt && lastProjectionTimestampRef.current > 0) {
-      if (data.serverDetectedAt < lastProjectionTimestampRef.current - 400) {
+    const incomingServerTime =
+      data?.telemetry?.serverResolvedAt ||
+      data?.serverDetectedAt ||
+      data?.serverTimestamp;
+    if (incomingServerTime && lastProjectionTimestampRef.current > 0) {
+      if (incomingServerTime < lastProjectionTimestampRef.current - 300) {
         console.info(
-          `[HFB] Stale server projection suppressed: ${projectionKey} (${data.serverDetectedAt} < ${lastProjectionTimestampRef.current})`,
+          `[HFB] Stale server projection suppressed: ${projectionKey} (${incomingServerTime} < ${lastProjectionTimestampRef.current})`,
         );
         return;
       }
@@ -457,6 +461,7 @@ export const useHandsfreeBible = ({
 
     // We need to fetch the next/previous verse using the current context
     const globalVerse = useBibleProjectionStore.getState().currentVerse;
+    const hfbState = useHFBStore.getState();
     const currentContext =
       globalVerse?.book && globalVerse.chapter && globalVerse.verse
         ? {
@@ -464,7 +469,17 @@ export const useHandsfreeBible = ({
             chapter: globalVerse.chapter,
             verse: globalVerse.verse,
           }
-        : currentVerseContextRef.current;
+        : currentVerseContextRef.current?.book &&
+            currentVerseContextRef.current?.chapter &&
+            currentVerseContextRef.current?.verse
+          ? currentVerseContextRef.current
+          : hfbState.hfbBookName && hfbState.hfbChapter
+            ? {
+                book: hfbState.hfbBookName,
+                chapter: hfbState.hfbChapter,
+                verse: hfbState.hfbActiveVerseNum || 1,
+              }
+            : null;
     console.log("[HandsfreeBible] executeNavigation triggered", {
       commandType,
       direction,
@@ -641,6 +656,7 @@ export const useHandsfreeBible = ({
     const parsedRef = parseHFBReference(text);
     const bookName =
       parsedRef?.book ||
+      useHFBStore.getState().hfbBookName ||
       useBibleProjectionStore.getState().currentVerse?.book ||
       currentVerseContextRef.current?.book;
     if (!bookName) return false;
@@ -873,8 +889,17 @@ export const useHandsfreeBible = ({
       targetVerse,
       offset,
       targetChapter,
+      serverTimestamp,
     ) => {
       resetInactivityTimer();
+      if (serverTimestamp && lastProjectionTimestampRef.current > 0) {
+        if (serverTimestamp < lastProjectionTimestampRef.current - 300) {
+          console.info(
+            `[HFB] Stale server navigation suppressed (${serverTimestamp} < ${lastProjectionTimestampRef.current})`,
+          );
+          return;
+        }
+      }
       executeNavigation(
         commandType,
         direction,

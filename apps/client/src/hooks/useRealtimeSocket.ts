@@ -33,6 +33,7 @@ interface RealtimeSocketProps {
     targetVerse?: number,
     offset?: number,
     targetChapter?: number,
+    serverTimestamp?: number,
   ) => void;
 }
 
@@ -166,6 +167,7 @@ export const useRealtimeSocket = ({
               data.targetVerse,
               data.offset,
               data.targetChapter,
+              data.serverTimestamp || data.serverDetectedAt,
             );
             break;
           case "reference_stage":

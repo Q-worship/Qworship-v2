@@ -336,7 +336,9 @@ export function setupAudioSocket(server: Server) {
               type: "bible_match",
               result,
               commandType,
+              turnSequence: cmd._turnSequence || utteranceSequence,
               projectionSequence: ++projectionSequence,
+              serverDetectedAt: Date.now(),
               telemetry: {
                 source,
                 traceId,
@@ -382,8 +384,10 @@ export function setupAudioSocket(server: Server) {
           type: "navigation",
           commandType,
           direction: clientDirection,
+          turnSequence: cmd._turnSequence || utteranceSequence,
           ...(targetChapter !== undefined ? { targetChapter } : {}),
           ...(targetVerse !== undefined ? { targetVerse } : {}),
+          serverTimestamp: Date.now(),
         }));
 
       } else if (cmd.name === "switch_bible_version") {
