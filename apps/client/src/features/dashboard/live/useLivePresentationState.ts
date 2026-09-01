@@ -244,6 +244,22 @@ export function useLivePresentationState() {
   const [liveConsoleItalic, setLiveConsoleItalic] = useState(
     () => readLiveConsoleSeed()?.italic ?? false,
   );
+  // Same seed pattern, for the Bible verse reference's independent styling.
+  const [liveConsoleReferenceFontFamily, setLiveConsoleReferenceFontFamily] = useState(
+    () => readLiveConsoleSeed()?.referenceFontFamily || "Lufgord",
+  );
+  const [liveConsoleReferenceFontColor, setLiveConsoleReferenceFontColor] = useState(
+    () => readLiveConsoleSeed()?.referenceFontColor || "#ffffff",
+  );
+  const [liveConsoleReferenceBold, setLiveConsoleReferenceBold] = useState(
+    () => readLiveConsoleSeed()?.referenceBold ?? true,
+  );
+  const [liveConsoleReferenceItalic, setLiveConsoleReferenceItalic] = useState(
+    () => readLiveConsoleSeed()?.referenceItalic ?? false,
+  );
+  const [liveConsoleReferencePosition, setLiveConsoleReferencePosition] = useState(
+    () => readLiveConsoleSeed()?.referencePosition || "top-center",
+  );
 
   // Dashboard-configured Default Web Screen settings - styles the idle
   // "Live Service / Now presenting..." screen shown when nothing is
@@ -331,6 +347,11 @@ export function useLivePresentationState() {
           setSlideTextSize(seed.textSize);
           setLiveConsoleBold(seed.bold);
           setLiveConsoleItalic(seed.italic);
+          setLiveConsoleReferenceFontFamily(seed.referenceFontFamily);
+          setLiveConsoleReferenceFontColor(seed.referenceFontColor);
+          setLiveConsoleReferenceBold(seed.referenceBold);
+          setLiveConsoleReferenceItalic(seed.referenceItalic);
+          setLiveConsoleReferencePosition(seed.referencePosition);
           setAppliedBackgroundType(seed.backgroundType);
           setAppliedBackgroundColor(seed.backgroundColor);
           setAppliedBackgroundImage(seed.backgroundImage);
@@ -2855,6 +2876,11 @@ export function useLivePresentationState() {
     liveConsoleFontColor,
     liveConsoleBold,
     liveConsoleItalic,
+    liveConsoleReferenceFontFamily,
+    liveConsoleReferenceFontColor,
+    liveConsoleReferenceBold,
+    liveConsoleReferenceItalic,
+    liveConsoleReferencePosition,
     isDefaultScreenActive,
     effectiveBackgroundType,
     effectiveBackgroundVideo,

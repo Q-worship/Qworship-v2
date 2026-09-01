@@ -29,6 +29,10 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     liveConsoleFontColor,
     liveConsoleBold,
     liveConsoleItalic,
+    liveConsoleReferenceFontFamily,
+    liveConsoleReferenceFontColor,
+    liveConsoleReferenceBold,
+    liveConsoleReferenceItalic,
     defaultScreenFontFamily,
     defaultScreenFontColor,
     defaultScreenBold,
@@ -181,12 +185,10 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     style={{
                       fontFamily:
                         editorState.referenceStyle.fontFamily ||
-                        editorState.styleFontFamily ||
-                        editorState.selectedFont ||
-                        liveConsoleFontFamily,
-                      color: editorState.referenceStyle.color || "#ffffff",
-                      fontWeight: editorState.referenceStyle.isBold ? "bold" : "normal",
-                      fontStyle: editorState.referenceStyle.isItalic ? "italic" : "normal",
+                        liveConsoleReferenceFontFamily,
+                      color: editorState.referenceStyle.color || liveConsoleReferenceFontColor,
+                      fontWeight: (editorState.referenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" : "normal",
+                      fontStyle: (editorState.referenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" : "normal",
                     }}>
                     {currentSongProjection.title}
                   </h2>
@@ -446,12 +448,10 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     style={{
                       fontFamily:
                         editorState.referenceStyle.fontFamily ||
-                        editorState.styleFontFamily ||
-                        editorState.selectedFont ||
-                        liveConsoleFontFamily,
-                      color: editorState.referenceStyle.color || "#ffffff",
-                      fontWeight: editorState.referenceStyle.isBold ? "bold" : "normal",
-                      fontStyle: editorState.referenceStyle.isItalic ? "italic" : "normal",
+                        liveConsoleReferenceFontFamily,
+                      color: editorState.referenceStyle.color || liveConsoleReferenceFontColor,
+                      fontWeight: (editorState.referenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" : "normal",
+                      fontStyle: (editorState.referenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" : "normal",
                     }}>
                     {slides[currentSlide - 1].title}
                   </h1>

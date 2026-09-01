@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PositionPicker } from "@/features/dashboard/components/PositionPicker";
 
 interface LivePresentationSettingsPageProps {
   onClose: () => void;
@@ -283,6 +285,78 @@ function ColorPickerField({
           placeholder="#000000"
         />
       </div>
+    </div>
+  );
+}
+
+function FontFamilySelect({
+  value,
+  onValueChange,
+}: {
+  value: string;
+  onValueChange: (val: string) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
+        <SelectItem value="'Inter', sans-serif">Inter</SelectItem>
+        <SelectItem value="'Roboto', sans-serif">Roboto</SelectItem>
+        <SelectItem value="'Playfair Display', serif">
+          Playfair Display
+        </SelectItem>
+        <SelectItem value="'Montserrat', sans-serif">
+          Montserrat
+        </SelectItem>
+        <SelectItem value="'Open Sans', sans-serif">
+          Open Sans
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function TypographyBoldItalicToggle({
+  bold,
+  italic,
+  onToggleBold,
+  onToggleItalic,
+}: {
+  bold: boolean;
+  italic: boolean;
+  onToggleBold: () => void;
+  onToggleItalic: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onToggleBold}
+        aria-pressed={bold}
+        title="Bold"
+        className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
+          bold
+            ? "bg-purple-600/30 border-purple-500 text-purple-300"
+            : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+        }`}
+      >
+        B
+      </button>
+      <button
+        type="button"
+        onClick={onToggleItalic}
+        aria-pressed={italic}
+        title="Italic"
+        className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
+          italic
+            ? "bg-purple-600/30 border-purple-500 text-purple-300"
+            : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+        }`}
+      >
+        I
+      </button>
     </div>
   );
 }
@@ -661,34 +735,36 @@ export function LivePresentationSettingsPage({
                   <Type className="w-5 h-5 text-purple-400" />
                   <h2 className="text-lg font-semibold text-white">Typography</h2>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdate({ bold: !activeSettings.bold })}
-                    aria-pressed={activeSettings.bold}
-                    title="Bold"
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
-                      activeSettings.bold
-                        ? "bg-purple-600/30 border-purple-500 text-purple-300"
-                        : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
-                    }`}
-                  >
-                    B
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdate({ italic: !activeSettings.italic })}
-                    aria-pressed={activeSettings.italic}
-                    title="Italic"
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
-                      activeSettings.italic
-                        ? "bg-purple-600/30 border-purple-500 text-purple-300"
-                        : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
-                    }`}
-                  >
-                    I
-                  </button>
-                </div>
+                {editTarget === "default" && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdate({ bold: !activeSettings.bold })}
+                      aria-pressed={activeSettings.bold}
+                      title="Bold"
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
+                        activeSettings.bold
+                          ? "bg-purple-600/30 border-purple-500 text-purple-300"
+                          : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdate({ italic: !activeSettings.italic })}
+                      aria-pressed={activeSettings.italic}
+                      title="Italic"
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
+                        activeSettings.italic
+                          ? "bg-purple-600/30 border-purple-500 text-purple-300"
+                          : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      I
+                    </button>
+                  </div>
+                )}
               </div>
 
               {editTarget === "default" && (
@@ -711,39 +787,77 @@ export function LivePresentationSettingsPage({
                       placeholder="Now presenting live to congregation"
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Font Family</Label>
+                    <FontFamilySelect
+                      value={activeSettings.fontFamily}
+                      onValueChange={(val) => handleUpdate({ fontFamily: val })}
+                    />
+                  </div>
+
+                  <ColorPickerField
+                    label="Text Colour"
+                    value={activeSettings.fontColor}
+                    onChange={(v) => handleUpdate({ fontColor: v })}
+                  />
                 </>
               )}
 
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-300">Font Family</Label>
-                <Select
-                  value={activeSettings.fontFamily}
-                  onValueChange={(val) => handleUpdate({ fontFamily: val })}
-                >
-                  <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-                    <SelectItem value="'Inter', sans-serif">Inter</SelectItem>
-                    <SelectItem value="'Roboto', sans-serif">Roboto</SelectItem>
-                    <SelectItem value="'Playfair Display', serif">
-                      Playfair Display
-                    </SelectItem>
-                    <SelectItem value="'Montserrat', sans-serif">
-                      Montserrat
-                    </SelectItem>
-                    <SelectItem value="'Open Sans', sans-serif">
-                      Open Sans
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {editTarget === "live" && (
+                <Tabs defaultValue="content">
+                  <TabsList className="bg-[#0a0614] border border-gray-700">
+                    <TabsTrigger value="content">Content</TabsTrigger>
+                    <TabsTrigger value="reference">Reference</TabsTrigger>
+                  </TabsList>
 
-              <ColorPickerField
-                label="Text Colour"
-                value={activeSettings.fontColor}
-                onChange={(v) => handleUpdate({ fontColor: v })}
-              />
+                  <TabsContent value="content" className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Family</Label>
+                      <FontFamilySelect
+                        value={settings.fontFamily}
+                        onValueChange={(val) => setSettings({ fontFamily: val })}
+                      />
+                    </div>
+                    <ColorPickerField
+                      label="Text Colour"
+                      value={settings.fontColor}
+                      onChange={(v) => setSettings({ fontColor: v })}
+                    />
+                    <TypographyBoldItalicToggle
+                      bold={settings.bold}
+                      italic={settings.italic}
+                      onToggleBold={() => setSettings({ bold: !settings.bold })}
+                      onToggleItalic={() => setSettings({ italic: !settings.italic })}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="reference" className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Family</Label>
+                      <FontFamilySelect
+                        value={settings.referenceFontFamily}
+                        onValueChange={(val) => setSettings({ referenceFontFamily: val })}
+                      />
+                    </div>
+                    <ColorPickerField
+                      label="Text Colour"
+                      value={settings.referenceFontColor}
+                      onChange={(v) => setSettings({ referenceFontColor: v })}
+                    />
+                    <TypographyBoldItalicToggle
+                      bold={settings.referenceBold}
+                      italic={settings.referenceItalic}
+                      onToggleBold={() => setSettings({ referenceBold: !settings.referenceBold })}
+                      onToggleItalic={() => setSettings({ referenceItalic: !settings.referenceItalic })}
+                    />
+                    <PositionPicker
+                      value={settings.referencePosition}
+                      onChange={(position) => setSettings({ referencePosition: position })}
+                    />
+                  </TabsContent>
+                </Tabs>
+              )}
 
               <div className="space-y-2">
                 <Label className="text-sm text-gray-300">Text Size</Label>
@@ -766,7 +880,8 @@ export function LivePresentationSettingsPage({
                 </Select>
                 <p className="text-[11px] text-gray-500">
                   Matches the same size scale used by the live console's own
-                  in-session text size control.
+                  in-session text size control. Applies to both the verse
+                  content and the reference.
                 </p>
               </div>
             </section>
