@@ -38,7 +38,6 @@ export const DashboardMainWorkspace = (props: any) => {
     applyBackgroundToCurrentItem, getItemBackground, currentUserId, goLive, exitLive,
     editorState, titleEditorState, activeTextarea, handleUndo, handleRedo, setEditorState,
     applyFontFamily, applyFormatting, listDropdownRef, setShowListStyleDropdown, showListStyleDropdown,
-    setReferenceColor, setReferenceFontFamily, toggleReferenceBold, toggleReferenceItalic, setReferencePosition,
     insertTextAtCursor, parsedLyrics, currentSongTitle, titleTextAreaRef, setActiveTextarea,
     applyStylesToTextarea, showAuthorOnScreen, setShowAuthorOnScreen, songArrangement,
     createSlidesFromSong, songSearchTerm, setSongSearchTerm, showSearchResults, filteredSongs,
@@ -3145,14 +3144,6 @@ import type { Slide } from "@/types";\n${text}`,
                             content={
                               editingContent.content || editingContent
                             }
-                            editorState={editorState}
-                            applyFontFamily={applyFontFamily}
-                            applyFormatting={applyFormatting}
-                            setReferenceColor={setReferenceColor}
-                            setReferenceFontFamily={setReferenceFontFamily}
-                            toggleReferenceBold={toggleReferenceBold}
-                            toggleReferenceItalic={toggleReferenceItalic}
-                            setReferencePosition={setReferencePosition}
                             onUpdate={(updatedContent) => {
                               console.log(
                                 "📝 PARENT: OnScreenBibleEditor onUpdate called with:",

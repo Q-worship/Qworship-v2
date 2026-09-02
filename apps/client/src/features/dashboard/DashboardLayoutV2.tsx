@@ -987,11 +987,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   const {
     editorState,
     setEditorState,
-    setReferenceColor,
-    setReferenceFontFamily,
-    toggleReferenceBold,
-    toggleReferenceItalic,
-    setReferencePosition,
     titleEditorState,
     setTitleEditorState,
     activeTextarea,
@@ -4734,11 +4729,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               setEditorState={setEditorState}
               applyFontFamily={applyFontFamily}
               applyFormatting={applyFormatting}
-              setReferenceColor={setReferenceColor}
-              setReferenceFontFamily={setReferenceFontFamily}
-              toggleReferenceBold={toggleReferenceBold}
-              toggleReferenceItalic={toggleReferenceItalic}
-              setReferencePosition={setReferencePosition}
               listDropdownRef={listDropdownRef}
               setShowListStyleDropdown={setShowListStyleDropdown}
               showListStyleDropdown={showListStyleDropdown}

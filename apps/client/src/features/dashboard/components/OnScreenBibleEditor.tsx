@@ -1,38 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { SearchIcon, InfoIcon, Bold, Italic } from 'lucide-react';
+import { SearchIcon, InfoIcon, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, ChevronDown, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from '../../../lib/api';
 import { HFBTranslationControls } from './live-console/HFBTranslationControls';
 import { useBibleProjectionStore } from '@/stores/useBibleProjectionStore';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { PositionPicker } from './PositionPicker';
-import { FONT_OPTIONS } from '@/features/dashboard/lib/fontOptions';
-import type { EditorState, BibleReferencePosition } from '@/features/dashboard/hooks/useWysiwygEditor';
 
 interface OnScreenBibleEditorProps {
   content: any;
   onUpdate: (updatedContent: any) => void;
-  editorState: EditorState;
-  applyFontFamily: (fontFamily: string) => void;
-  applyFormatting: (command: string, value?: string) => void;
-  setReferenceColor: (color: string) => void;
-  setReferenceFontFamily: (fontFamily: string) => void;
-  toggleReferenceBold: () => void;
-  toggleReferenceItalic: () => void;
-  setReferencePosition: (position: BibleReferencePosition) => void;
 }
 
 export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
   content,
-  onUpdate,
-  editorState,
-  applyFontFamily,
-  applyFormatting,
-  setReferenceColor,
-  setReferenceFontFamily,
-  toggleReferenceBold,
-  toggleReferenceItalic,
-  setReferencePosition,
+  onUpdate
 }) => {
   const [activeVersion, setActiveVersion] = useState<string>(content?.version || 'KJV');
   const [searchInput, setSearchInput] = useState<string>(content?.reference || '');
@@ -349,94 +329,97 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-[#4a3a6b]">
-      {/* Bible Editor: Content vs Reference styling, each with its own font/color/bold/italic */}
+      {/* Bible Editor: Rich Text Editor Toolbar - Same as Song Editor 2 */}
       <div className="bg-[#2d1f4a] border-b border-gray-600 flex-shrink-0">
-        <Tabs defaultValue="content">
-          <TabsList className="bg-[#1a1426] m-2 mb-0">
-            <TabsTrigger value="content">Content</TabsTrigger>
-            <TabsTrigger value="reference">Reference</TabsTrigger>
-          </TabsList>
 
-          <TabsContent value="content" className="mt-0">
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2 overflow-x-auto">
-              <select
-                className="bg-[#1a1426] text-white text-sm border border-gray-600 rounded px-2 py-1"
-                value={editorState.selectedFont}
-                onChange={(e) => applyFontFamily(e.target.value)}
-                title="Font Family"
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={font} value={font}>{font}</option>
-                ))}
-              </select>
+        {/* Formatting Toolbar - Single Responsive Row */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 overflow-x-auto">
+          {/* Undo/Redo */}
+          <div className="flex items-center">
+            <button
+              className="p-1.5 rounded transition-colors text-gray-500 cursor-not-allowed"
+              disabled
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              className="p-1.5 rounded transition-colors text-gray-500 cursor-not-allowed"
+              disabled
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
+          </div>
 
-              <button
-                className={`p-1.5 rounded transition-colors text-white hover:bg-white/10 ${editorState.isBold ? "bg-white/20" : ""}`}
-                title="Bold"
-                onClick={() => applyFormatting("bold")}
-              >
-                <Bold className="w-4 h-4" />
-              </button>
-              <button
-                className={`p-1.5 rounded transition-colors text-white hover:bg-white/10 ${editorState.isItalic ? "bg-white/20" : ""}`}
-                title="Italic"
-                onClick={() => applyFormatting("italic")}
-              >
-                <Italic className="w-4 h-4" />
-              </button>
+          <div className="w-px h-6 bg-gray-600"></div>
 
-              <input
-                type="color"
-                className="w-8 h-8 bg-transparent border border-gray-500 rounded cursor-pointer flex-shrink-0"
-                title="Text Color"
-                value={editorState.styleColor || editorState.textColor || "#ffffff"}
-                onChange={(e) => applyFormatting("color", e.target.value)}
-              />
-            </div>
-          </TabsContent>
+          {/* Font Selection */}
+          <div className="flex items-center space-x-1">
+            <select className="bg-[#1a1426] text-white text-sm border border-gray-600 rounded px-2 py-1">
+              <option>Lufgord</option>
+              <option>Arial</option>
+              <option>Helvetica</option>
+            </select>
+          </div>
 
-          <TabsContent value="reference" className="mt-0">
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2 overflow-x-auto">
-              <select
-                className="bg-[#1a1426] text-white text-sm border border-gray-600 rounded px-2 py-1"
-                value={editorState.referenceStyle.fontFamily || editorState.selectedFont}
-                onChange={(e) => setReferenceFontFamily(e.target.value)}
-                title="Reference Font Family"
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={font} value={font}>{font}</option>
-                ))}
-              </select>
+          {/* Heading Selection */}
+          <div className="flex items-center space-x-1">
+            <select className="bg-[#1a1426] text-white text-sm border border-gray-600 rounded px-2 py-1">
+              <option>Heading 1</option>
+              <option>Heading 2</option>
+              <option>Paragraph</option>
+            </select>
+          </div>
 
-              <button
-                className={`p-1.5 rounded transition-colors text-white hover:bg-white/10 ${editorState.referenceStyle.isBold ? "bg-white/20" : ""}`}
-                title="Bold"
-                onClick={toggleReferenceBold}
-              >
-                <Bold className="w-4 h-4" />
-              </button>
-              <button
-                className={`p-1.5 rounded transition-colors text-white hover:bg-white/10 ${editorState.referenceStyle.isItalic ? "bg-white/20" : ""}`}
-                title="Italic"
-                onClick={toggleReferenceItalic}
-              >
-                <Italic className="w-4 h-4" />
-              </button>
+          {/* Styles */}
+          <div className="flex items-center space-x-1">
+            <button className="flex items-center space-x-1 bg-[#1a1426] text-white text-sm border border-gray-600 rounded px-2 py-1">
+              <span>Styles</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </div>
 
-              <input
-                type="color"
-                className="w-8 h-8 bg-transparent border border-gray-500 rounded cursor-pointer flex-shrink-0"
-                title="Reference Color"
-                value={editorState.referenceStyle.color || "#ffffff"}
-                onChange={(e) => setReferenceColor(e.target.value)}
-              />
-            </div>
+          <div className="w-px h-6 bg-gray-600"></div>
 
-            <div className="px-4 pb-4">
-              <PositionPicker value={editorState.referenceStyle.position} onChange={setReferencePosition} />
-            </div>
-          </TabsContent>
-        </Tabs>
+          {/* Text Formatting */}
+          <div className="flex items-center">
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Bold (Ctrl+B)">
+              <Bold className="w-4 h-4" />
+            </button>
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Italic (Ctrl+I)">
+              <Italic className="w-4 h-4" />
+            </button>
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Underline (Ctrl+U)">
+              <Underline className="w-4 h-4" />
+            </button>
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Strikethrough">
+              <Strikethrough className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="w-px h-6 bg-gray-600"></div>
+
+          {/* Text Alignment */}
+          <div className="flex items-center">
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Align Left">
+              <AlignLeft className="w-4 h-4" />
+            </button>
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Align Center">
+              <AlignCenter className="w-4 h-4" />
+            </button>
+            <button className="p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Align Right">
+              <AlignRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="w-px h-6 bg-gray-600"></div>
+
+          {/* Color */}
+          <button className="flex items-center space-x-1 p-1.5 rounded transition-colors text-white hover:bg-white/10" title="Text Color">
+            <Palette className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Full Width Layout - Bible Search & Options */}

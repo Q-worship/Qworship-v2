@@ -2,23 +2,8 @@ import React, { useState } from 'react';
 import { useBibleStore } from '../bible.store';
 import { OnScreenBibleEditor } from "@/features/dashboard/components/OnScreenBibleEditor";
 import { HandsfreeBibleWidget } from "@/features/dashboard/components/HandsfreeBibleWidget";
-import { useWysiwygEditor } from "@/features/dashboard/hooks/useWysiwygEditor";
 
 export const BibleWorkspace: React.FC = () => {
-  const {
-    editorState,
-    applyFontFamily,
-    applyFormatting,
-    setReferenceColor,
-    setReferenceFontFamily,
-    toggleReferenceBold,
-    toggleReferenceItalic,
-    setReferencePosition,
-  } = useWysiwygEditor({
-    onContentChange: () => {},
-    onUndoRedo: () => {},
-  });
-
   const {
     activeContent,
     setActiveContent,
@@ -44,14 +29,6 @@ export const BibleWorkspace: React.FC = () => {
       <div className="w-1/2 min-w-[500px] border-r border-gray-700 flex flex-col h-full overflow-hidden">
         <OnScreenBibleEditor
           content={activeContent}
-          editorState={editorState}
-          applyFontFamily={applyFontFamily}
-          applyFormatting={applyFormatting}
-          setReferenceColor={setReferenceColor}
-          setReferenceFontFamily={setReferenceFontFamily}
-          toggleReferenceBold={toggleReferenceBold}
-          toggleReferenceItalic={toggleReferenceItalic}
-          setReferencePosition={setReferencePosition}
           onUpdate={(updatedContent) => {
              setActiveContent(updatedContent);
              
