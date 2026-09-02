@@ -260,6 +260,11 @@ export function useLivePresentationState() {
   const [liveConsoleReferencePosition, setLiveConsoleReferencePosition] = useState(
     () => readLiveConsoleSeed()?.referencePosition || "top-center",
   );
+  // Independent from slideTextSize below - lets the reference be sized
+  // separately from the verse content instead of scaling together.
+  const [liveConsoleReferenceTextSize, setLiveConsoleReferenceTextSize] = useState(
+    () => readLiveConsoleSeed()?.referenceTextSize || "small",
+  );
 
   // Dashboard-configured Default Web Screen settings - styles the idle
   // "Live Service / Now presenting..." screen shown when nothing is
@@ -352,6 +357,7 @@ export function useLivePresentationState() {
           setLiveConsoleReferenceBold(seed.referenceBold);
           setLiveConsoleReferenceItalic(seed.referenceItalic);
           setLiveConsoleReferencePosition(seed.referencePosition);
+          setLiveConsoleReferenceTextSize(seed.referenceTextSize);
           setAppliedBackgroundType(seed.backgroundType);
           setAppliedBackgroundColor(seed.backgroundColor);
           setAppliedBackgroundImage(seed.backgroundImage);
@@ -2878,6 +2884,7 @@ export function useLivePresentationState() {
     liveConsoleReferenceBold,
     liveConsoleReferenceItalic,
     liveConsoleReferencePosition,
+    liveConsoleReferenceTextSize,
     isDefaultScreenActive,
     effectiveBackgroundType,
     effectiveBackgroundVideo,

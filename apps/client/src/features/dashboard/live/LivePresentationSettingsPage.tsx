@@ -6,6 +6,7 @@ import {
   BLANK_CANVAS_SCREEN_SETTINGS,
   type LiveConsoleSettings,
   type DefaultScreenSettings,
+  type LiveConsoleTextSize,
 } from "@/stores/useLiveConsoleSettingsStore";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
@@ -335,6 +336,29 @@ function FontFamilySelect({
   );
 }
 
+function TextSizeSelect({
+  value,
+  onValueChange,
+}: {
+  value: LiveConsoleTextSize;
+  onValueChange: (val: LiveConsoleTextSize) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
+        {TEXT_SIZE_OPTIONS.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function TypographyBoldItalicToggle({
   bold,
   italic,
@@ -518,7 +542,11 @@ export function LivePresentationSettingsPage({
   const liveReferenceRef = useRef<HTMLDivElement>(null);
 
   const liveBaseRem = activeSize.previewRem * 0.45;
-  const liveReferenceBaseRem = liveBaseRem * 0.5;
+  // Independent from liveBaseRem so the reference preview matches the same
+  // independent sizing the live console itself now uses (was previously a
+  // fixed 0.5x of the content size, so they always scaled together).
+  const referenceSize = TEXT_SIZE_OPTIONS.find((o) => o.value === settings.referenceTextSize) ?? TEXT_SIZE_OPTIONS[0];
+  const liveReferenceBaseRem = referenceSize.previewRem * 0.45;
   useAutoFitTextSize(
     previewBoxRef,
     liveCardRef,
@@ -530,6 +558,7 @@ export function LivePresentationSettingsPage({
       editTarget,
       settings.hideTextBox,
       liveBaseRem,
+      liveReferenceBaseRem,
       activeSettings.fontFamily,
       activeSettings.bold,
       activeSettings.italic,
@@ -833,6 +862,14 @@ export function LivePresentationSettingsPage({
                     value={activeSettings.fontColor}
                     onChange={(v) => handleUpdate({ fontColor: v })}
                   />
+
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Text Size</Label>
+                    <TextSizeSelect
+                      value={activeSettings.textSize}
+                      onValueChange={(val) => handleUpdate({ textSize: val })}
+                    />
+                  </div>
                 </>
               )}
 
@@ -862,6 +899,17 @@ export function LivePresentationSettingsPage({
                       onToggleBold={() => setSettings({ bold: !settings.bold })}
                       onToggleItalic={() => setSettings({ italic: !settings.italic })}
                     />
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Text Size</Label>
+                      <TextSizeSelect
+                        value={settings.textSize}
+                        onValueChange={(val) => setSettings({ textSize: val })}
+                      />
+                      <p className="text-[11px] text-gray-500">
+                        Matches the same size scale used by the live console's
+                        own in-session text size control.
+                      </p>
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="reference" className="space-y-5 mt-4">
@@ -883,6 +931,16 @@ export function LivePresentationSettingsPage({
                       onToggleBold={() => setSettings({ referenceBold: !settings.referenceBold })}
                       onToggleItalic={() => setSettings({ referenceItalic: !settings.referenceItalic })}
                     />
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Text Size</Label>
+                      <TextSizeSelect
+                        value={settings.referenceTextSize}
+                        onValueChange={(val) => setSettings({ referenceTextSize: val })}
+                      />
+                      <p className="text-[11px] text-gray-500">
+                        Independent from the verse content's text size above.
+                      </p>
+                    </div>
                     <PositionPicker
                       value={settings.referencePosition}
                       onChange={(position) => setSettings({ referencePosition: position })}
@@ -890,32 +948,6 @@ export function LivePresentationSettingsPage({
                   </TabsContent>
                 </Tabs>
               )}
-
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-300">Text Size</Label>
-                <Select
-                  value={activeSettings.textSize}
-                  onValueChange={(val: LiveConsoleSettings["textSize"]) =>
-                    handleUpdate({ textSize: val })
-                  }
-                >
-                  <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-                    {TEXT_SIZE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-gray-500">
-                  Matches the same size scale used by the live console's own
-                  in-session text size control. Applies to both the verse
-                  content and the reference.
-                </p>
-              </div>
             </section>
 
             {/* Text box - Live Web Screen only; the idle Default Web Screen has no slide text box to strip */}

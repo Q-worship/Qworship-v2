@@ -41,6 +41,11 @@ export interface LiveConsoleSettings {
   referenceBold: boolean;
   referenceItalic: boolean;
   referencePosition: BibleReferencePosition;
+  // Independent from textSize above - the verse content and the reference
+  // each have their own size preset so changing one doesn't resize the
+  // other (both still shrink together, proportionally, only if the pair
+  // together would otherwise overflow the box).
+  referenceTextSize: LiveConsoleTextSize;
 }
 
 export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
@@ -60,6 +65,7 @@ export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
   referenceBold: true,
   referenceItalic: false,
   referencePosition: "top-center",
+  referenceTextSize: "small",
 };
 
 const STORAGE_KEY = "qworship-live-console-settings-page";
@@ -89,6 +95,7 @@ export interface LiveWindowSeed {
   referenceBold: boolean;
   referenceItalic: boolean;
   referencePosition: BibleReferencePosition;
+  referenceTextSize: LiveConsoleTextSize;
 }
 
 export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
@@ -104,6 +111,7 @@ export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed 
     referenceBold: settings.referenceBold,
     referenceItalic: settings.referenceItalic,
     referencePosition: settings.referencePosition,
+    referenceTextSize: settings.referenceTextSize,
   };
 
   if (settings.backgroundType === "media") {

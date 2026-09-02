@@ -34,6 +34,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     liveConsoleReferenceFontColor,
     liveConsoleReferenceBold,
     liveConsoleReferenceItalic,
+    liveConsoleReferenceTextSize,
     defaultScreenFontFamily,
     defaultScreenFontColor,
     defaultScreenBold,
@@ -93,14 +94,18 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
   const songBibleVersionRef = useRef<HTMLSpanElement>(null);
 
   const songBibleBaseRem = TEXT_SIZE_MAX_REM[slideTextSize] ?? 3;
+  // Independent from songBibleBaseRem so the reference can be sized
+  // separately from the verse content instead of scaling together - both
+  // still shrink together, proportionally, only if the pair together
+  // would otherwise overflow the box.
+  const referenceBaseRem = TEXT_SIZE_MAX_REM[liveConsoleReferenceTextSize] ?? 1.5;
   useAutoFitTextSize(
     songBibleBoxRef,
     songBibleMeasureRef,
     (factor) => {
-      const fontSize = `${songBibleBaseRem * factor}rem`;
-      if (songBibleReferenceRef.current) songBibleReferenceRef.current.style.fontSize = fontSize;
-      if (songBibleContentRef.current) songBibleContentRef.current.style.fontSize = fontSize;
-      if (songBibleVersionRef.current) songBibleVersionRef.current.style.fontSize = fontSize;
+      if (songBibleReferenceRef.current) songBibleReferenceRef.current.style.fontSize = `${referenceBaseRem * factor}rem`;
+      if (songBibleContentRef.current) songBibleContentRef.current.style.fontSize = `${songBibleBaseRem * factor}rem`;
+      if (songBibleVersionRef.current) songBibleVersionRef.current.style.fontSize = `${songBibleBaseRem * factor}rem`;
     },
     [
       currentSongProjection?.title,
@@ -108,6 +113,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
       currentSongProjection?.sectionTitle,
       projectionType,
       songBibleBaseRem,
+      referenceBaseRem,
       contentFixedArea,
       slidesTransparent,
       editorState.styleFontFamily,
@@ -133,15 +139,15 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     deckBibleBoxRef,
     deckBibleMeasureRef,
     (factor) => {
-      const fontSize = `${songBibleBaseRem * factor}rem`;
-      if (deckBibleReferenceRef.current) deckBibleReferenceRef.current.style.fontSize = fontSize;
-      if (deckBibleContentRef.current) deckBibleContentRef.current.style.fontSize = fontSize;
+      if (deckBibleReferenceRef.current) deckBibleReferenceRef.current.style.fontSize = `${referenceBaseRem * factor}rem`;
+      if (deckBibleContentRef.current) deckBibleContentRef.current.style.fontSize = `${songBibleBaseRem * factor}rem`;
     },
     [
       currentDeckSlide?.title,
       currentDeckSlide?.content,
       currentDeckSlide?.type,
       songBibleBaseRem,
+      referenceBaseRem,
       contentFixedArea,
       slidesTransparent,
       editorState.styleFontFamily,
@@ -152,13 +158,25 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     ],
   );
 
-  const referenceIsBottom = isReferenceBottomPosition(editorState.referenceStyle.position);
-  const referenceAlignClass = getReferencePositionClass(editorState.referenceStyle.position);
+  // editorState arrives via postMessage sync and starts as `{}` in a
+  // freshly-opened live window until the first EDITOR_STATE_SYNC lands, so
+  // referenceStyle must never be read without a fallback here - doing so
+  // used to throw on first render and blank out the whole live window
+  // (default screen, live content, hands-free bible alike).
+  const safeReferenceStyle = editorState.referenceStyle || {
+    color: null,
+    fontFamily: null,
+    isBold: true,
+    isItalic: false,
+    position: "top-center" as const,
+  };
+  const referenceIsBottom = isReferenceBottomPosition(safeReferenceStyle.position);
+  const referenceAlignClass = getReferencePositionClass(safeReferenceStyle.position);
   const referenceStyleProps = {
-    fontFamily: editorState.referenceStyle.fontFamily || liveConsoleReferenceFontFamily,
-    color: editorState.referenceStyle.color || liveConsoleReferenceFontColor,
-    fontWeight: (editorState.referenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" as const : "normal" as const,
-    fontStyle: (editorState.referenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" as const : "normal" as const,
+    fontFamily: safeReferenceStyle.fontFamily || liveConsoleReferenceFontFamily,
+    color: safeReferenceStyle.color || liveConsoleReferenceFontColor,
+    fontWeight: (safeReferenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" as const : "normal" as const,
+    fontStyle: (safeReferenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" as const : "normal" as const,
   };
   const songBibleReferenceEl = (
     <h2
