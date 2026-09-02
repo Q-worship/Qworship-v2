@@ -91,6 +91,11 @@ export function useLivePresentationState() {
   const [liveProjection, setLiveProjection] = useState<string>("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  // Set only when Go Live was triggered with a specific external screen
+  // (features/dashboard/hooks/useExternalDisplayDetection.ts) - lets the
+  // click-to-fullscreen handler in LivePresentationV2.tsx target that exact
+  // screen instead of whichever one this window happened to land on.
+  const [targetScreenPosition, setTargetScreenPosition] = useState<{ left: number; top: number } | null>(null);
 
   // Song projection state
   const [isSongWidgetOpen, setIsSongWidgetOpen] = useState(false);
@@ -1386,6 +1391,11 @@ export function useLivePresentationState() {
           }
           break;
         case "SLIDES_SYNC":
+          // Captured regardless of whether slides are present yet - external
+          // display targeting shouldn't depend on slide data arriving.
+          if (data.targetScreenPosition) {
+            setTargetScreenPosition(data.targetScreenPosition);
+          }
           // Sync core slide data only (editorState handled by EDITOR_STATE_SYNC)
           if (data.slides && data.slides.length > 0) {
             setSlides(data.slides);
@@ -2998,6 +3008,7 @@ export function useLivePresentationState() {
     appliedBackgroundColor,
     getSlideTransitionClass,
     isFullscreen,
+    targetScreenPosition,
     setBackgroundVideo,
     backgroundImage,
     setSlideNumberPosition,

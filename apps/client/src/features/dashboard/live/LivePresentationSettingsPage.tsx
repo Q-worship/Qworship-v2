@@ -10,6 +10,7 @@ import {
 } from "@/stores/useLiveConsoleSettingsStore";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
+import { useExternalDisplayDetection } from "@/features/dashboard/hooks/useExternalDisplayDetection";
 import { BackgroundMediaPicker } from "@/features/mainPresentation/BackgroundMediaPicker";
 import {
   Select,
@@ -494,6 +495,7 @@ export function LivePresentationSettingsPage({
 }: LivePresentationSettingsPageProps) {
   const { settings, setSettings, defaultScreenSettings, setDefaultScreenSettings } =
     useLiveConsoleSettingsStore();
+  const externalDisplay = useExternalDisplayDetection();
 
   // Which screen Background + Typography below are currently editing: the
   // active "Live Web Screen" (slide/song/verse content) or the idle
@@ -968,6 +970,35 @@ export function LivePresentationSettingsPage({
                       Strips the dark rounded panel (fill and border) that
                       normally wraps projected slide text, leaving bare text
                       over the background.
+                    </span>
+                  </span>
+                </label>
+              </section>
+            )}
+
+            {/* External display detection - Chromium-only Window Management API,
+                feature-detected: renders nothing at all on Firefox/Safari. */}
+            {editTarget === "live" && externalDisplay.supported && (
+              <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={externalDisplay.enabled}
+                    onChange={(e) => {
+                      if (e.target.checked) externalDisplay.requestEnable();
+                    }}
+                    disabled={externalDisplay.enabled}
+                    className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer disabled:cursor-default"
+                  />
+                  <span>
+                    <span className="block text-sm text-gray-200 font-medium">
+                      Detect external display
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      When a second display is connected and extended (e.g. a
+                      projector over HDMI), you'll be asked whether to show
+                      live output there while the console stays here. Your
+                      browser will ask for permission once.
                     </span>
                   </span>
                 </label>

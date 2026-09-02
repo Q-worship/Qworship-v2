@@ -263,6 +263,7 @@ export const LivePresentationV2 = (): JSX.Element => {
     setAppliedBackgroundVideo,
     setCurrentSongSectionIndex,
     clearProjection,
+    targetScreenPosition,
   } = stateProps;
   const props = stateProps;
 
@@ -291,7 +292,26 @@ export const LivePresentationV2 = (): JSX.Element => {
         ) {
           try {
             if (document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen();
+              // If Go Live was targeted at a specific external screen, try
+              // to fullscreen there specifically rather than wherever this
+              // window happens to be - falls straight through to the plain
+              // call below on any unsupported browser or lookup failure, so
+              // this never changes behavior for a normal Go Live.
+              let targetScreen: ScreenDetailed | undefined;
+              if (targetScreenPosition && window.getScreenDetails) {
+                try {
+                  const details = await window.getScreenDetails();
+                  targetScreen = details.screens.find(
+                    (s) => s.left === targetScreenPosition.left && s.top === targetScreenPosition.top,
+                  );
+                } catch {
+                  // Permission not available in this window/context - fall
+                  // back to the plain request below.
+                }
+              }
+              await document.documentElement.requestFullscreen(
+                targetScreen ? { screen: targetScreen } : undefined,
+              );
             }
           } catch (e) {
             console.log("Fullscreen request failed on click:", e);

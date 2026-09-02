@@ -70,6 +70,8 @@ import { useAudioDevices } from "@/hooks/use-audio-devices";
 import { useRecordingManager } from "@/features/dashboard/hooks/useRecordingManager";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useLivePresentation } from "@/features/dashboard/hooks/useLivePresentation";
+import { useExternalDisplayDetection } from "@/features/dashboard/hooks/useExternalDisplayDetection";
+import { ExternalDisplayPrompt } from "@/features/dashboard/components/ExternalDisplayPrompt";
 import { useProjectManager } from "@/features/dashboard/hooks/useProjectManager";
 import { useProjectMutations } from "@/features/dashboard/hooks/useProjectMutations";
 import {
@@ -1046,6 +1048,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     // from the other.
     onSlideProjected: () => {},
   });
+
+  // Opt-in external-display detection (Chromium-only Window Management API,
+  // inert everywhere else) - see features/dashboard/hooks/useExternalDisplayDetection.ts.
+  // The toggle to enable it lives on the Live Presentation Settings page;
+  // this just listens and surfaces the "second display detected" toast.
+  const externalDisplay = useExternalDisplayDetection();
 
   // ── Lower Third: push current slide to OBS whenever the live slide changes ──
   // This fires for BOTH dashboard-panel clicks (which call setCurrentSlide directly)
@@ -4528,6 +4536,16 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
   return (
     <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
+      <ExternalDisplayPrompt
+        visible={externalDisplay.externalScreenAvailable}
+        onShowThere={() => {
+          if (externalDisplay.externalScreen) {
+            goLive(externalDisplay.externalScreen);
+          }
+          externalDisplay.dismiss();
+        }}
+        onDismiss={externalDisplay.dismiss}
+      />
       {/* Blur Overlay for Preview Mode */}
       {!isBuildMode && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-30 pointer-events-none"></div>

@@ -38,16 +38,19 @@ export const useLivePresentation = ({
   const { clearProjection: clearZustandProjection } = useBibleProjectionStore();
   const { setMode: setDisplayMode } = useDisplayModeStore();
 
-  const goLive = () => {
+  const goLive = (targetScreen?: ScreenDetailed) => {
     clearZustandProjection();
     setDisplayMode("slides");
     localStorage.removeItem("qworship-live-background");
 
-    const newWindow = window.open(
-      "/live",
-      "_blank",
-      "fullscreen=yes,scrollbars=no,resizable=no",
-    );
+    // Plain "Go Live" (no targetScreen) keeps today's exact behavior - the
+    // window features string only gains left/top/width/height when a
+    // specific external screen was chosen via external-display detection.
+    const features = targetScreen
+      ? `left=${targetScreen.availLeft},top=${targetScreen.availTop},width=${targetScreen.availWidth},height=${targetScreen.availHeight},scrollbars=no,resizable=no`
+      : "fullscreen=yes,scrollbars=no,resizable=no";
+
+    const newWindow = window.open("/live", "_blank", features);
 
     if (newWindow) {
       setLiveWindow(newWindow);
@@ -71,6 +74,13 @@ export const useLivePresentation = ({
                 totalSlides,
                 titleEditorState,
                 itemBackgrounds,
+                // Lets the live window re-derive the same ScreenDetailed via
+                // its own getScreenDetails() call (matched by position) so
+                // its existing click-to-fullscreen handler can target this
+                // specific screen instead of "whichever screen I'm on".
+                targetScreenPosition: targetScreen
+                  ? { left: targetScreen.left, top: targetScreen.top }
+                  : null,
               },
             },
             window.location.origin,
