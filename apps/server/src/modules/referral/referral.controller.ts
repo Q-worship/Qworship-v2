@@ -8,6 +8,7 @@ import { sendAdminCredentialsEmail } from "../auth/email.service.js";
 import { CommissionLedgerEntry } from "./commissionLedger.model.js";
 import { WithdrawalRequest } from "./withdrawalRequest.model.js";
 import { PLAN_MONTHLY_PRICE, computeMonthlyCommission, SubscriptionType } from "../../config/referralCommission.js";
+import { notifyReferralCommissionEarned, notifyReferralWithdrawalPaid } from "../notifications/notification.service.js";
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -318,7 +319,7 @@ function monthsBetween(start: Date, end: Date): string[] {
 
 async function accrueCommissionsForReferee(refereeId: string) {
   const activeOrgs = await Organization.find({ referredBy: refereeId, subscriptionStatus: "active", activatedAt: { $exists: true } })
-    .select("subscriptionType activatedAt")
+    .select("name subscriptionType activatedAt")
     .lean();
 
   const now = new Date();
@@ -330,11 +331,14 @@ async function accrueCommissionsForReferee(refereeId: string) {
     const periods = monthsBetween(org.activatedAt as unknown as Date, now);
     for (const period of periods) {
       try {
-        await CommissionLedgerEntry.updateOne(
+        const result = await CommissionLedgerEntry.updateOne(
           { refereeId, organizationId: org._id, period },
           { $setOnInsert: { refereeId, organizationId: org._id, period, grossAmount, commissionAmount, status: "available" } },
           { upsert: true }
         );
+        if (result.upsertedCount > 0) {
+          notifyReferralCommissionEarned(refereeId, commissionAmount, org.name).catch(() => {});
+        }
       } catch (error: any) {
         if (error?.code !== 11000) throw error;
       }
@@ -493,6 +497,10 @@ export const adminUpdateWithdrawal = async (req: Request, res: Response) => {
       await flipLedgerToPaid(String(request.refereeId), request.amount);
     }
     await request.save();
+
+    if (status === "paid" && !wasPaid) {
+      notifyReferralWithdrawalPaid(request.refereeId, request.amount).catch(() => {});
+    }
 
     return res.json({ success: true, request });
   } catch (error: any) {

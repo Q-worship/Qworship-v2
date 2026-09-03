@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Organization } from '../organization/organization.model.js';
 import { User } from '../auth/auth.model.js';
+import { notifyReferralNewOrganization } from '../notifications/notification.service.js';
 
 const TRIAL_DAYS = 30;
 
@@ -68,6 +69,7 @@ export async function savePreferences(req: Request, res: Response) {
 
   const organization = await Organization.findOne({ ownerId: user._id });
   if (organization) {
+    const isNewReferral = !!referee && String(organization.referredBy || '') !== String(referee._id);
     if (referee) {
       organization.referredBy = referee._id as any;
       organization.referralCodeUsed = referralCode;
@@ -78,6 +80,9 @@ export async function savePreferences(req: Request, res: Response) {
       organization.referralCodeUsed = undefined;
     }
     await organization.save();
+    if (isNewReferral && referee) {
+      notifyReferralNewOrganization(referee._id as any, organization.name).catch(() => {});
+    }
   }
 
   user.selectedFeatures = [...new Set(selectedFeatures.map(value => value.trim()).filter(Boolean))];

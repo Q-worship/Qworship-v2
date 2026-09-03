@@ -168,6 +168,69 @@ export const notifyRecordingSaved = (
     metadata: { recordingName },
   });
 
+// ─── Referral programme ────────────────────────────────────────────
+
+export const notifyReferralNewOrganization = (
+  refereeId: string | mongoose.Types.ObjectId,
+  churchName: string
+) =>
+  createNotification({
+    userId: refereeId,
+    type: 'referral_new_organization',
+    category: 'user_activity',
+    title: 'New referral signed up',
+    message: `${churchName} joined QWorship using your referral code. You'll start earning once their subscription becomes active.`,
+    icon: 'Building2',
+    actionUrl: '/refer-and-earn/dashboard/referrals',
+    metadata: { churchName },
+  });
+
+export const notifyReferralOrgActivated = (
+  refereeId: string | mongoose.Types.ObjectId,
+  churchName: string
+) =>
+  createNotification({
+    userId: refereeId,
+    type: 'referral_org_activated',
+    category: 'user_activity',
+    title: `${churchName} is now active`,
+    message: `${churchName}'s subscription is now active. You'll start earning monthly commission from this referral.`,
+    icon: 'Building2',
+    actionUrl: '/refer-and-earn/dashboard/referrals',
+    metadata: { churchName },
+  });
+
+export const notifyReferralCommissionEarned = (
+  refereeId: string | mongoose.Types.ObjectId,
+  amount: number,
+  churchName: string
+) =>
+  createNotification({
+    userId: refereeId,
+    type: 'referral_commission_earned',
+    category: 'user_activity',
+    title: 'New commission recorded',
+    message: `$${amount.toFixed(2)} was recorded for ${churchName}'s subscription.`,
+    icon: 'CircleDollarSign',
+    actionUrl: '/refer-and-earn/dashboard/analytics',
+    metadata: { amount, churchName },
+  });
+
+export const notifyReferralWithdrawalPaid = (
+  refereeId: string | mongoose.Types.ObjectId,
+  amount: number
+) =>
+  createNotification({
+    userId: refereeId,
+    type: 'referral_withdrawal_paid',
+    category: 'user_activity',
+    title: 'Withdrawal completed',
+    message: `$${amount.toFixed(2)} was sent to your payout destination.`,
+    icon: 'WalletCards',
+    actionUrl: '/refer-and-earn/dashboard/withdrawals',
+    metadata: { amount },
+  });
+
 // ─── Admin broadcast helpers ─────────────────────────────────────────
 
 export const broadcastNewFeature = (title: string, message: string) =>
