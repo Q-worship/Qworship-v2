@@ -1,8 +1,8 @@
 /** Quiet Momentum analytics: readable funnel, territory, and campaign insight — built only from real referral data. */
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Loader2, Megaphone, TrendingUp, UsersRound } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Download, Eye, Loader2, Megaphone, TrendingUp, UsersRound } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "../lib/toast";
 
@@ -16,22 +16,44 @@ interface ReferredOrganization {
   date: string;
 }
 
+interface CampaignStat {
+  id: string;
+  name: string;
+  visits: number;
+  trials: number;
+  paid: number;
+}
+
 const COLORS = ["#8054F6", "#ff2e91", "#47b998", "#f2aa4c", "#4c9bf2", "#c98f4c"];
 
 export default function Analytics() {
   const { data, isLoading } = useQuery<{ churches: ReferredOrganization[] }>({ queryKey: ["/api/referrals/my-organizations"] });
+  const { data: visitStats, isLoading: visitStatsLoading } = useQuery<{ totalVisits: number; campaigns: CampaignStat[] }>({ queryKey: ["/api/referrals/my-visit-stats"] });
   const organizations = data?.churches || [];
+  const totalVisits = visitStats?.totalVisits || 0;
+  const campaigns = visitStats?.campaigns || [];
 
   const total = organizations.length;
   const trialCount = organizations.filter((o) => o.status === "trial").length;
   const paidCount = organizations.filter((o) => o.status === "active").length;
   const trialToPaidRate = trialCount + paidCount > 0 ? Math.round((paidCount / (trialCount + paidCount)) * 1000) / 10 : 0;
 
-  const funnel = [
-    { label: "Signed up", value: total, rate: "100%" },
-    { label: "Trial", value: trialCount, rate: total > 0 ? `${Math.round((trialCount / total) * 100)}%` : "0%" },
-    { label: "Paid", value: paidCount, rate: total > 0 ? `${Math.round((paidCount / total) * 100)}%` : "0%" },
-  ];
+  // Once real clicks exist, show the full click-through funnel; otherwise fall back to
+  // the signup-onward stages so a "0 visits" bar never sits above real signups (which
+  // happens for codes redeemed by hand, without ever going through a tracked link).
+  const funnel = totalVisits > 0
+    ? [
+        { label: "Link visits", value: totalVisits, rate: "100%" },
+        { label: "Signed up", value: total, rate: `${Math.round((total / totalVisits) * 100)}%` },
+        { label: "Trial", value: trialCount, rate: `${Math.round((trialCount / totalVisits) * 100)}%` },
+        { label: "Paid", value: paidCount, rate: `${Math.round((paidCount / totalVisits) * 100)}%` },
+      ]
+    : [
+        { label: "Signed up", value: total, rate: "100%" },
+        { label: "Trial", value: trialCount, rate: total > 0 ? `${Math.round((trialCount / total) * 100)}%` : "0%" },
+        { label: "Paid", value: paidCount, rate: total > 0 ? `${Math.round((paidCount / total) * 100)}%` : "0%" },
+      ];
+  const funnelBase = funnel[0]?.value || 0;
 
   const countryCounts = new Map<string, number>();
   for (const org of organizations) {
@@ -67,14 +89,22 @@ export default function Analytics() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading || visitStatsLoading ? (
         <div className="surface mt-7 flex items-center justify-center gap-2 rounded-[24px] py-16 text-sm text-[#8a8491]">
           <Loader2 className="animate-spin" size={16} />
           Loading analytics...
         </div>
       ) : (
         <>
-          <section className="mt-7 grid gap-4 sm:grid-cols-3">
+          <section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="surface rounded-[22px] p-5">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-[#8054F6]">
+                <Eye size={19} />
+              </span>
+              <div className="metric-number mt-5 text-3xl font-extrabold">{totalVisits}</div>
+              <div className="mt-1 text-sm font-bold">Link visits</div>
+              <p className="mt-2 text-xs text-[#8b8591]">Tracked visits to your referral link</p>
+            </article>
             <article className="surface rounded-[22px] p-5">
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-[#8054F6]">
                 <UsersRound size={19} />
@@ -116,7 +146,11 @@ export default function Analytics() {
                         <div className="relative h-11 overflow-hidden rounded-xl bg-[#f1eef8]">
                           <div
                             className="flex h-full items-center rounded-xl px-4 text-sm font-extrabold text-white"
-                            style={{ width: `${100 - i * 22}%`, background: i === 2 ? "#47b998" : "#8054F6", opacity: 1 - i * 0.12 }}
+                            style={{
+                              width: `${funnelBase > 0 ? Math.max(8, Math.round((step.value / funnelBase) * 100)) : 8}%`,
+                              background: i === funnel.length - 1 ? "#47b998" : "#8054F6",
+                              opacity: 1 - i * 0.12,
+                            }}
                           >
                             {step.value}
                           </div>
@@ -166,13 +200,45 @@ export default function Analytics() {
           <section className="surface mt-5 rounded-[24px] p-6">
             <p className="text-xs font-bold tracking-[.12em] text-[#8d8997] uppercase">Campaign quality</p>
             <h2 className="mt-2 text-xl font-extrabold">Which share paths perform</h2>
-            <div className="mt-5 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[#faf8ff] py-12 text-center">
-              <Megaphone className="text-[#c9c3d4]" size={28} />
-              <p className="text-sm font-semibold text-[#4a4553]">Campaign tracking isn't live yet</p>
-              <p className="max-w-sm text-xs text-[#8a8491]">
-                Create a campaign link from the Referrals page, and clicks, trials, and paid conversions for each one will appear here once tracking ships.
-              </p>
-            </div>
+            {campaigns.length === 0 ? (
+              <div className="mt-5 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[#faf8ff] py-12 text-center">
+                <Megaphone className="text-[#c9c3d4]" size={28} />
+                <p className="text-sm font-semibold text-[#4a4553]">No campaign links yet</p>
+                <p className="max-w-sm text-xs text-[#8a8491]">
+                  Create a campaign link from the Referrals page, and clicks, trials, and paid conversions for each one will appear here.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 h-[270px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={campaigns} margin={{ left: -16, right: 10 }}>
+                      <CartesianGrid stroke="#eeeaf6" vertical={false} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#77717e", fontSize: 10 }} interval={0} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "#aaa6b1", fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip contentStyle={{ border: 0, borderRadius: 12, boxShadow: "0 12px 30px rgba(39,31,63,.12)", fontSize: 12 }} />
+                      <Bar dataKey="visits" fill="#d9cff8" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="trials" fill="#8054F6" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="paid" fill="#ff2e91" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap gap-5 text-xs text-[#77727f]">
+                  <span className="flex items-center gap-2">
+                    <i className="h-2.5 w-2.5 rounded-sm bg-[#d9cff8]" />
+                    Visits
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <i className="h-2.5 w-2.5 rounded-sm bg-[#8054F6]" />
+                    Trials
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <i className="h-2.5 w-2.5 rounded-sm bg-[#ff2e91]" />
+                    Paid
+                  </span>
+                </div>
+              </>
+            )}
           </section>
         </>
       )}

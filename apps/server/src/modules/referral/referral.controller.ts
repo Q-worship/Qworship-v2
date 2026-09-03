@@ -9,6 +9,8 @@ import { CommissionLedgerEntry } from "./commissionLedger.model.js";
 import { WithdrawalRequest } from "./withdrawalRequest.model.js";
 import { PLAN_MONTHLY_PRICE, computeMonthlyCommission, SubscriptionType } from "../../config/referralCommission.js";
 import { notifyReferralCommissionEarned, notifyReferralWithdrawalPaid } from "../notifications/notification.service.js";
+import { Campaign } from "./campaign.model.js";
+import { LinkVisit } from "./linkVisit.model.js";
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -503,6 +505,119 @@ export const adminUpdateWithdrawal = async (req: Request, res: Response) => {
     }
 
     return res.json({ success: true, request });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+function slugifyCampaignName(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 42);
+}
+
+// Public, unauthenticated — a referral link is clicked while fully logged out.
+// Must never surface an error or slow response to a real visitor: bad/unknown
+// codes and campaign slugs are ignored silently rather than rejected.
+export const trackReferralVisit = async (req: Request, res: Response) => {
+  try {
+    const code = typeof req.body.code === "string" ? req.body.code.trim().toUpperCase() : "";
+    if (!code) return res.status(200).json({ success: true });
+
+    const referee = await User.findOne({ referralCode: code, role: "referee" }).select("_id").lean();
+    if (!referee) return res.status(200).json({ success: true });
+
+    const campaignSlug = typeof req.body.campaign === "string" ? slugifyCampaignName(req.body.campaign) : "";
+    const campaign = campaignSlug
+      ? await Campaign.findOne({ refereeId: referee._id, slug: campaignSlug }).select("_id").lean()
+      : null;
+
+    await LinkVisit.create({ refereeId: referee._id, campaignId: campaign?._id });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(200).json({ success: true });
+  }
+};
+
+export const getMyCampaigns = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+    const campaigns = await Campaign.find({ refereeId: user._id }).sort({ createdAt: -1 }).lean();
+    return res.json({
+      success: true,
+      campaigns: campaigns.map((c: any) => ({ id: c._id, name: c.name, slug: c.slug, source: c.source, destination: c.destination, createdAt: c.createdAt })),
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const createCampaign = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+
+    const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+    const source = typeof req.body.source === "string" ? req.body.source.trim() : "";
+    const destination = typeof req.body.destination === "string" ? req.body.destination.trim() : "";
+    if (name.length < 3) return res.status(400).json({ success: false, message: "Enter a campaign name with at least three characters" });
+    if (!source || !destination) return res.status(400).json({ success: false, message: "Choose a channel and destination" });
+
+    const slug = slugifyCampaignName(name);
+    if (!slug) return res.status(400).json({ success: false, message: "Enter a campaign name using letters or numbers" });
+
+    const existing = await Campaign.findOne({ refereeId: user._id, slug });
+    if (existing) return res.status(400).json({ success: false, message: "A campaign with this name already exists. Choose a distinct name." });
+
+    const campaign = await Campaign.create({ refereeId: user._id, name, slug, source, destination });
+    return res.status(201).json({
+      success: true,
+      campaign: { id: campaign._id, name: campaign.name, slug: campaign.slug, source: campaign.source, destination: campaign.destination, createdAt: campaign.createdAt },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getMyVisitStats = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (user.role !== "referee") return res.status(403).json({ success: false, message: "This endpoint is only available to referral partners" });
+
+    const refereeId = user._id;
+    const [totalVisits, campaigns, campaignVisitCounts, campaignOrgCounts] = await Promise.all([
+      LinkVisit.countDocuments({ refereeId }),
+      Campaign.find({ refereeId }).sort({ createdAt: -1 }).lean(),
+      LinkVisit.aggregate([
+        { $match: { refereeId, campaignId: { $exists: true, $ne: null } } },
+        { $group: { _id: "$campaignId", count: { $sum: 1 } } },
+      ]),
+      Organization.aggregate([
+        { $match: { referredBy: refereeId, campaignId: { $exists: true, $ne: null } } },
+        { $group: { _id: { campaignId: "$campaignId", status: "$subscriptionStatus" }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const visitsByCampaign = new Map<string, number>();
+    for (const row of campaignVisitCounts) visitsByCampaign.set(String(row._id), row.count);
+
+    const orgCountsByCampaign = new Map<string, { trial: number; paid: number }>();
+    for (const row of campaignOrgCounts) {
+      const key = String(row._id.campaignId);
+      const entry = orgCountsByCampaign.get(key) || { trial: 0, paid: 0 };
+      if (row._id.status === "trial") entry.trial += row.count;
+      if (row._id.status === "active") entry.paid += row.count;
+      orgCountsByCampaign.set(key, entry);
+    }
+
+    return res.json({
+      success: true,
+      totalVisits,
+      campaigns: campaigns.map((c: any) => {
+        const key = String(c._id);
+        const orgCounts = orgCountsByCampaign.get(key) || { trial: 0, paid: 0 };
+        return { id: c._id, name: c.name, visits: visitsByCampaign.get(key) || 0, trials: orgCounts.trial, paid: orgCounts.paid };
+      }),
+    });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }

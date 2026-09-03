@@ -10,7 +10,8 @@ export function getReferralCode(user: ReferralUser): string {
   return `QW-${initial}${suffix}`;
 }
 
-export function getReferralLink(code: string): string {
+export function getReferralLink(code: string, campaignSlug?: string): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "https://qworship.com";
-  return `${origin}/refer-and-earn/join?ref=${encodeURIComponent(code)}`;
+  const base = `${origin}/signup?ref=${encodeURIComponent(code)}`;
+  return campaignSlug ? `${base}&campaign=${encodeURIComponent(campaignSlug)}` : base;
 }

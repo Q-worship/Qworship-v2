@@ -31,7 +31,10 @@ import {
 } from "lucide-react";
 import * as QRCode from "qrcode";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { toast } from "../lib/toast";
+import { getReferralLink } from "../lib/referralCode";
 
 export type ReferralTool = "qr" | "share" | "campaign" | null;
 
@@ -66,10 +69,14 @@ const shareTemplates = [
   },
 ];
 
-const initialCampaigns = [
-  { id: "cmp-summer", name: "Summer demo series", source: "WhatsApp", clicks: 61, created: "14 Aug 2026", status: "Active" },
-  { id: "cmp-workshop", name: "Church tech workshop", source: "Event QR", clicks: 42, created: "02 Aug 2026", status: "Active" },
-];
+interface CampaignRow {
+  id: string;
+  name: string;
+  slug: string;
+  source: string;
+  destination: string;
+  createdAt: string;
+}
 
 function downloadFile(contents: BlobPart, type: string, filename: string) {
   const blob = new Blob([contents], { type });
@@ -229,26 +236,39 @@ function ShareMessageDialog({ open, onClose, referralLink, referralCode }: Omit<
   </Dialog>;
 }
 
-function CampaignLinkDialog({ open, onClose, referralLink, referralCode }: Omit<Props, "active"> & { open: boolean }) {
+function CampaignLinkDialog({ open, onClose, referralCode }: Omit<Props, "active"> & { open: boolean }) {
   const [name, setName] = useState("");
   const [source, setSource] = useState("whatsapp");
   const [destination, setDestination] = useState("plans");
   const [context, setContext] = useState("");
   const [error, setError] = useState("");
-  const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [createdUrl, setCreatedUrl] = useState("");
   const slug = useMemo(() => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 42), [name]);
-  const previewUrl = `${referralLink}?campaign=${slug || "campaign-name"}&source=${source}&destination=${destination}`;
+  const previewUrl = getReferralLink(referralCode, slug || "campaign-name");
+
+  const { data } = useQuery<{ campaigns: CampaignRow[] }>({ queryKey: ["/api/referrals/campaigns"], enabled: open });
+  const campaigns = data?.campaigns || [];
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const sourceLabel = source === "whatsapp" ? "WhatsApp" : source === "email" ? "Email" : source === "event" ? "Event QR" : "Social";
+      const response = await apiRequest("POST", "/api/referrals/campaigns", { name: name.trim(), source: sourceLabel, destination });
+      return response.json() as Promise<{ campaign: CampaignRow }>;
+    },
+    onSuccess: ({ campaign }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/referrals/campaigns"] });
+      setCreatedUrl(getReferralLink(referralCode, campaign.slug));
+      setError("");
+      toast.success("Campaign link created", { description: "New visits will appear separately in Analytics." });
+    },
+    onError: (mutationError: any) => setError(mutationError?.message?.replace(/^\d+:\s*/, "") || "Unable to create campaign link"),
+  });
 
   function createCampaign(event: FormEvent) {
     event.preventDefault();
     if (name.trim().length < 3) { setError("Enter a campaign name with at least three characters."); return; }
     if (campaigns.some((campaign) => campaign.name.toLowerCase() === name.trim().toLowerCase())) { setError("A campaign with this name already exists. Choose a distinct name."); return; }
-    const sourceLabel = source === "whatsapp" ? "WhatsApp" : source === "email" ? "Email" : source === "event" ? "Event QR" : "Social";
-    setCampaigns((items) => [{ id: `cmp-${Date.now()}`, name: name.trim(), source: sourceLabel, clicks: 0, created: "27 Aug 2026", status: "Active" }, ...items]);
-    setCreatedUrl(previewUrl);
-    setError("");
-    toast.success("Campaign link created", { description: "New visits will appear separately in Analytics." });
+    createMutation.mutate();
   }
 
   function reset() { setName(""); setContext(""); setSource("whatsapp"); setDestination("plans"); setError(""); setCreatedUrl(""); }
@@ -257,8 +277,8 @@ function CampaignLinkDialog({ open, onClose, referralLink, referralCode }: Omit<
     <DialogContent className="referee-portal-dialog max-h-[94vh] overflow-y-auto rounded-[26px] sm:max-w-[1040px]">
       {!createdUrl ? <><DialogHeader><div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#efeaff] text-[#8054F6]"><MousePointer2 size={21}/></div><DialogTitle className="text-2xl">Create a campaign link</DialogTitle><DialogDescription>Name a sharing effort so you can compare its visits, trials, and paid churches without changing referral ownership.</DialogDescription></DialogHeader>
       <div className="mt-5 grid gap-6 lg:grid-cols-[1.04fr_.96fr]"><form id="campaign-form" onSubmit={createCampaign} className="space-y-5"><label><Label className="text-xs font-bold">Campaign name</Label><Input value={name} onChange={(event) => { setName(event.target.value); setError(""); }} className={`mt-2 h-11 bg-[#f8f7fb] ${error ? "border-rose-400 focus-visible:ring-rose-300" : ""}`} placeholder="e.g. September pastors conference"/><div className="mt-2 flex justify-between text-[10px]"><span className={error ? "font-semibold text-rose-600" : "text-[#99929e]"}>{error || "Use a name you will recognise in Analytics."}</span><span className="text-[#aaa4b0]">{name.length}/60</span></div></label><div className="grid gap-4 sm:grid-cols-2"><label><Label className="text-xs font-bold">Primary channel</Label><Select value={source} onValueChange={setSource}><SelectTrigger className="mt-2 h-11 bg-[#f8f7fb]"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="email">Email</SelectItem><SelectItem value="event">Event QR</SelectItem><SelectItem value="social">Social post</SelectItem></SelectContent></Select></label><label><Label className="text-xs font-bold">Destination</Label><Select value={destination} onValueChange={setDestination}><SelectTrigger className="mt-2 h-11 bg-[#f8f7fb]"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="plans">Plans and pricing</SelectItem><SelectItem value="demo">Book a demonstration</SelectItem><SelectItem value="product">Product overview</SelectItem><SelectItem value="home">Q-Worship home</SelectItem></SelectContent></Select></label></div><label><Label className="text-xs font-bold">Internal context <span className="font-normal text-[#99929e]">(optional)</span></Label><Textarea value={context} onChange={(event) => setContext(event.target.value)} className="mt-2 min-h-24 resize-none bg-[#f8f7fb]" placeholder="Event, audience, territory, or follow-up note. This is not shown to the visitor."/></label><div className="rounded-[18px] border border-[#e8e3f1] bg-[#faf9fd] p-4"><div className="flex items-center justify-between"><p className="text-[10px] font-bold tracking-[.12em] text-[#8e8796] uppercase">Live link preview</p><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700">Attribution protected</span></div><div className="mt-3 break-all rounded-xl bg-white p-3 font-mono text-[11px] leading-5 text-[#6844c7] shadow-sm">{previewUrl}</div><p className="mt-3 flex gap-2 text-[10px] leading-4 text-[#7f7886]"><ShieldCheck className="shrink-0 text-[#8054F6]" size={14}/>Your representative code remains the owner. Campaign parameters only separate performance reporting.</p></div></form>
-      <aside className="rounded-[22px] bg-[#f1eef8] p-5"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold tracking-[.12em] text-[#8e8796] uppercase">Recent campaign links</p><h3 className="mt-1 text-lg font-extrabold">Your active sharing paths</h3></div><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-[#8054F6] shadow-sm"><Link2 size={18}/></span></div><div className="mt-5 space-y-3">{campaigns.slice(0, 4).map((campaign) => <article key={campaign.id} className="rounded-[16px] bg-white p-4 shadow-[0_8px_24px_rgba(54,42,86,.05)]"><div className="flex items-start justify-between gap-3"><div><div className="text-sm font-extrabold">{campaign.name}</div><div className="mt-1 text-[10px] text-[#918a97]">{campaign.source} · Created {campaign.created}</div></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold text-emerald-700">{campaign.status}</span></div><div className="mt-3 flex items-center justify-between border-t border-[#f0edf5] pt-3"><span className="flex items-center gap-1.5 text-[10px] text-[#7d7684]"><MousePointer2 size={12}/><b className="text-[#34303a]">{campaign.clicks}</b> visits</span><button type="button" onClick={() => copyText(`${referralLink}?campaign=${campaign.id.replace("cmp-", "")}`, `${campaign.name} link copied`)} className="text-[10px] font-extrabold text-[#8054F6]">Copy link</button></div></article>)}</div><div className="mt-4 flex gap-2 rounded-xl bg-white/65 p-3 text-[10px] leading-4 text-[#746d7b]"><Sparkles className="mt-0.5 shrink-0 text-[#ff2e91]" size={14}/>Campaign-level visits and conversion will appear in Analytics once activity is recorded.</div></aside></div>
-      <DialogFooter className="mt-6"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button form="campaign-form" type="submit" className="violet-button"><Plus className="mr-2" size={16}/>Create campaign link</Button></DialogFooter></> : <div className="py-8 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><Check size={29}/></div><DialogTitle className="mt-5 text-2xl">Campaign link is ready</DialogTitle><DialogDescription className="mx-auto mt-2 max-w-md">"{name}" will now appear as a separate source in Referral Analytics. Your ownership code remains unchanged.</DialogDescription><div className="mx-auto mt-6 max-w-2xl rounded-[18px] bg-[#f5f2fb] p-4 text-left"><p className="text-[10px] font-bold tracking-[.12em] text-[#8e8796] uppercase">Campaign URL</p><div className="mt-2 break-all font-mono text-xs leading-5 text-[#6844c7]">{createdUrl}</div></div><div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row"><Button variant="outline" className="bg-white" onClick={() => copyText(createdUrl, "Campaign link copied")}><Copy className="mr-2" size={16}/>Copy link</Button><Button variant="outline" className="bg-white" onClick={() => { setCreatedUrl(""); setName(""); }}><Plus className="mr-2" size={16}/>Create another</Button><Button className="violet-button" onClick={() => { onClose(); window.setTimeout(reset, 250); }}><Check className="mr-2" size={16}/>Done</Button></div></div>}
+      <aside className="rounded-[22px] bg-[#f1eef8] p-5"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold tracking-[.12em] text-[#8e8796] uppercase">Recent campaign links</p><h3 className="mt-1 text-lg font-extrabold">Your active sharing paths</h3></div><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-[#8054F6] shadow-sm"><Link2 size={18}/></span></div><div className="mt-5 space-y-3">{campaigns.length === 0 ? <p className="rounded-[16px] bg-white p-4 text-[11px] leading-5 text-[#918a97]">No campaign links yet. Create one and it will show up here.</p> : campaigns.slice(0, 4).map((campaign) => <article key={campaign.id} className="rounded-[16px] bg-white p-4 shadow-[0_8px_24px_rgba(54,42,86,.05)]"><div className="flex items-start justify-between gap-3"><div><div className="text-sm font-extrabold">{campaign.name}</div><div className="mt-1 text-[10px] text-[#918a97]">{campaign.source} · Created {new Date(campaign.createdAt).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" })}</div></div></div><div className="mt-3 flex items-center justify-end border-t border-[#f0edf5] pt-3"><button type="button" onClick={() => copyText(getReferralLink(referralCode, campaign.slug), `${campaign.name} link copied`)} className="text-[10px] font-extrabold text-[#8054F6]">Copy link</button></div></article>)}</div><div className="mt-4 flex gap-2 rounded-xl bg-white/65 p-3 text-[10px] leading-4 text-[#746d7b]"><Sparkles className="mt-0.5 shrink-0 text-[#ff2e91]" size={14}/>Campaign-level visits and conversion will appear in Analytics once activity is recorded.</div></aside></div>
+      <DialogFooter className="mt-6"><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button form="campaign-form" type="submit" className="violet-button" disabled={createMutation.isPending}><Plus className="mr-2" size={16}/>{createMutation.isPending ? "Creating…" : "Create campaign link"}</Button></DialogFooter></> : <div className="py-8 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><Check size={29}/></div><DialogTitle className="mt-5 text-2xl">Campaign link is ready</DialogTitle><DialogDescription className="mx-auto mt-2 max-w-md">"{name}" will now appear as a separate source in Referral Analytics. Your ownership code remains unchanged.</DialogDescription><div className="mx-auto mt-6 max-w-2xl rounded-[18px] bg-[#f5f2fb] p-4 text-left"><p className="text-[10px] font-bold tracking-[.12em] text-[#8e8796] uppercase">Campaign URL</p><div className="mt-2 break-all font-mono text-xs leading-5 text-[#6844c7]">{createdUrl}</div></div><div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row"><Button variant="outline" className="bg-white" onClick={() => copyText(createdUrl, "Campaign link copied")}><Copy className="mr-2" size={16}/>Copy link</Button><Button variant="outline" className="bg-white" onClick={() => { setCreatedUrl(""); setName(""); }}><Plus className="mr-2" size={16}/>Create another</Button><Button className="violet-button" onClick={() => { onClose(); window.setTimeout(reset, 250); }}><Check className="mr-2" size={16}/>Done</Button></div></div>}
     </DialogContent>
   </Dialog>;
 }

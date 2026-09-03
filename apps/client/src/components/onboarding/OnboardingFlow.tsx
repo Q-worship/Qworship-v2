@@ -20,6 +20,7 @@ import { WelcomeStep } from './steps/WelcomeStep'
 import { ChurchInfoStep, type ChurchInfoData } from './steps/ChurchInfoStep'
 import { FeatureInterestsStep } from './steps/FeatureInterestsStep'
 import { ReferralSourceStep } from './steps/ReferralSourceStep'
+import { readStoredAttribution } from '@/features/referee-portal/lib/referralAttribution'
 
 type OnboardingWelcomeStep = 1 | 2 | 3 | 4
 
@@ -51,7 +52,7 @@ export function OnboardingFlow() {
   const [step, setStep] = useState<OnboardingWelcomeStep>(1)
   const [churchInfo, setChurchInfo] = useState<ChurchInfoData>(initialChurchInfo)
   const [selectedFeatures, setSelectedFeatures] = useState<OnboardingFeatureId[]>([])
-  const [referralCode, setReferralCode] = useState('')
+  const [referralCode, setReferralCode] = useState(() => readStoredAttribution()?.code || '')
   const [hearAboutUsSource, setHearAboutUsSource] = useState<string[]>([])
   const [referralError, setReferralError] = useState('')
   const [error, setError] = useState('')
@@ -98,7 +99,9 @@ export function OnboardingFlow() {
     setReferralError('')
     try {
       const trimmedCode = referralCode.trim()
-      await saveOnboardingPreferences(selectedFeatures, trimmedCode ? { referralCode: trimmedCode } : { hearAboutUsSource })
+      const attribution = readStoredAttribution()
+      const campaign = attribution?.code.toUpperCase() === trimmedCode.toUpperCase() ? attribution.campaign : undefined
+      await saveOnboardingPreferences(selectedFeatures, trimmedCode ? { referralCode: trimmedCode, campaign } : { hearAboutUsSource })
       setPhase('plans')
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : 'Unable to save preferences'
