@@ -19,6 +19,9 @@ export interface UseExternalDisplayDetectionResult {
   requestEnable: () => Promise<void>;
   /** Hides the current prompt without disabling detection for future screenschange events. */
   dismiss: () => void;
+  /** Turns detection back off - stops listening and forgets the "enabled" flag (the OS/browser
+   *  permission grant itself is untouched; re-enabling won't need a new prompt). */
+  disableDetection: () => void;
 }
 
 function pickExternalScreen(details: ScreenDetails): ScreenDetailed | null {
@@ -96,6 +99,16 @@ export function useExternalDisplayDetection(): UseExternalDisplayDetectionResult
 
   const dismiss = useCallback(() => setExternalScreen(null), []);
 
+  const disableDetection = useCallback(() => {
+    // Setting enabled false runs the effect's own cleanup (removes the
+    // screenschange listener) on the next render - no extra plumbing needed.
+    setEnabled(false);
+    setExternalScreen(null);
+    try {
+      localStorage.removeItem(ENABLED_FLAG_KEY);
+    } catch {}
+  }, []);
+
   return {
     supported,
     enabled,
@@ -103,5 +116,6 @@ export function useExternalDisplayDetection(): UseExternalDisplayDetectionResult
     externalScreen,
     requestEnable,
     dismiss,
+    disableDetection,
   };
 }

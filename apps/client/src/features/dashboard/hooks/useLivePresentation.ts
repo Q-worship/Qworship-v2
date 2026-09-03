@@ -39,6 +39,14 @@ export const useLivePresentation = ({
   const { setMode: setDisplayMode } = useDisplayModeStore();
 
   const goLive = (targetScreen?: ScreenDetailed) => {
+    // If a live window is already open (e.g. the operator went live on their
+    // own screen, then connected and chose an external display), close it
+    // first so there's only ever one live window - the one actually
+    // connected to this call - instead of a stray, unnoticed second one.
+    if (liveWindow && !liveWindow.closed) {
+      liveWindow.close();
+    }
+
     clearZustandProjection();
     setDisplayMode("slides");
     localStorage.removeItem("qworship-live-background");

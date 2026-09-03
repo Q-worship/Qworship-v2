@@ -986,9 +986,9 @@ export function LivePresentationSettingsPage({
                     checked={externalDisplay.enabled}
                     onChange={(e) => {
                       if (e.target.checked) externalDisplay.requestEnable();
+                      else externalDisplay.disableDetection();
                     }}
-                    disabled={externalDisplay.enabled}
-                    className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer disabled:cursor-default"
+                    className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer"
                   />
                   <span>
                     <span className="block text-sm text-gray-200 font-medium">

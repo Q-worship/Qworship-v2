@@ -198,7 +198,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
   return (
     <div
           ref={screenRef}
-          className={`text-center max-w-[90vw] max-h-[92vh] overflow-hidden flex flex-col justify-center relative ${contentFixedArea ? "h-[85vh]" : ""}`}>
+          className={`text-center ${slidesTransparent ? "max-w-[97vw]" : "max-w-[90vw]"} max-h-[92vh] overflow-hidden flex flex-col justify-center relative ${contentFixedArea ? "h-[85vh]" : ""}`}>
           {/* Content is conditionally rendered based on activeMode from display mode store */}
           {/* Song/Bible Projection - only show when mode matches */}
           {currentSongProjection &&

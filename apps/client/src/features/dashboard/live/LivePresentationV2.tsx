@@ -321,8 +321,22 @@ export const LivePresentationV2 = (): JSX.Element => {
       <LiveBackgroundLayer appliedBackgroundType={effectiveBackgroundType as any} appliedBackgroundVideo={effectiveBackgroundVideo} />
       {/* Full Screen Content - What the audience sees */}
       <div className="w-full h-full flex items-center justify-center relative z-10">
-        {/* Fullscreen Prompt - Shows only first time and when not in fullscreen */}
-        {!isFullscreen && showFullscreenPrompt && (
+        {/* Fullscreen Prompt - Shows only first time and when not in fullscreen.
+            This window was opened targeting a specific external display (HDMI/
+            projector) - the operator may only glance at that screen while
+            positioning their mouse there, so the small banner used for a
+            normal same-screen Go Live isn't reliably noticeable. A single
+            click is unavoidable here (no browser lets a normal website enter
+            fullscreen without a gesture), so make it impossible to miss. */}
+        {!isFullscreen && showFullscreenPrompt && targetScreenPosition && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70">
+            <div className="mx-6 rounded-2xl border border-red-400 bg-red-600 px-10 py-8 text-center shadow-2xl animate-pulse">
+              <p className="text-3xl font-bold text-white">Click anywhere to start</p>
+              <p className="mt-2 text-lg text-red-100">This begins the presentation on this display</p>
+            </div>
+          </div>
+        )}
+        {!isFullscreen && showFullscreenPrompt && !targetScreenPosition && (
           <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-600/90 text-white px-6 py-3 rounded-lg shadow-xl border border-red-400 z-50 animate-pulse">
             <p className="text-center font-medium">
               Click anywhere to enter fullscreen for audience presentation

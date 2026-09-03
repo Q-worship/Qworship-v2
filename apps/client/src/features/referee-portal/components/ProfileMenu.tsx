@@ -135,7 +135,7 @@ export default function ProfileMenu() {
     </DropdownMenu>
 
     <AlertDialog open={signOutOpen} onOpenChange={(value) => !signingOut && setSignOutOpen(value)}>
-      <AlertDialogContent className="rounded-[24px] sm:max-w-[470px]">
+      <AlertDialogContent className="referee-portal-dialog rounded-[24px] sm:max-w-[470px]">
         <AlertDialogHeader><span className="mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-rose-600"><LogOut size={21}/></span><AlertDialogTitle className="text-2xl">Sign out of Q-Worship?</AlertDialogTitle><AlertDialogDescription>You will return to the Referrer sign-in screen. Your account and referral activity will remain unchanged.</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel disabled={signingOut}>Stay signed in</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); signOut(); }} disabled={signingOut} className="bg-rose-600 text-white hover:bg-rose-700">{signingOut ? <><Loader2 className="mr-2 animate-spin" size={16}/>Signing out…</> : <><LogOut className="mr-2" size={16}/>Sign out</>}</AlertDialogAction></AlertDialogFooter>
       </AlertDialogContent>

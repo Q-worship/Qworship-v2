@@ -5643,18 +5643,22 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         open={isImportImageOpen}
         onOpenChange={(open) => {
           setIsImportImageOpen(open);
-          if (!open && recentlyUploadedMediaId) {
-            // When import modal closes after successful upload,
-            // open the full Assets page with the newly uploaded media pre-selected
-            setTimeout(() => {
-              setIsBackgroundAssetsModalOpen(true);
-              setBackgroundModalMode("browse"); // Set to browse mode to show selection interface
-            }, 300);
-          }
         }}
         onMediaUploaded={(mediaAsset) => {
           // Store the uploaded media ID for preselection
           setRecentlyUploadedMediaId(mediaAsset.id);
+
+          // Open the full Assets page with the newly uploaded media pre-selected.
+          // Triggered here (with the fresh id available directly as a
+          // parameter) rather than from onOpenChange, which used to read
+          // recentlyUploadedMediaId through a stale closure - it still saw
+          // the previous render's value (null, on the very first upload)
+          // since React batches this state update with the modal's own
+          // close, so the thumbnail never appeared until a full reload.
+          setTimeout(() => {
+            setIsBackgroundAssetsModalOpen(true);
+            setBackgroundModalMode("browse"); // Set to browse mode to show selection interface
+          }, 300);
 
           toast({
             title: "Media Uploaded Successfully!",
