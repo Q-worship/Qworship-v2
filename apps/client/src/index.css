@@ -11432,3 +11432,21 @@ body.refer-mobile-nav-open {
 .referee-portal-dialog input {
   color: #17122b;
 }
+
+/* The shared Dialog/DialogTitle/DialogDescription/Close-button components
+   read --background/--foreground/--muted-foreground/--accent, which resolve
+   to the app's global dark theme (html.dark) since this app is dark-themed
+   everywhere except the referee portal's own light "Quiet Momentum" design.
+   Re-scoping those CSS variables to their light-mode values (same as :root
+   above) inside this marker class fixes every element that reads them -
+   the dialog surface itself, its title/description text, and the close
+   button - without needing to fight Tailwind utility specificity per element. */
+.referee-portal-dialog {
+  --background: 0 0% 100%;
+  --foreground: 222.2 47.4% 11.2%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --border: 214.3 31.8% 91.4%;
+  --ring: 215 20.2% 65.1%;
+}
