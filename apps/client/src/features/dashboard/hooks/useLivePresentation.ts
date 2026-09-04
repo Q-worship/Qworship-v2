@@ -108,6 +108,12 @@ export const useLivePresentation = ({
                 slideNumber: currentSlide,
                 background: currentBackground,
                 itemId: currentItemId,
+                // This is a startup sync of "where the deck currently is,"
+                // not the operator navigating - must not clear an active
+                // Hands-Free Bible/Song projection that started in the same
+                // window as these retries (see the receiving handler in
+                // useLivePresentationState.ts).
+                isInitialSync: true,
               },
             },
             window.location.origin,
@@ -438,7 +444,9 @@ export const useLivePresentation = ({
             liveWindow.postMessage(
               {
                 type: "SLIDE_CHANGE",
-                data: { slideNumber: currentSlide },
+                // Startup handshake sync, not real navigation - see the
+                // isInitialSync note in goLive()'s sendInitialData above.
+                data: { slideNumber: currentSlide, isInitialSync: true },
               },
               window.location.origin,
             );

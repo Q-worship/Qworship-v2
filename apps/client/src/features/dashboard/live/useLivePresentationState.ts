@@ -1273,13 +1273,24 @@ export function useLivePresentationState() {
         case "SLIDE_CHANGE":
           setCurrentSlide(data.slideNumber);
 
-          // Switch display mode to 'slides' when navigating slides
-          // This ensures we return to slide display after HFB Bible or Song projections
-          useDisplayModeStore.getState().setMode("slides");
+          // isInitialSync marks a startup/reconnect sync of "where the deck
+          // currently is" (goLive's retried sendInitialData, the LIVE_READY
+          // handshake) rather than the operator navigating - those fire on
+          // a timer independent of anything the operator is doing, and used
+          // to unconditionally stomp an active Hands-Free Bible/Song
+          // projection that had just started in the same window, which is
+          // why the very first HFB command right after Go Live could get
+          // silently reverted to the Default Web Screen. Only a real
+          // navigation event should switch mode back to slides.
+          if (!data.isInitialSync) {
+            // Switch display mode to 'slides' when navigating slides
+            // This ensures we return to slide display after HFB Bible or Song projections
+            useDisplayModeStore.getState().setMode("slides");
 
-          // Clear any song/bible projection to show slide content
-          setCurrentSongProjection(null);
-          setProjectionType(null);
+            // Clear any song/bible projection to show slide content
+            setCurrentSongProjection(null);
+            setProjectionType(null);
+          }
 
           // Store background data if provided
           if (data.background && data.itemId) {
