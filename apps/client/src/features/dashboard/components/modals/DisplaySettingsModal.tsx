@@ -1,21 +1,56 @@
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Monitor, MonitorUp, Info, CheckCircle2 } from "lucide-react";
-import { useExternalDisplayDetection } from "@/features/dashboard/hooks/useExternalDisplayDetection";
+import { useExternalDisplayDetection, type DisplayOutputMode } from "@/features/dashboard/hooks/useExternalDisplayDetection";
 
 interface DisplaySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// Keeps the "Detecting External Displays" state on screen for a minimum
+// stretch even when the real check resolves faster, so it reads as a real
+// check happening rather than a flash the eye can't register.
+const MIN_DETECT_DISPLAY_MS = 2200;
+
 export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalProps) {
   const externalDisplay = useExternalDisplayDetection();
-  const { defaultOutput, setDefaultOutput, supported, enabled, isDetecting, externalScreen } = externalDisplay;
+  const { defaultOutput, setDefaultOutput, supported, enabled, externalScreen, requestEnable, disableDetection } = externalDisplay;
+
+  // Which tab is being VIEWED - independent of which output is actually the
+  // committed default. Switching to HDMI only previews/checks it; nothing is
+  // saved until "Set as default display" is checked (see handleSelectHdmi).
+  const [viewingTab, setViewingTab] = useState<DisplayOutputMode>(defaultOutput);
+  // Local, modal-only "still checking" flag - separate from the store's own
+  // isDetecting so the minimum-display-time wrapper doesn't need to fight
+  // over the same flag other consumers (the toast) also read.
+  const [isCheckingHdmi, setIsCheckingHdmi] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) setViewingTab(defaultOutput);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const handleSelectWeb = () => {
+    setViewingTab("web");
+    setDefaultOutput("web");
+  };
+
+  const handleSelectHdmi = () => {
+    setViewingTab("hdmi");
+    setIsCheckingHdmi(true);
+    const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_DETECT_DISPLAY_MS));
+    Promise.all([requestEnable(), minDelay]).finally(() => setIsCheckingHdmi(false));
+  };
+
+  const showDetectingPanel = viewingTab === "hdmi" && supported && (isCheckingHdmi || externalScreen);
+  const showDefaultBanner = viewingTab === defaultOutput;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="max-w-xl w-[92vw] bg-[#0f0920] border-gray-700 p-0 flex flex-col"
+        className="max-w-xl w-[92vw] max-h-[85vh] bg-[#0f0920] border-gray-700 p-0 flex flex-col"
         data-testid="modal-display-settings"
       >
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-700/50 flex-shrink-0">
@@ -26,7 +61,7 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6">
             <h3 className="text-base font-semibold text-white">Default Display Output</h3>
             <p className="mt-1 text-sm text-gray-400">Choose default presentation mode for your displays</p>
@@ -34,9 +69,9 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
             <div className="mt-4 inline-flex rounded-xl bg-[#0f0920] border border-gray-700/60 p-1">
               <button
                 type="button"
-                onClick={() => setDefaultOutput("web")}
+                onClick={handleSelectWeb}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                  defaultOutput === "web" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
+                  viewingTab === "web" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
               >
                 <Monitor className="h-4 w-4" />
@@ -44,9 +79,9 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
               </button>
               <button
                 type="button"
-                onClick={() => setDefaultOutput("hdmi")}
+                onClick={handleSelectHdmi}
                 className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                  defaultOutput === "hdmi" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
+                  viewingTab === "hdmi" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
                 }`}
               >
                 <MonitorUp className="h-4 w-4" />
@@ -54,22 +89,24 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
               </button>
             </div>
 
-            <div className="mt-4 flex items-start gap-2 text-xs text-gray-400">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400" />
-              <span>
-                Your default is currently set to {defaultOutput === "web" ? "Web screen" : "HDMI"}, this means when
-                you go live,{" "}
-                {defaultOutput === "web"
-                  ? "a new window will be opened in your browser"
-                  : "output will target your connected external display automatically"}
-                .
-              </span>
-            </div>
+            {showDefaultBanner && (
+              <div className="mt-4 flex items-start gap-2 text-xs text-gray-400">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400" />
+                <span>
+                  Your default is currently set to {defaultOutput === "web" ? "Web screen" : "HDMI"}, this means when
+                  you go live,{" "}
+                  {defaultOutput === "web"
+                    ? "a new window will be opened in your browser"
+                    : "a new window will be opened in your extended HDMI screen"}
+                  .
+                </span>
+              </div>
+            )}
 
-            {supported && enabled && (isDetecting || externalScreen) && (
+            {showDetectingPanel && (
               <div className="mt-5 border-t border-gray-700/40 pt-5">
                 <h4 className="text-sm font-semibold text-white">External HDMI Display</h4>
-                {isDetecting ? (
+                {isCheckingHdmi ? (
                   <div className="mt-3">
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-700/60">
                       <div className="h-full w-1/2 animate-pulse rounded-full bg-gradient-to-r from-purple-600 to-purple-400" />
@@ -109,8 +146,8 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
                   type="checkbox"
                   checked={enabled}
                   onChange={(e) => {
-                    if (e.target.checked) externalDisplay.requestEnable();
-                    else externalDisplay.disableDetection();
+                    if (e.target.checked) requestEnable();
+                    else disableDetection();
                   }}
                   className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer"
                 />

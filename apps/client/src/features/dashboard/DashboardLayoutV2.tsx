@@ -70,7 +70,7 @@ import { useAudioDevices } from "@/hooks/use-audio-devices";
 import { useRecordingManager } from "@/features/dashboard/hooks/useRecordingManager";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useLivePresentation } from "@/features/dashboard/hooks/useLivePresentation";
-import { useExternalDisplayDetection } from "@/features/dashboard/hooks/useExternalDisplayDetection";
+import { useExternalDisplayDetection, useExternalDisplayAutoAttach } from "@/features/dashboard/hooks/useExternalDisplayDetection";
 import { ExternalDisplayPrompt } from "@/features/dashboard/components/ExternalDisplayPrompt";
 import { useProjectManager } from "@/features/dashboard/hooks/useProjectManager";
 import { useProjectMutations } from "@/features/dashboard/hooks/useProjectMutations";
@@ -1051,9 +1051,14 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
   // Opt-in external-display detection (Chromium-only Window Management API,
   // inert everywhere else) - see features/dashboard/hooks/useExternalDisplayDetection.ts.
-  // The toggle to enable it lives on the Live Presentation Settings page;
-  // this just listens and surfaces the "second display detected" toast.
+  // A shared Zustand store, so this reads the exact same state the Display
+  // Settings modal writes - no more risk of the two drifting out of sync.
+  // The toggle to enable it lives on the Display Settings page; this just
+  // listens and surfaces the "second display detected" toast.
   const externalDisplay = useExternalDisplayDetection();
+  // Owns the one-time "re-attach if previously enabled" effect for the whole
+  // session - must be called from exactly one place (see the hook's own doc).
+  useExternalDisplayAutoAttach();
 
   // ── Lower Third: push current slide to OBS whenever the live slide changes ──
   // This fires for BOTH dashboard-panel clicks (which call setCurrentSlide directly)
@@ -4550,9 +4555,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
       <ExternalDisplayPrompt
         visible={externalDisplay.externalScreenAvailable}
-        onManage={() => {
+        onSetAsDefault={() => {
+          externalDisplay.setDefaultOutput("hdmi");
           externalDisplay.dismiss();
-          setIsDisplaySettingsModalOpen(true);
         }}
         onDismiss={externalDisplay.dismiss}
       />

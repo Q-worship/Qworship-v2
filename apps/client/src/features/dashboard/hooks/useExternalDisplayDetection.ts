@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
+import { create } from "zustand";
 
 // Persists only whether the operator has previously granted the
 // window-management permission through our own "enable" action - the real
@@ -14,26 +15,46 @@ const DEFAULT_OUTPUT_KEY = "qworship-default-display-output";
 
 export type DisplayOutputMode = "web" | "hdmi";
 
-export interface UseExternalDisplayDetectionResult {
+export interface ExternalDisplayState {
   /** False on any browser without the Window Management API (Firefox, Safari). */
   supported: boolean;
   /** Whether the operator has previously granted the permission via requestEnable(). */
   enabled: boolean;
   /** True while a getScreenDetails() call is in flight (drives a "Detecting..." state). */
   isDetecting: boolean;
+  externalScreen: ScreenDetailed | null;
   /** True only while a genuine second screen is currently present and not dismissed. */
   externalScreenAvailable: boolean;
-  externalScreen: ScreenDetailed | null;
-  /** Must be called from a click handler - this is what raises the native permission prompt. */
+  /** Persisted default Go Live target ("web" until the operator changes it). */
+  defaultOutput: DisplayOutputMode;
+  /** Must be called from a click handler - this is what raises the native permission prompt.
+   *  Safe to call again once already enabled (idempotent, no new prompt). */
   requestEnable: () => Promise<void>;
   /** Hides the current prompt without disabling detection for future screenschange events. */
   dismiss: () => void;
   /** Turns detection back off - stops listening and forgets the "enabled" flag (the OS/browser
    *  permission grant itself is untouched; re-enabling won't need a new prompt). */
   disableDetection: () => void;
-  /** Persisted default Go Live target ("web" until the operator changes it). */
-  defaultOutput: DisplayOutputMode;
   setDefaultOutput: (mode: DisplayOutputMode) => void;
+}
+
+const isSupported = typeof window !== "undefined" && "getScreenDetails" in window;
+
+function readInitialEnabled(): boolean {
+  if (!isSupported) return false;
+  try {
+    return localStorage.getItem(ENABLED_FLAG_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function readInitialDefaultOutput(): DisplayOutputMode {
+  try {
+    return localStorage.getItem(DEFAULT_OUTPUT_KEY) === "hdmi" ? "hdmi" : "web";
+  } catch {
+    return "web";
+  }
 }
 
 function pickExternalScreen(details: ScreenDetails): ScreenDetailed | null {
@@ -46,113 +67,107 @@ function pickExternalScreen(details: ScreenDetails): ScreenDetailed | null {
   );
 }
 
-export function useExternalDisplayDetection(): UseExternalDisplayDetectionResult {
-  const supported = typeof window !== "undefined" && "getScreenDetails" in window;
-  const [enabled, setEnabled] = useState(() => {
-    if (!supported) return false;
-    try {
-      return localStorage.getItem(ENABLED_FLAG_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-  const [externalScreen, setExternalScreen] = useState<ScreenDetailed | null>(null);
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [defaultOutput, setDefaultOutputState] = useState<DisplayOutputMode>(() => {
-    try {
-      return localStorage.getItem(DEFAULT_OUTPUT_KEY) === "hdmi" ? "hdmi" : "web";
-    } catch {
-      return "web";
-    }
-  });
-  const screenDetailsRef = useRef<ScreenDetails | null>(null);
+// Module-level (not per-component) - there is only ever one real browser
+// subscription, regardless of how many components read the store below.
+let screenDetailsRef: ScreenDetails | null = null;
+let detachListener: (() => void) | null = null;
 
-  const setDefaultOutput = useCallback((mode: DisplayOutputMode) => {
-    setDefaultOutputState(mode);
-    try {
-      localStorage.setItem(DEFAULT_OUTPUT_KEY, mode);
-    } catch {}
-  }, []);
+function attach(details: ScreenDetails, set: (partial: Partial<ExternalDisplayState>) => void) {
+  detachListener?.();
+  screenDetailsRef = details;
+  set({ externalScreen: pickExternalScreen(details), externalScreenAvailable: !!pickExternalScreen(details) });
+  const handleChange = () => {
+    const screen = pickExternalScreen(details);
+    set({ externalScreen: screen, externalScreenAvailable: !!screen });
+  };
+  details.addEventListener("screenschange", handleChange);
+  detachListener = () => details.removeEventListener("screenschange", handleChange);
+}
 
-  const attach = useCallback((details: ScreenDetails) => {
-    screenDetailsRef.current = details;
-    setExternalScreen(pickExternalScreen(details));
-    const handleChange = () => setExternalScreen(pickExternalScreen(details));
-    details.addEventListener("screenschange", handleChange);
-    return () => details.removeEventListener("screenschange", handleChange);
-  }, []);
+export const useExternalDisplayDetection = create<ExternalDisplayState>((set, get) => ({
+  supported: isSupported,
+  enabled: readInitialEnabled(),
+  isDetecting: false,
+  externalScreen: null,
+  externalScreenAvailable: false,
+  defaultOutput: readInitialDefaultOutput(),
 
-  useEffect(() => {
-    if (!supported || !enabled || !window.getScreenDetails) return;
-    let cancelled = false;
-    let cleanup: (() => void) | undefined;
-
-    setIsDetecting(true);
-    window
-      .getScreenDetails()
-      .then((details) => {
-        if (cancelled) return;
-        cleanup = attach(details);
-      })
-      .catch(() => {
-        // Permission was revoked outside the app (browser site settings) or
-        // the call otherwise failed - quietly fall back to "not enabled"
-        // rather than surfacing an error for something the operator didn't
-        // actively do just now.
-        setEnabled(false);
-        try {
-          localStorage.removeItem(ENABLED_FLAG_KEY);
-        } catch {}
-      })
-      .finally(() => {
-        if (!cancelled) setIsDetecting(false);
-      });
-
-    return () => {
-      cancelled = true;
-      cleanup?.();
-    };
-  }, [supported, enabled, attach]);
-
-  const requestEnable = useCallback(async () => {
+  requestEnable: async () => {
+    const { supported } = get();
     if (!supported || !window.getScreenDetails) return;
-    setIsDetecting(true);
+    set({ isDetecting: true });
     try {
       const details = await window.getScreenDetails();
-      attach(details);
-      setEnabled(true);
+      attach(details, set);
+      set({ enabled: true });
       try {
         localStorage.setItem(ENABLED_FLAG_KEY, "true");
       } catch {}
     } catch (error) {
       console.warn("[ExternalDisplay] permission request failed or was denied:", error);
     } finally {
-      setIsDetecting(false);
+      set({ isDetecting: false });
     }
-  }, [supported, attach]);
+  },
 
-  const dismiss = useCallback(() => setExternalScreen(null), []);
+  dismiss: () => set({ externalScreen: null, externalScreenAvailable: false }),
 
-  const disableDetection = useCallback(() => {
-    // Setting enabled false runs the effect's own cleanup (removes the
-    // screenschange listener) on the next render - no extra plumbing needed.
-    setEnabled(false);
-    setExternalScreen(null);
+  disableDetection: () => {
+    detachListener?.();
+    detachListener = null;
+    screenDetailsRef = null;
+    set({ enabled: false, externalScreen: null, externalScreenAvailable: false });
     try {
       localStorage.removeItem(ENABLED_FLAG_KEY);
     } catch {}
-  }, []);
+  },
 
-  return {
-    supported,
-    enabled,
-    isDetecting,
-    externalScreenAvailable: !!externalScreen,
-    externalScreen,
-    requestEnable,
-    dismiss,
-    disableDetection,
-    defaultOutput,
-    setDefaultOutput,
-  };
+  setDefaultOutput: (mode: DisplayOutputMode) => {
+    set({ defaultOutput: mode });
+    try {
+      localStorage.setItem(DEFAULT_OUTPUT_KEY, mode);
+    } catch {}
+  },
+}));
+
+/** Re-attaches detection on load if the operator had previously enabled it -
+ *  call exactly ONCE, from a component guaranteed to mount for the whole
+ *  session (DashboardLayoutV2.tsx). Every other consumer just reads the
+ *  store above directly; calling this more than once would attempt a second
+ *  redundant getScreenDetails() but is otherwise harmless (attach() detaches
+ *  any prior listener first). */
+export function useExternalDisplayAutoAttach(): void {
+  useEffect(() => {
+    const { supported, enabled } = useExternalDisplayDetection.getState();
+    if (!supported || !enabled || !window.getScreenDetails) return;
+    let cancelled = false;
+
+    useExternalDisplayDetection.setState({ isDetecting: true });
+    window
+      .getScreenDetails()
+      .then((details) => {
+        if (cancelled) return;
+        attach(details, useExternalDisplayDetection.setState);
+      })
+      .catch(() => {
+        // Permission was revoked outside the app (browser site settings) or
+        // the call otherwise failed - quietly fall back to "not enabled"
+        // rather than surfacing an error for something the operator didn't
+        // actively do just now.
+        useExternalDisplayDetection.setState({ enabled: false });
+        try {
+          localStorage.removeItem(ENABLED_FLAG_KEY);
+        } catch {}
+      })
+      .finally(() => {
+        if (!cancelled) useExternalDisplayDetection.setState({ isDetecting: false });
+      });
+
+    return () => {
+      cancelled = true;
+      detachListener?.();
+      detachListener = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }

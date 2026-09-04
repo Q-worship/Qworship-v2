@@ -35,6 +35,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     liveConsoleReferenceBold,
     liveConsoleReferenceItalic,
     liveConsoleReferenceTextSize,
+    liveConsoleReferencePosition,
     defaultScreenFontFamily,
     defaultScreenFontColor,
     defaultScreenBold,
@@ -168,10 +169,16 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     fontFamily: null,
     isBold: true,
     isItalic: false,
-    position: "top-center" as const,
+    position: null,
   };
-  const referenceIsBottom = isReferenceBottomPosition(safeReferenceStyle.position);
-  const referenceAlignClass = getReferencePositionClass(safeReferenceStyle.position);
+  // Falls through to the Live Presentation Settings page's own position
+  // (BroadcastChannel-synced into liveConsoleReferencePosition) the same way
+  // font/color/bold/italic already do below - previously hardcoded to
+  // "top-center" here, so Settings-page position changes only ever affected
+  // that page's own preview and never reached the real live output.
+  const referencePosition = safeReferenceStyle.position || liveConsoleReferencePosition || "top-center";
+  const referenceIsBottom = isReferenceBottomPosition(referencePosition);
+  const referenceAlignClass = getReferencePositionClass(referencePosition);
   const referenceStyleProps = {
     fontFamily: safeReferenceStyle.fontFamily || liveConsoleReferenceFontFamily,
     color: safeReferenceStyle.color || liveConsoleReferenceFontColor,
