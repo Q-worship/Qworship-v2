@@ -4534,15 +4534,25 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     return filtered;
   };
 
+  // Wraps goLive so the ordinary "Go Live" button auto-targets HDMI when
+  // that's the persisted default (Display Settings) and a screen is
+  // currently detected - no prompt/extra click needed for the common case,
+  // re-evaluated fresh on every call since useExternalDisplayDetection stays
+  // mounted across Go Live/Stop cycles (no reload required to pick it up).
+  const startGoLive = () =>
+    goLive(
+      externalDisplay.defaultOutput === "hdmi" && externalDisplay.externalScreen
+        ? externalDisplay.externalScreen
+        : undefined,
+    );
+
   return (
     <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
       <ExternalDisplayPrompt
         visible={externalDisplay.externalScreenAvailable}
-        onShowThere={() => {
-          if (externalDisplay.externalScreen) {
-            goLive(externalDisplay.externalScreen);
-          }
+        onManage={() => {
           externalDisplay.dismiss();
+          setIsDisplaySettingsModalOpen(true);
         }}
         onDismiss={externalDisplay.dismiss}
       />
@@ -4606,7 +4616,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         liveWindow={liveWindow}
         slides={slides}
         itemBackgrounds={itemBackgrounds}
-        goLive={goLive}
+        goLive={startGoLive}
         exitLive={exitLive}
         isProfileMenuOpen={isProfileMenuOpen}
         setIsProfileMenuOpen={setIsProfileMenuOpen}
@@ -4737,7 +4747,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               applyBackgroundToCurrentItem={applyBackgroundToCurrentItem}
               getItemBackground={getItemBackground}
               currentUserId={currentUserId}
-              goLive={goLive}
+              goLive={startGoLive}
               exitLive={exitLive}
               editorState={editorState}
               titleEditorState={titleEditorState}

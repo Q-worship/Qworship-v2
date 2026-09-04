@@ -1,12 +1,7 @@
-import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Monitor, Type, Palette, Layout, Maximize, Eye } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Monitor, MonitorUp, Info, CheckCircle2 } from "lucide-react";
+import { useExternalDisplayDetection } from "@/features/dashboard/hooks/useExternalDisplayDetection";
 
 interface DisplaySettingsModalProps {
   isOpen: boolean;
@@ -14,258 +9,148 @@ interface DisplaySettingsModalProps {
 }
 
 export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalProps) {
-  const { toast } = useToast();
-  const [fontSize, setFontSize] = useState<number[]>([16]);
-  const [fontFamily, setFontFamily] = useState<string>("inter");
-  const [primaryColor, setPrimaryColor] = useState<string>("#8356f3");
-  const [showSlideNumbers, setShowSlideNumbers] = useState(true);
-  const [showPreviewPanel, setShowPreviewPanel] = useState(true);
-  const [fullscreenOnLive, setFullscreenOnLive] = useState(true);
-  const [transitionEffect, setTransitionEffect] = useState<string>("fade");
-  const [transitionDuration, setTransitionDuration] = useState<number[]>([300]);
-
-  const handleSave = () => {
-    toast({
-      title: "Display Settings Saved",
-      description: "Your display settings have been updated successfully.",
-      className: "bg-[#8356f3] text-white",
-    });
-  };
-
-  const colorOptions = [
-    { value: "#8356f3", label: "Purple", color: "#8356f3" },
-    { value: "#3b82f6", label: "Blue", color: "#3b82f6" },
-    { value: "#10b981", label: "Green", color: "#10b981" },
-    { value: "#f59e0b", label: "Orange", color: "#f59e0b" },
-    { value: "#ef4444", label: "Red", color: "#ef4444" },
-    { value: "#ec4899", label: "Pink", color: "#ec4899" },
-  ];
+  const externalDisplay = useExternalDisplayDetection();
+  const { defaultOutput, setDefaultOutput, supported, enabled, isDetecting, externalScreen } = externalDisplay;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent 
-        className="max-w-5xl w-[92vw] h-[85vh] max-h-[800px] bg-[#0f0920] border-gray-700 p-0 flex flex-col"
+      <DialogContent
+        className="max-w-xl w-[92vw] bg-[#0f0920] border-gray-700 p-0 flex flex-col"
         data-testid="modal-display-settings"
       >
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-700/50 flex-shrink-0">
-          <DialogTitle className="text-xl font-bold text-[#C77DFF]">
-            Display Settings
-          </DialogTitle>
+          <DialogTitle className="text-xl font-bold text-[#C77DFF]">Display Settings</DialogTitle>
           <DialogDescription className="text-gray-400">
-            Customize how content is displayed in your presentations and workspace
+            Configure your Q-worship Cloud display settings. Detect any external display sources connected to your
+            computer and set your preferred output source for live presentation
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-8 max-w-3xl">
-            {/* Typography Settings */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                  <Type className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Typography</h3>
-                  <p className="text-sm text-gray-400">Customize fonts and text sizes</p>
-                </div>
-              </div>
-              <div className="ml-13 pl-10 space-y-4">
-                <div className="p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <Label className="text-white font-medium mb-3 block">Font Family</Label>
-                  <Select value={fontFamily} onValueChange={setFontFamily}>
-                    <SelectTrigger className="w-full max-w-xs bg-[#0f0920] border-gray-600 text-white">
-                      <SelectValue placeholder="Select font" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a0f2e] border-gray-600">
-                      <SelectItem value="inter" className="text-white hover:bg-purple-600">Inter</SelectItem>
-                      <SelectItem value="roboto" className="text-white hover:bg-purple-600">Roboto</SelectItem>
-                      <SelectItem value="opensans" className="text-white hover:bg-purple-600">Open Sans</SelectItem>
-                      <SelectItem value="lato" className="text-white hover:bg-purple-600">Lato</SelectItem>
-                      <SelectItem value="montserrat" className="text-white hover:bg-purple-600">Montserrat</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <div className="flex items-center justify-between mb-3">
-                    <Label className="text-white font-medium">Base Font Size</Label>
-                    <span className="text-purple-400 font-medium">{fontSize[0]}px</span>
-                  </div>
-                  <Slider
-                    value={fontSize}
-                    onValueChange={setFontSize}
-                    min={12}
-                    max={24}
-                    step={1}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-2">
-                    <span>12px</span>
-                    <span>24px</span>
-                  </div>
-                </div>
-              </div>
+        <div className="p-6 space-y-6">
+          <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6">
+            <h3 className="text-base font-semibold text-white">Default Display Output</h3>
+            <p className="mt-1 text-sm text-gray-400">Choose default presentation mode for your displays</p>
+
+            <div className="mt-4 inline-flex rounded-xl bg-[#0f0920] border border-gray-700/60 p-1">
+              <button
+                type="button"
+                onClick={() => setDefaultOutput("web")}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  defaultOutput === "web" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                <Monitor className="h-4 w-4" />
+                Web Screen
+              </button>
+              <button
+                type="button"
+                onClick={() => setDefaultOutput("hdmi")}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  defaultOutput === "hdmi" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                <MonitorUp className="h-4 w-4" />
+                HDMI
+              </button>
             </div>
 
-            {/* Color Theme */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                  <Palette className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Accent Color</h3>
-                  <p className="text-sm text-gray-400">Choose your primary accent color</p>
-                </div>
-              </div>
-              <div className="ml-13 pl-10">
-                <div className="p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <div className="flex flex-wrap gap-3">
-                    {colorOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => setPrimaryColor(option.value)}
-                        className={`w-10 h-10 rounded-full transition-all ${
-                          primaryColor === option.value 
-                            ? "ring-2 ring-white ring-offset-2 ring-offset-[#1a0f2e]" 
-                            : "hover:scale-110"
-                        }`}
-                        style={{ backgroundColor: option.color }}
-                        title={option.label}
-                        data-testid={`color-option-${option.label.toLowerCase()}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div className="mt-4 flex items-start gap-2 text-xs text-gray-400">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-purple-400" />
+              <span>
+                Your default is currently set to {defaultOutput === "web" ? "Web screen" : "HDMI"}, this means when
+                you go live,{" "}
+                {defaultOutput === "web"
+                  ? "a new window will be opened in your browser"
+                  : "output will target your connected external display automatically"}
+                .
+              </span>
             </div>
 
-            {/* Presentation Layout */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                  <Layout className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Workspace Layout</h3>
-                  <p className="text-sm text-gray-400">Configure your workspace panels</p>
-                </div>
-              </div>
-              <div className="ml-13 pl-10 space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <div>
-                    <Label className="text-white font-medium">Show Slide Numbers</Label>
-                    <p className="text-sm text-gray-400">Display slide numbers in the editor</p>
+            {supported && enabled && (isDetecting || externalScreen) && (
+              <div className="mt-5 border-t border-gray-700/40 pt-5">
+                <h4 className="text-sm font-semibold text-white">External HDMI Display</h4>
+                {isDetecting ? (
+                  <div className="mt-3">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-700/60">
+                      <div className="h-full w-1/2 animate-pulse rounded-full bg-gradient-to-r from-purple-600 to-purple-400" />
+                    </div>
+                    <p className="mt-2 text-center text-xs text-gray-500">Detecting External Displays</p>
                   </div>
-                  <Switch 
-                    checked={showSlideNumbers} 
-                    onCheckedChange={setShowSlideNumbers}
-                    className="data-[state=checked]:bg-[#6366f1]"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <div>
-                    <Label className="text-white font-medium">Show Preview Panel</Label>
-                    <p className="text-sm text-gray-400">Display the live preview panel</p>
+                ) : externalScreen ? (
+                  <div className="mt-3 flex items-start gap-3">
+                    <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-purple-600/20 text-purple-300">
+                      <MonitorUp className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-purple-300">External display detected - HDMI</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Show the live output there? Your console will stay open here.
+                      </p>
+                      <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={defaultOutput === "hdmi"}
+                          onChange={(e) => setDefaultOutput(e.target.checked ? "hdmi" : "web")}
+                          className="h-3.5 w-3.5 rounded accent-purple-500 cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-300">Set as default display</span>
+                      </label>
+                    </div>
                   </div>
-                  <Switch 
-                    checked={showPreviewPanel} 
-                    onCheckedChange={setShowPreviewPanel}
-                    className="data-[state=checked]:bg-[#6366f1]"
-                  />
-                </div>
+                ) : null}
               </div>
-            </div>
+            )}
+          </section>
 
-            {/* Presentation Mode */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                  <Maximize className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Presentation Mode</h3>
-                  <p className="text-sm text-gray-400">Configure live presentation behavior</p>
-                </div>
-              </div>
-              <div className="ml-13 pl-10 space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <div>
-                    <Label className="text-white font-medium">Fullscreen on Go Live</Label>
-                    <p className="text-sm text-gray-400">Automatically enter fullscreen when presenting</p>
-                  </div>
-                  <Switch 
-                    checked={fullscreenOnLive} 
-                    onCheckedChange={setFullscreenOnLive}
-                    className="data-[state=checked]:bg-[#6366f1]"
-                  />
-                </div>
-              </div>
-            </div>
+          {supported && (
+            <section className="bg-[#120a26] border border-gray-700/40 rounded-xl p-6">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => {
+                    if (e.target.checked) externalDisplay.requestEnable();
+                    else externalDisplay.disableDetection();
+                  }}
+                  className="mt-0.5 w-4 h-4 rounded accent-purple-500 cursor-pointer"
+                />
+                <span>
+                  <span className="block text-sm text-gray-200 font-medium">Automatically detect external displays</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    When a second display is connected and extended (e.g. a projector over HDMI), you'll be asked
+                    whether to show live output there while the console stays here. Your browser will ask for
+                    permission once.
+                  </span>
+                  <span className="block text-xs text-gray-600 mt-2">
+                    Please note that this is only available for Google Chrome and Microsoft Edge browsers, if you
+                    cannot detect your external display, please switch to one of these browsers.
+                  </span>
+                </span>
+              </label>
+              {enabled && externalScreen && (
+                <p className="mt-3 flex items-center gap-1.5 text-xs text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Detection is active and an external display is currently connected.
+                </p>
+              )}
+            </section>
+          )}
 
-            {/* Transition Effects */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center">
-                  <Eye className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Transitions</h3>
-                  <p className="text-sm text-gray-400">Configure slide transition effects</p>
-                </div>
-              </div>
-              <div className="ml-13 pl-10 space-y-4">
-                <div className="p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <Label className="text-white font-medium mb-3 block">Transition Effect</Label>
-                  <Select value={transitionEffect} onValueChange={setTransitionEffect}>
-                    <SelectTrigger className="w-full max-w-xs bg-[#0f0920] border-gray-600 text-white">
-                      <SelectValue placeholder="Select effect" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a0f2e] border-gray-600">
-                      <SelectItem value="none" className="text-white hover:bg-purple-600">None</SelectItem>
-                      <SelectItem value="fade" className="text-white hover:bg-purple-600">Fade</SelectItem>
-                      <SelectItem value="slide" className="text-white hover:bg-purple-600">Slide</SelectItem>
-                      <SelectItem value="zoom" className="text-white hover:bg-purple-600">Zoom</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="p-4 rounded-lg bg-[#1a0f2e] border border-gray-700">
-                  <div className="flex items-center justify-between mb-3">
-                    <Label className="text-white font-medium">Transition Duration</Label>
-                    <span className="text-purple-400 font-medium">{transitionDuration[0]}ms</span>
-                  </div>
-                  <Slider
-                    value={transitionDuration}
-                    onValueChange={setTransitionDuration}
-                    min={100}
-                    max={1000}
-                    step={50}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-2">
-                    <span>100ms</span>
-                    <span>1000ms</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          {!supported && (
+            <p className="text-xs text-gray-500">
+              Automatic external display detection is only available in Google Chrome and Microsoft Edge - switch to
+              one of these browsers to use it.
+            </p>
+          )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-700/50 flex-shrink-0 flex justify-between">
+        <div className="px-6 py-4 border-t border-gray-700/50 flex-shrink-0 flex justify-end">
           <Button
             onClick={onClose}
-            variant="outline"
-            className="border-gray-600 text-gray-300 hover:bg-gray-700"
-            data-testid="button-cancel-display-settings"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
             className="bg-[#6366f1] hover:bg-[#5558e3] text-white"
-            data-testid="button-save-display-settings"
+            data-testid="button-close-display-settings"
           >
-            Save Changes
+            Done
           </Button>
         </div>
       </DialogContent>
