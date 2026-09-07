@@ -16,7 +16,8 @@ const MIN_DETECT_DISPLAY_MS = 2200;
 
 export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalProps) {
   const externalDisplay = useExternalDisplayDetection();
-  const { defaultOutput, setDefaultOutput, supported, enabled, externalScreen, requestEnable, disableDetection } = externalDisplay;
+  const { defaultOutput, setDefaultOutput, supported, enabled, isDetecting, externalScreen, requestEnable, disableDetection } =
+    externalDisplay;
 
   // Which tab is being VIEWED - independent of which output is actually the
   // committed default. Switching to HDMI only previews/checks it; nothing is
@@ -44,7 +45,13 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
     Promise.all([requestEnable(), minDelay]).finally(() => setIsCheckingHdmi(false));
   };
 
-  const showDetectingPanel = viewingTab === "hdmi" && supported && (isCheckingHdmi || externalScreen);
+  // isCheckingHdmi covers the HDMI-tab click (wrapped with the minimum
+  // display time below); isDetecting is the store's own raw flag, which
+  // also flips true when detection is triggered from the "Automatically
+  // detect" checkbox instead - without this, that path jumped straight from
+  // nothing to the detected-display icon with no loading state in between.
+  const isCheckingDisplay = isCheckingHdmi || isDetecting;
+  const showDetectingPanel = viewingTab === "hdmi" && supported && (isCheckingDisplay || externalScreen);
   const showDefaultBanner = viewingTab === defaultOutput;
 
   return (
@@ -106,10 +113,10 @@ export function DisplaySettingsModal({ isOpen, onClose }: DisplaySettingsModalPr
             {showDetectingPanel && (
               <div className="mt-5 border-t border-gray-700/40 pt-5">
                 <h4 className="text-sm font-semibold text-white">External HDMI Display</h4>
-                {isCheckingHdmi ? (
+                {isCheckingDisplay ? (
                   <div className="mt-3">
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-700/60">
-                      <div className="h-full w-1/2 animate-pulse rounded-full bg-gradient-to-r from-purple-600 to-purple-400" />
+                      <div className="qw-indeterminate-bar h-full w-1/3 rounded-full bg-gradient-to-r from-purple-600 to-purple-400" />
                     </div>
                     <p className="mt-2 text-center text-xs text-gray-500">Detecting External Displays</p>
                   </div>
