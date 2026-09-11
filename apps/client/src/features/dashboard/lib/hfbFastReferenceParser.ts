@@ -20,6 +20,22 @@ export interface HFBContextNavigation {
   rawText: string;
 }
 
+/**
+ * A bare "verse N" command. If the speaker had already said "chapter N" (or
+ * "Book chapter N") earlier in the same unconsumed segment without a verse,
+ * that pending context is attached so the caller can complete the reference
+ * instead of jumping within the current chapter.
+ */
+export interface HFBVerseNavigation {
+  verse: number;
+  verseEnd?: number;
+  start: number;
+  end: number;
+  rawText: string;
+  pendingBook?: string;
+  pendingChapter?: number;
+}
+
 const aliases = new Map<string, string>();
 for (const item of BIBLE_BOOKS_LCC) aliases.set(item.name.toLowerCase(), item.name);
 [
@@ -167,6 +183,96 @@ export function scanHFBContextNavigations(
         rawText: match[0],
       });
     }
+  }
+
+  return results;
+}
+
+const verseOnlyPattern = new RegExp(
+  `\\b(?:(?:go|jump|move|skip)\\s+to\\s+|take\\s+me\\s+to\\s+|show\\s+me\\s+|read\\s+)?verse\\s+(${numberWords})(?:\\s+(?:to|through)\\s+(${numberWords}))?\\b`,
+  "i",
+);
+const pendingChapterPattern = new RegExp(
+  `\\b(?:(${bookAlternation})\\s+)?chapter\\s+(${numberWords})\\b`,
+  "i",
+);
+
+/** Spans of every full reference / chapter+verse command in the cleaned text. */
+function collectReferenceSpans(clean: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  for (const pattern of patterns) {
+    const matcher = new RegExp(pattern.source, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = matcher.exec(clean)) !== null) {
+      spans.push([match.index, match.index + match[0].length]);
+    }
+  }
+  const ctx = new RegExp(contextualChapterVersePattern.source, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = ctx.exec(clean)) !== null) {
+    spans.push([match.index, match.index + match[0].length]);
+  }
+  return spans;
+}
+
+/**
+ * Scan bare "verse N" commands (no book, no chapter) in a transcript.
+ * Occurrences that are part of a fuller reference are skipped — those belong
+ * to parseHFBReference / scanHFBContextNavigations.
+ */
+export function scanHFBVerseNavigations(
+  text: string,
+  fromIndex = 0,
+): HFBVerseNavigation[] {
+  const clean = text
+    .toLowerCase()
+    .replace(/[!?;,.:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const spans = collectReferenceSpans(clean);
+  const overlaps = (start: number, end: number) =>
+    spans.some(([s, e]) => start < e && end > s);
+
+  const results: HFBVerseNavigation[] = [];
+  const matcher = new RegExp(verseOnlyPattern.source, "gi");
+  let match: RegExpExecArray | null;
+
+  while ((match = matcher.exec(clean)) !== null) {
+    if (match.index < fromIndex) continue;
+    const end = match.index + match[0].length;
+    if (overlaps(match.index, end)) continue;
+
+    const verse = parseNumber(match[1]);
+    const verseEnd = match[2] ? parseNumber(match[2]) : undefined;
+    if (!Number.isInteger(verse) || verse < 1 || verse > 176) continue;
+    if (verseEnd !== undefined && (!Number.isInteger(verseEnd) || verseEnd < verse)) continue;
+
+    // Look back over the unconsumed segment for a "chapter N" (optionally
+    // with a book) that never got its verse — the speaker paused mid-reference.
+    let pendingBook: string | undefined;
+    let pendingChapter: number | undefined;
+    const lookback = clean.slice(fromIndex, match.index);
+    const pendingMatcher = new RegExp(pendingChapterPattern.source, "gi");
+    let pending: RegExpExecArray | null;
+    while ((pending = pendingMatcher.exec(lookback)) !== null) {
+      const pStart = fromIndex + pending.index;
+      const pEnd = pStart + pending[0].length;
+      if (overlaps(pStart, pEnd)) continue;
+      const chapter = parseNumber(pending[2]);
+      if (!Number.isInteger(chapter) || chapter < 1 || chapter > 150) continue;
+      pendingBook = pending[1] ? aliases.get(pending[1].toLowerCase()) : undefined;
+      pendingChapter = chapter;
+    }
+
+    results.push({
+      verse,
+      verseEnd,
+      start: match.index,
+      end,
+      rawText: match[0],
+      pendingBook,
+      pendingChapter,
+    });
   }
 
   return results;

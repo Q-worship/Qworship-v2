@@ -17,6 +17,7 @@ import {
   parseHFBContextNavigation,
   parseHFBReference,
   scanHFBContextNavigations,
+  scanHFBVerseNavigations,
 } from "../lib/hfbFastReferenceParser";
 import { parseBibleVersionCommand } from "../data/bibleTranslations";
 import { useBibleRAMCache } from "./useBibleRAMCache";
@@ -832,6 +833,137 @@ export const useHandsfreeBible = ({
     return handledAny;
   };
 
+  /**
+   * Bare "verse N" — projects verse N of the chapter currently on stage.
+   * If the speaker already said "chapter N" (or "Book chapter N") earlier in
+   * the same segment and paused, the parser attaches that pending context and
+   * the full reference is completed here instead. A bare "chapter N" alone is
+   * never projected — it always waits for its verse.
+   */
+  const processVerseNavigationLocally = (
+    text: string,
+    confidence = 0,
+    isFinal = false,
+  ): boolean => {
+    const fromIndex = consumedCursorIndexRef.current;
+    const navigations = scanHFBVerseNavigations(text, fromIndex);
+    if (!navigations.length) return false;
+
+    const targetNavigations = isFinal
+      ? navigations
+      : [navigations[navigations.length - 1]];
+
+    const hfbState = useHFBStore.getState();
+    const projected = useBibleProjectionStore.getState().currentVerse;
+    const currentBook =
+      hfbState.hfbBookName ||
+      projected?.book ||
+      currentVerseContextRef.current?.book;
+    const currentChapter =
+      hfbState.hfbChapter ||
+      projected?.chapter ||
+      currentVerseContextRef.current?.chapter;
+
+    let handledAny = false;
+    for (const navigation of targetNavigations) {
+      const book = navigation.pendingBook || currentBook;
+      const chapter = navigation.pendingChapter || currentChapter;
+      if (!book || !chapter) continue;
+
+      const key = `verse|${book}|${chapter}|${navigation.verse}`;
+      const label = `${book} ${chapter}:${navigation.verse}`;
+      const now = performance.now();
+
+      if (executedContextNavigationsRef.current.has(key)) {
+        handledAny = true;
+        continue;
+      }
+
+      const previous = pendingInterimRef.current;
+      const sameCandidate = previous.key === key && now - previous.at < 1500;
+      const count = sameCandidate ? previous.count + 1 : 1;
+      pendingInterimRef.current = {
+        key,
+        count,
+        at: now,
+        firstSeenAt: sameCandidate ? previous.firstSeenAt || previous.at : now,
+      };
+
+      const requiredResults = isFinal
+        ? 1
+        : confidence >= 0.85
+          ? 1
+          : confidence >= 0.65
+            ? 2
+            : Infinity;
+
+      if (count < requiredResults) {
+        useHFBStore.getState().setHfbLiveTokens({
+          committedText: text.slice(0, fromIndex),
+          candidate: {
+            text: navigation.rawText,
+            type: "navigation",
+            status: "evaluating",
+            label,
+          },
+          liveTailText: text.slice(navigation.end),
+        });
+        return true;
+      }
+
+      executedContextNavigationsRef.current.add(key);
+      consumedCursorIndexRef.current = Math.max(consumedCursorIndexRef.current, navigation.end);
+      lastContextNavigationRef.current = { key, at: now };
+
+      useHFBStore.getState().setHfbLiveTokens({
+        committedText: text.slice(0, consumedCursorIndexRef.current),
+        candidate: {
+          text: navigation.rawText,
+          type: "navigation",
+          status: "executed",
+          label,
+        },
+        liveTailText: text.slice(consumedCursorIndexRef.current),
+      });
+
+      console.info(
+        `[HFB] Client verse navigation: ${label} (conf: ${confidence.toFixed(2)})`,
+      );
+
+      if (navigation.pendingBook) {
+        // Completing a "Book chapter N … verse M" the speaker paused inside:
+        // resolve and project through the same path as a server match.
+        const version = selectedBibleVersionRef.current;
+        void resolveHFBVerse(book, chapter, navigation.verse, version).then((resolved) => {
+          if (!resolved) return;
+          const versionKey = version.toLowerCase();
+          handleBibleMatch({
+            commandType: "reference",
+            result: {
+              book,
+              chapter,
+              verses: [{ verse: navigation.verse, text: resolved.text, [versionKey]: resolved.text }],
+            },
+          });
+        });
+      } else if (navigation.pendingChapter) {
+        void executeNavigation(
+          "jump_to_chapter_verse",
+          undefined,
+          navigation.verse,
+          undefined,
+          undefined,
+          navigation.pendingChapter,
+        );
+      } else {
+        void executeNavigation("jump_to_verse", undefined, navigation.verse);
+      }
+      return true;
+    }
+
+    return handledAny;
+  };
+
   const NEXT_VERSE_RE =
     /\b(?:show me the next verse|take me to the next verse|show me the next|take me to the next|next verse please|move to next verse|go to next verse|skip to next verse|next verse)\b/i;
   const PREV_VERSE_RE =
@@ -1044,7 +1176,8 @@ export const useHandsfreeBible = ({
       const conf = metadata?.confidence ?? 0;
       const isHandled =
         processContextNavigationLocally(text, conf, false) ||
-        processRelativeNavigationLocally(text, conf, false);
+        processRelativeNavigationLocally(text, conf, false) ||
+        processVerseNavigationLocally(text, conf, false);
 
       if (!isHandled) {
         void processInterimLocally(text, metadata).then((handled) => {
@@ -1088,7 +1221,8 @@ export const useHandsfreeBible = ({
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
       if (
         !processContextNavigationLocally(text, 1.0, true) &&
-        !processRelativeNavigationLocally(text, 1.0, true)
+        !processRelativeNavigationLocally(text, 1.0, true) &&
+        !processVerseNavigationLocally(text, 1.0, true)
       ) {
         void processInterimLocally(text, { clientReceivedAt: Date.now(), confidence: 1.0 });
       }

@@ -215,7 +215,7 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 onClick={() => hfbStore.setHfbSubMode('quote')}
                 className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
                   hfbStore.hfbSubMode === 'quote'
-                    ? 'bg-amber-900/50 text-amber-200'
+                    ? 'bg-[#0DCC85]/20 text-[#0DCC85]'
                     : 'text-gray-600 hover:text-gray-400'
                 }`}
               >

@@ -33,7 +33,7 @@ const HISTORY_WORDS = 40;
 /** How long a tier's candidate stays eligible for arbitration. */
 const CANDIDATE_TTL_MS = 4000;
 /** Pill auto-dismisses after this long without reinforcement. */
-const PILL_TTL_MS = 45_000;
+export const PILL_TTL_MS = 45_000;
 /** Skip suggesting a verse that was explicitly detected this recently. */
 const DETECTED_DEDUP_MS = 10_000;
 
