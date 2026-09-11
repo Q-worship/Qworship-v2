@@ -60,6 +60,28 @@ export interface HFBProjectedVerse {
   version: string;
 }
 
+/** QUOTE MODE (trial): a verse the pastor appears to be quoting, awaiting operator confirmation. */
+export type HFBSubMode = 'reference' | 'quote';
+
+export interface HFBSuggestedVerse {
+  book: string;
+  chapter: number;
+  verse: number;
+  verseEnd?: number;
+  reference: string;
+  /** 'read-along' = matched against the loaded chapter; 'global' = matched against the whole KJV. */
+  origin: 'read-along' | 'global';
+  /** Translation the quote was matched in (read-along uses whatever chapter is loaded). */
+  matchedVersion: string;
+  /** Verse text in matchedVersion, for the pill preview. */
+  text: string;
+  matchedText: string;
+  confidence: number; // 0–1
+  consecutiveWords: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+}
+
 export interface HFBResolvedVerse {
   number: number;
   text: string;
@@ -200,6 +222,8 @@ interface HFBStore {
   hfbBookName: string;
   hfbChapter: number;
   hfbChapterVerses: HFBChapterVerse[];
+  /** Lower-case version code the loaded hfbChapterVerses belong to (may lag hfbVersion mid-switch). */
+  hfbChapterVersion: string;
   hfbChapterLoading: boolean;
   hfbActiveVerseNum: number | null;
 
@@ -242,6 +266,14 @@ interface HFBStore {
 
   hfbCurrentProjected: HFBProjectedVerse | null;
   setHfbCurrentProjected: (projected: HFBProjectedVerse | null) => void;
+
+  // QUOTE MODE (trial)
+  hfbSubMode: HFBSubMode;
+  setHfbSubMode: (mode: HFBSubMode) => void;
+  hfbSuggestedVerse: HFBSuggestedVerse | null;
+  setHfbSuggestedVerse: (
+    suggestion: HFBSuggestedVerse | null | ((prev: HFBSuggestedVerse | null) => HFBSuggestedVerse | null),
+  ) => void;
   
   // Connection state
   hfbConnectionStatus: "idle" | "connecting" | "ready" | "reconnecting" | "disconnected";
@@ -301,13 +333,24 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
   hfbStrictMode: false,
   setHfbStrictMode: (strict) => set({ hfbStrictMode: strict }),
 
+  hfbSubMode: 'reference',
+  setHfbSubMode: (mode) => set({ hfbSubMode: mode, hfbSuggestedVerse: null }),
+  hfbSuggestedVerse: null,
+  setHfbSuggestedVerse: (suggestion) => set((state) => ({
+    hfbSuggestedVerse: typeof suggestion === 'function' ? suggestion(state.hfbSuggestedVerse) : suggestion,
+  })),
+
   hfbBookName: '',
   hfbChapter: 0,
   hfbChapterVerses: [],
+  hfbChapterVersion: '',
   hfbChapterLoading: false,
   hfbActiveVerseNum: null,
 
-  setHfbChapterView: (book, chapter, verses) => set({ hfbBookName: book, hfbChapter: chapter, hfbChapterVerses: verses, hfbChapterLoading: false }),
+  setHfbChapterView: (book, chapter, verses) => set((state) => ({
+    hfbBookName: book, hfbChapter: chapter, hfbChapterVerses: verses,
+    hfbChapterVersion: state.hfbVersion.toLowerCase(), hfbChapterLoading: false,
+  })),
   setHfbChapterLoading: (loading) => set({ hfbChapterLoading: loading }),
   setHfbActiveVerseNum: (num) => set({ hfbActiveVerseNum: num }),
 
@@ -358,10 +401,13 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     // If the requested chapter is already loaded in Center Stage for this EXACT version, just update the active verse highlight
     const current = get();
     const vKey = version.toLowerCase();
+    // Compare against the version the loaded verses actually belong to —
+    // callers set hfbVersion before fetching, so hfbVersion alone would
+    // short-circuit a translation switch and leave the old text on stage.
     if (
       current.hfbBookName === book &&
       current.hfbChapter === chapter &&
-      current.hfbVersion?.toLowerCase() === vKey &&
+      current.hfbChapterVersion === vKey &&
       current.hfbChapterVerses.length > 0
     ) {
       if (highlightVerse !== undefined) {
@@ -375,6 +421,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       hfbBookName: book,
       hfbChapter: chapter,
       hfbVersion: version.toUpperCase(),
+      hfbChapterVersion: vKey,
       hfbChapterLoading: true,
       hfbActiveVerseNum: highlightVerse !== undefined ? highlightVerse : null,
       hfbChapterVerses: [],
@@ -462,6 +509,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     hfbBookName: '',
     hfbChapter: 0,
     hfbChapterVerses: [],
+    hfbChapterVersion: '',
     hfbActiveVerseNum: null,
     hfbTranscriptLines: [],
     hfbCurrentPartial: '',
@@ -469,6 +517,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     hfbLiveTokens: { committedText: '', liveTailText: '' },
     hfbDetectedVerses: [],
     hfbCurrentProjected: null,
+    hfbSuggestedVerse: null,
     hfbLastLatencyMs: null,
     hfbLastLatencySource: null,
   })

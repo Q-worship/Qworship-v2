@@ -1,4 +1,4 @@
-import { BookOpen, Music, X, Mic, MicOff } from "lucide-react";
+import { BookOpen, Music, X, Mic, MicOff, Quote } from "lucide-react";
 import qworshipLogo from "@assets/Group 1_1753843572404.png";
 import { useLiveConsoleStore } from "../../hooks/useLiveConsoleStore";
 import { InlineBibleBrowser } from "../InlineBibleBrowser";
@@ -7,6 +7,7 @@ import { useHandsfreeBibleContext } from "../../providers/HandsfreeBibleProvider
 import { useRef, useEffect } from "react";
 import { useHFBStore } from "../../hooks/useHFBStore";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
+import { HFBQuoteSuggestionPill } from "./HFBQuoteSuggestionPill"; // QUOTE MODE (trial)
 
 interface LeftPanelProps {
   bibleProps: any;
@@ -194,6 +195,34 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
               <Music className="w-2.5 h-2.5" />
               Song
             </button>
+
+            {/* QUOTE MODE (trial): HFB sub-mode toggle */}
+            <div
+              className="ml-auto flex items-center rounded border border-gray-800 bg-[#0d0d1a] p-0.5"
+              title="Reference: project spoken references. Quote: suggest verses the speaker is quoting for you to confirm."
+            >
+              <button
+                onClick={() => hfbStore.setHfbSubMode('reference')}
+                className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
+                  hfbStore.hfbSubMode === 'reference'
+                    ? 'bg-purple-900/50 text-purple-200'
+                    : 'text-gray-600 hover:text-gray-400'
+                }`}
+              >
+                Ref
+              </button>
+              <button
+                onClick={() => hfbStore.setHfbSubMode('quote')}
+                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
+                  hfbStore.hfbSubMode === 'quote'
+                    ? 'bg-amber-900/50 text-amber-200'
+                    : 'text-gray-600 hover:text-gray-400'
+                }`}
+              >
+                <Quote className="w-2 h-2" />
+                Quote
+              </button>
+            </div>
           </div>
 
           {/* LIVE TRANSCRIPT */}
@@ -314,6 +343,15 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 </button>
               )}
             </div>
+            {/* QUOTE MODE (trial): single suggestion pill, operator confirms */}
+            {hfbStore.hfbSubMode === 'quote' && (
+              <div className="px-2 pt-1.5 shrink-0">
+                <HFBQuoteSuggestionPill
+                  onConfirm={() => { void hfb.confirmQuoteSuggestion(); }}
+                  onDismiss={hfb.dismissQuoteSuggestion}
+                />
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto bible-nav-scroll px-2 py-1.5 space-y-1">
               {hfbStore.hfbDetectedVerses.length === 0 ? (
                 <p className="text-[10px] text-gray-700 italic px-1">No verses detected yet</p>

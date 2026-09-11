@@ -20,6 +20,7 @@ import {
 } from "../lib/hfbFastReferenceParser";
 import { parseBibleVersionCommand } from "../data/bibleTranslations";
 import { useBibleRAMCache } from "./useBibleRAMCache";
+import { useHFBQuoteMode } from "./useHFBQuoteMode"; // QUOTE MODE (trial)
 import { db } from "@/lib/db";
 
 interface UseHandsfreeBibleProps {
@@ -945,6 +946,18 @@ export const useHandsfreeBible = ({
     return true;
   };
 
+  // QUOTE MODE (trial): operator-confirmed suggestions project through the
+  // same path as a server bible_match so all guards/history apply.
+  const quoteMode = useHFBQuoteMode({
+    projectVerse: (book, chapter, verse, text) => {
+      const versionKey = selectedBibleVersionRef.current.toLowerCase();
+      handleBibleMatch({
+        commandType: "quote_confirm",
+        result: { book, chapter, verses: [{ verse, text, [versionKey]: text }] },
+      });
+    },
+  });
+
   const {
     connect,
     disconnect,
@@ -954,12 +967,15 @@ export const useHandsfreeBible = ({
     setBibleVersion,
     setBibleContext,
     beginSessionTrace,
+    setHfbSubMode: sendHfbSubModeToServer,
   } = useRealtimeSocket({
     onSocketOpen: () => {
       console.info("[HFB] Socket connected/reconnected — resetting sequence and server clock tracking");
       lastServerProjectionSequenceRef.current = 0;
       lastServerProjectionAtRef.current = 0;
+      sendHfbSubModeToServer(useHFBStore.getState().hfbSubMode); // QUOTE MODE (trial)
     },
+    onVerseSuggestion: quoteMode.onServerSuggestion, // QUOTE MODE (trial)
     onBibleMatch: (data: any) => {
       resetInactivityTimer();
       handleBibleMatch(data);
@@ -1023,6 +1039,7 @@ export const useHandsfreeBible = ({
       useHFBStore
         .getState()
         .setHfbCurrentPartial(text, metadata?.detectedReferences);
+      quoteMode.onPartial(text); // QUOTE MODE (trial)
 
       const conf = metadata?.confidence ?? 0;
       const isHandled =
@@ -1066,6 +1083,7 @@ export const useHandsfreeBible = ({
       useHFBStore.getState().setHfbCurrentPartial(""); // Clear partial when final arrives
       useHFBStore.getState().setHfbLiveTokens({ committedText: '', liveTailText: '' });
       consumedCursorIndexRef.current = 0;
+      quoteMode.onFinal(text); // QUOTE MODE (trial)
       const requestedVersion = parseBibleVersionCommand(text);
       if (requestedVersion) applyVoiceVersionChange(requestedVersion);
       if (
@@ -1196,6 +1214,12 @@ export const useHandsfreeBible = ({
       setMicrophoneStatus("Listening");
     },
   });
+
+  // QUOTE MODE (trial): keep the server's matcher in step with the toggle.
+  const hfbSubMode = useHFBStore((s) => s.hfbSubMode);
+  useEffect(() => {
+    sendHfbSubModeToServer(hfbSubMode);
+  }, [hfbSubMode, sendHfbSubModeToServer]);
 
   // Keep the voice socket aware of manual clicks and projections originating
   // outside HFB. Contextual commands can then preserve the active book without
@@ -1504,6 +1528,9 @@ export const useHandsfreeBible = ({
     setIsListeningMode,
     setDetectedCommands,
     executeNavigation,
+    // QUOTE MODE (trial)
+    confirmQuoteSuggestion: quoteMode.confirmSuggestion,
+    dismissQuoteSuggestion: quoteMode.dismissSuggestion,
   };
 };
 

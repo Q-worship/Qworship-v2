@@ -4,6 +4,7 @@ import { DeepgramTranscriptionService } from "./deepgram.service.js";
 import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
 import { isBibleVersionCode } from "./bible-translations.js";
+import { kjvQuoteIndex, normalizeQuoteText } from "./handsfreeBible/kjvQuoteIndex.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -159,6 +160,47 @@ export function setupAudioSocket(server: Server) {
     let commandQueue: Promise<void> = Promise.resolve();
     const executedOccurrences = new Map<string, number>();
     const interimOccurrences = new Map<string, { count: number; lastSeenAt: number }>();
+
+    // ── QUOTE MODE (trial) ────────────────────────────────────────────────
+    // When the client toggles the HFB sub-mode to "quote", every partial is
+    // also run through the KJV shingle index and the best candidate is sent
+    // as a `verse_suggestion`. The client decides what to show; the server
+    // never projects from this path. Remove this block + the two call sites
+    // below to drop the feature.
+    let quoteModeEnabled = false;
+    let quoteSequence = 0;
+    let quoteLastRunAt = 0;
+    /** Words from finalised utterances so a quote split across a pause still resolves. */
+    let quoteRecentWords: string[] = [];
+    const QUOTE_WINDOW_WORDS = 20;
+    const QUOTE_HISTORY_WORDS = 40;
+    const QUOTE_THROTTLE_MS = 200;
+
+    const runQuoteMatch = (partialText: string, force = false) => {
+      if (!quoteModeEnabled || !kjvQuoteIndex.isReady) return;
+      const now = Date.now();
+      if (!force && now - quoteLastRunAt < QUOTE_THROTTLE_MS) return;
+      quoteLastRunAt = now;
+
+      const partialWords = normalizeQuoteText(partialText);
+      const words = [...quoteRecentWords, ...partialWords].slice(-QUOTE_WINDOW_WORDS);
+      const candidate = kjvQuoteIndex.match(words);
+      if (!candidate) return;
+
+      quoteSequence += 1;
+      ws.send(JSON.stringify({
+        type: "verse_suggestion",
+        seq: quoteSequence,
+        matchedVersion: "kjv",
+        candidate,
+        serverDetectedAt: now,
+      }));
+    };
+
+    const commitQuoteWords = (finalText: string) => {
+      if (!quoteModeEnabled) return;
+      quoteRecentWords = [...quoteRecentWords, ...normalizeQuoteText(finalText)].slice(-QUOTE_HISTORY_WORDS);
+    };
 
     // Occurrence tracking handles partial/final replay for the whole utterance.
     // These short guards only collapse duplicate transport events; navigation
@@ -559,6 +601,8 @@ export function setupAudioSocket(server: Server) {
         serverReceivedAt: Date.now(),
       }));
 
+      runQuoteMatch(text); // QUOTE MODE (trial)
+
       const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
 
       if (ENABLE_SERVER_COMMANDS) {
@@ -686,6 +730,10 @@ export function setupAudioSocket(server: Server) {
 
       ws.send(JSON.stringify({ type: "transcript_final", text: displayText }));
 
+      // QUOTE MODE (trial): run once more on the final wording, then bank it.
+      runQuoteMatch(textToParse, true);
+      commitQuoteWords(textToParse);
+
       const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
       if (ENABLE_SERVER_COMMANDS) {
         const deterministicCommand = FastBibleParser.parse(textToParse);
@@ -732,6 +780,18 @@ export function setupAudioSocket(server: Server) {
             if (isBibleVersionCode(requestedVersion)) {
               activeVersion = requestedVersion;
               console.log(`[AudioSocket] Active Bible version: ${activeVersion.toUpperCase()}`);
+            }
+          }
+
+          // QUOTE MODE (trial)
+          if (msg.type === "set_hfb_sub_mode") {
+            quoteModeEnabled = msg.mode === "quote";
+            quoteRecentWords = [];
+            console.log(`[AudioSocket] HFB sub-mode: ${quoteModeEnabled ? "quote" : "reference"}`);
+            if (quoteModeEnabled) {
+              kjvQuoteIndex.ensureBuilt().catch((err) =>
+                console.error("[AudioSocket] Failed to build KJV quote index", err),
+              );
             }
           }
 
