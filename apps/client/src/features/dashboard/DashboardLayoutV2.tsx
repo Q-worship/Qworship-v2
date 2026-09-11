@@ -98,6 +98,7 @@ import {
   useDashboardPresentation,
   DashboardPresentationProvider,
 } from "@/features/dashboard/providers/DashboardPresentationProvider";
+import { HandsfreeBibleProvider } from "@/features/dashboard/providers/HandsfreeBibleProvider";
 import { DashboardMainWorkspace } from "@/features/dashboard/components/DashboardMainWorkspace";
 
 // CloudMediaTab, MyMediaTab, and MediaBrowserContent are imported from ../components/
@@ -1098,6 +1099,11 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     currentUserId,
   ]);
 
+  const hfb = useHandsfreeBible({
+    liveWindow,
+    handsfreeBibleButtonRef,
+  });
+
   const {
     isHandsfreeBibleOpen,
     isWidgetVisible,
@@ -1118,10 +1124,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     setDetectedCommands,
     volume,
     executeNavigation,
-  } = useHandsfreeBible({
-    liveWindow,
-    handsfreeBibleButtonRef,
-  });
+  } = hfb;
 
   const [showListStyleDropdown, setShowListStyleDropdown] = useState(false);
   const listDropdownRef = useRef<HTMLDivElement>(null);
@@ -4527,7 +4530,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   };
 
   return (
-    <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
+    <HandsfreeBibleProvider value={hfb}>
+      <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
       {/* Blur Overlay for Preview Mode */}
       {!isBuildMode && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-30 pointer-events-none"></div>
@@ -5743,6 +5747,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
       />
     </div>
+    </HandsfreeBibleProvider>
   );
 };
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 interface RealtimeSocketProps {
+  onSocketOpen?: () => void;
   onBibleMatch: (result: any) => void;
   onPartialTranscript?: (text: string, metadata?: {
     confidence?: number;
@@ -46,6 +47,7 @@ export const useRealtimeSocket = ({
   onVersionChange,
   onConnectionStatus,
   onReferenceStage,
+  onSocketOpen,
   onError,
   onAudioStatus,
   onNavigation,
@@ -58,6 +60,7 @@ export const useRealtimeSocket = ({
 
   // Store callbacks in refs to avoid causing re-renders/re-creation of connect()
   const callbacks = useRef<RealtimeSocketProps>({
+    onSocketOpen,
     onBibleMatch,
     onPartialTranscript,
     onFinalTranscript,
@@ -74,6 +77,7 @@ export const useRealtimeSocket = ({
   // Update refs on every render
   useEffect(() => {
     callbacks.current = {
+      onSocketOpen,
       onBibleMatch,
       onPartialTranscript,
       onFinalTranscript,
@@ -109,6 +113,7 @@ export const useRealtimeSocket = ({
         queuedChunks: pendingAudioRef.current.length,
       });
       setIsConnected(true);
+      callbacks.current.onSocketOpen?.();
       for (const message of pendingControlRef.current) ws.send(message);
       pendingControlRef.current = [];
       for (const chunk of pendingAudioRef.current) ws.send(chunk);

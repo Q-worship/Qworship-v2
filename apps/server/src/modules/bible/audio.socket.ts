@@ -559,58 +559,62 @@ export function setupAudioSocket(server: Server) {
         serverReceivedAt: Date.now(),
       }));
 
-      const versionCommand = FastBibleParser.parse(text);
-      if (versionCommand?.name === "switch_bible_version") {
-        const occurrenceKey = `${utteranceSequence}:${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
-        if (!executedOccurrences.has(occurrenceKey) && confidence >= 0.5) {
-          executedOccurrences.set(occurrenceKey, Date.now());
-          await enqueueCommand(versionCommand, "Partial");
+      const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
+
+      if (ENABLE_SERVER_COMMANDS) {
+        const versionCommand = FastBibleParser.parse(text);
+        if (versionCommand?.name === "switch_bible_version") {
+          const occurrenceKey = `${utteranceSequence}:${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
+          if (!executedOccurrences.has(occurrenceKey) && confidence >= 0.5) {
+            executedOccurrences.set(occurrenceKey, Date.now());
+            await enqueueCommand(versionCommand, "Partial");
+          }
         }
-      }
 
-      if (await executeTranscriptCommands(text, "Partial", confidence, false)) {
-        resetPartialState();
-        return;
-      }
-
-      // ── Step 2: Progressive accumulation ──────────────────────────────
-      const stage = FastBibleParser.parseStage(text);
-
-      if (!stage) {
-        // No book detected yet — if we had a state older than 5s, reset it
-        if (partialState.book && Date.now() - partialState.bookDetectedAt > 5000) {
+        if (await executeTranscriptCommands(text, "Partial", confidence, false)) {
           resetPartialState();
-        }
-        return;
-      }
-
-      if (stage.type === "book_only") {
-        // New book detected — start or update accumulator
-        if (partialState.book !== stage.book) {
-          console.log(`[AudioSocket] Predictive: book detected → "${stage.book}"`);
-          partialState.book = stage.book;
-          partialState.chapter = null;
-          partialState.verse = null;
-          partialState.bookDetectedAt = Date.now();
-          // Notify UI that a book has been detected (for visual feedback)
-          ws.send(JSON.stringify({ type: "book_detected", book: stage.book }));
+          return;
         }
 
-      } else if (stage.type === "book_chapter" && stage.book && stage.chapter) {
-        // Book + chapter detected — update accumulator
-        if (partialState.book !== stage.book || partialState.chapter !== stage.chapter) {
-          console.log(`[AudioSocket] Predictive: book+chapter → "${stage.book} ${stage.chapter}"`);
-          partialState.book = stage.book;
-          partialState.chapter = stage.chapter;
-          partialState.verse = null;
-          if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
-          ws.send(JSON.stringify({
-            type: "reference_stage",
-            stage: "book_chapter",
-            book: stage.book,
-            chapter: stage.chapter,
-            serverDetectedAt: Date.now(),
-          }));
+        // ── Step 2: Progressive accumulation ──────────────────────────────
+        const stage = FastBibleParser.parseStage(text);
+
+        if (!stage) {
+          // No book detected yet — if we had a state older than 5s, reset it
+          if (partialState.book && Date.now() - partialState.bookDetectedAt > 5000) {
+            resetPartialState();
+          }
+          return;
+        }
+
+        if (stage.type === "book_only") {
+          // New book detected — start or update accumulator
+          if (partialState.book !== stage.book) {
+            console.log(`[AudioSocket] Predictive: book detected → "${stage.book}"`);
+            partialState.book = stage.book;
+            partialState.chapter = null;
+            partialState.verse = null;
+            partialState.bookDetectedAt = Date.now();
+            // Notify UI that a book has been detected (for visual feedback)
+            ws.send(JSON.stringify({ type: "book_detected", book: stage.book }));
+          }
+
+        } else if (stage.type === "book_chapter" && stage.book && stage.chapter) {
+          // Book + chapter detected — update accumulator
+          if (partialState.book !== stage.book || partialState.chapter !== stage.chapter) {
+            console.log(`[AudioSocket] Predictive: book+chapter → "${stage.book} ${stage.chapter}"`);
+            partialState.book = stage.book;
+            partialState.chapter = stage.chapter;
+            partialState.verse = null;
+            if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
+            ws.send(JSON.stringify({
+              type: "reference_stage",
+              stage: "book_chapter",
+              book: stage.book,
+              chapter: stage.chapter,
+              serverDetectedAt: Date.now(),
+            }));
+          }
         }
       }
     };
@@ -650,9 +654,12 @@ export function setupAudioSocket(server: Server) {
 
       console.log(`[AudioSocket] ${label} — flushing: "${textToFlush}"`);
 
-      if (!await executeTranscriptCommands(textToFlush, label, 1, true, turnSequence)) {
-        const cmd = FastBibleParser.parse(textToFlush);
-        if (cmd && cmd.name === "switch_bible_version") await enqueueCommand(cmd, label);
+      const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
+      if (ENABLE_SERVER_COMMANDS) {
+        if (!await executeTranscriptCommands(textToFlush, label, 1, true, turnSequence)) {
+          const cmd = FastBibleParser.parse(textToFlush);
+          if (cmd && cmd.name === "switch_bible_version") await enqueueCommand(cmd, label);
+        }
       }
 
       resetPartialState();
@@ -679,18 +686,21 @@ export function setupAudioSocket(server: Server) {
 
       ws.send(JSON.stringify({ type: "transcript_final", text: displayText }));
 
-      const deterministicCommand = FastBibleParser.parse(textToParse);
+      const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
+      if (ENABLE_SERVER_COMMANDS) {
+        const deterministicCommand = FastBibleParser.parse(textToParse);
 
-      if (confidence != null && confidence < 0.5) {
-        if (!isDeterministicNavigation(deterministicCommand) || confidence < 0.35) {
-          console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
-          return;
+        if (confidence != null && confidence < 0.5) {
+          if (!isDeterministicNavigation(deterministicCommand) || confidence < 0.35) {
+            console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
+            return;
+          }
         }
-      }
 
-      if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true, turnSequence)) {
-        if (deterministicCommand?.name === "switch_bible_version") {
-          await enqueueCommand(deterministicCommand, "Final");
+        if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true, turnSequence)) {
+          if (deterministicCommand?.name === "switch_bible_version") {
+            await enqueueCommand(deterministicCommand, "Final");
+          }
         }
       }
     });
