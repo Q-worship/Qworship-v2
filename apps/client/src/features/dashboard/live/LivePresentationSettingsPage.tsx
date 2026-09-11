@@ -6,8 +6,10 @@ import {
   BLANK_CANVAS_SCREEN_SETTINGS,
   type LiveConsoleSettings,
   type DefaultScreenSettings,
+  type LiveConsoleTextSize,
 } from "@/stores/useLiveConsoleSettingsStore";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
+import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
 import { BackgroundMediaPicker } from "@/features/mainPresentation/BackgroundMediaPicker";
 import {
   Select,
@@ -31,6 +33,8 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PositionPicker } from "@/features/dashboard/components/PositionPicker";
 
 interface LivePresentationSettingsPageProps {
   onClose: () => void;
@@ -248,6 +252,28 @@ function GradientBuilder({
 }
 
 // ── ColorPickerField ──────────────────────────────────────────────────────────
+// Mirrors the live console's own getReferencePositionClass /
+// isReferenceBottomPosition (features/dashboard/live/useLivePresentationState.ts):
+// the reference sits directly above/below the verse (same small gap either
+// way, chosen by DOM order in the JSX below) - these only pick the
+// left/center/right alignment within that row.
+function getReferencePositionClass(position: string) {
+  switch (position) {
+    case "top-left":
+    case "bottom-left":
+      return "self-start text-left";
+    case "top-right":
+    case "bottom-right":
+      return "self-end text-right";
+    default:
+      return "self-center text-center";
+  }
+}
+
+function isReferenceBottomPosition(position: string) {
+  return position.startsWith("bottom");
+}
+
 function ColorPickerField({
   label,
   value,
@@ -283,6 +309,95 @@ function ColorPickerField({
           placeholder="#000000"
         />
       </div>
+    </div>
+  );
+}
+
+function FontFamilySelect({
+  value,
+  onValueChange,
+}: {
+  value: string;
+  onValueChange: (val: string) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white max-h-72">
+        {FONT_OPTIONS.map((font) => (
+          <SelectItem key={font} value={font}>
+            {font}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function TextSizeSelect({
+  value,
+  onValueChange,
+}: {
+  value: LiveConsoleTextSize;
+  onValueChange: (val: LiveConsoleTextSize) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
+        {TEXT_SIZE_OPTIONS.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function TypographyBoldItalicToggle({
+  bold,
+  italic,
+  onToggleBold,
+  onToggleItalic,
+}: {
+  bold: boolean;
+  italic: boolean;
+  onToggleBold: () => void;
+  onToggleItalic: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onToggleBold}
+        aria-pressed={bold}
+        title="Bold"
+        className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
+          bold
+            ? "bg-purple-600/30 border-purple-500 text-purple-300"
+            : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+        }`}
+      >
+        B
+      </button>
+      <button
+        type="button"
+        onClick={onToggleItalic}
+        aria-pressed={italic}
+        title="Italic"
+        className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
+          italic
+            ? "bg-purple-600/30 border-purple-500 text-purple-300"
+            : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+        }`}
+      >
+        I
+      </button>
     </div>
   );
 }
@@ -424,14 +539,34 @@ export function LivePresentationSettingsPage({
   const descBoxRef = useRef<HTMLDivElement>(null);
   const descTextRef = useRef<HTMLDivElement>(null);
 
+  const liveReferenceRef = useRef<HTMLDivElement>(null);
+
   const liveBaseRem = activeSize.previewRem * 0.45;
+  // Independent from liveBaseRem so the reference preview matches the same
+  // independent sizing the live console itself now uses (was previously a
+  // fixed 0.5x of the content size, so they always scaled together).
+  const referenceSize = TEXT_SIZE_OPTIONS.find((o) => o.value === settings.referenceTextSize) ?? TEXT_SIZE_OPTIONS[0];
+  const liveReferenceBaseRem = referenceSize.previewRem * 0.45;
   useAutoFitTextSize(
     previewBoxRef,
     liveCardRef,
     (factor) => {
       if (liveTextRef.current) liveTextRef.current.style.fontSize = `${liveBaseRem * factor}rem`;
+      if (liveReferenceRef.current) liveReferenceRef.current.style.fontSize = `${liveReferenceBaseRem * factor}rem`;
     },
-    [editTarget, settings.hideTextBox, liveBaseRem, activeSettings.fontFamily, activeSettings.bold, activeSettings.italic],
+    [
+      editTarget,
+      settings.hideTextBox,
+      liveBaseRem,
+      liveReferenceBaseRem,
+      activeSettings.fontFamily,
+      activeSettings.bold,
+      activeSettings.italic,
+      settings.referenceFontFamily,
+      settings.referenceBold,
+      settings.referenceItalic,
+      settings.referencePosition,
+    ],
   );
 
   const titleBaseRem = activeSize.previewRem * 0.45;
@@ -661,34 +796,36 @@ export function LivePresentationSettingsPage({
                   <Type className="w-5 h-5 text-purple-400" />
                   <h2 className="text-lg font-semibold text-white">Typography</h2>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleUpdate({ bold: !activeSettings.bold })}
-                    aria-pressed={activeSettings.bold}
-                    title="Bold"
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
-                      activeSettings.bold
-                        ? "bg-purple-600/30 border-purple-500 text-purple-300"
-                        : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
-                    }`}
-                  >
-                    B
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUpdate({ italic: !activeSettings.italic })}
-                    aria-pressed={activeSettings.italic}
-                    title="Italic"
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
-                      activeSettings.italic
-                        ? "bg-purple-600/30 border-purple-500 text-purple-300"
-                        : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
-                    }`}
-                  >
-                    I
-                  </button>
-                </div>
+                {editTarget === "default" && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdate({ bold: !activeSettings.bold })}
+                      aria-pressed={activeSettings.bold}
+                      title="Bold"
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border font-bold text-sm transition-all ${
+                        activeSettings.bold
+                          ? "bg-purple-600/30 border-purple-500 text-purple-300"
+                          : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdate({ italic: !activeSettings.italic })}
+                      aria-pressed={activeSettings.italic}
+                      title="Italic"
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg border italic text-sm transition-all ${
+                        activeSettings.italic
+                          ? "bg-purple-600/30 border-purple-500 text-purple-300"
+                          : "bg-[#0a0614] border-gray-700 text-gray-400 hover:border-gray-500"
+                      }`}
+                    >
+                      I
+                    </button>
+                  </div>
+                )}
               </div>
 
               {editTarget === "default" && (
@@ -711,64 +848,106 @@ export function LivePresentationSettingsPage({
                       placeholder="Now presenting live to congregation"
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Font Family</Label>
+                    <FontFamilySelect
+                      value={activeSettings.fontFamily}
+                      onValueChange={(val) => handleUpdate({ fontFamily: val })}
+                    />
+                  </div>
+
+                  <ColorPickerField
+                    label="Text Colour"
+                    value={activeSettings.fontColor}
+                    onChange={(v) => handleUpdate({ fontColor: v })}
+                  />
+
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Text Size</Label>
+                    <TextSizeSelect
+                      value={activeSettings.textSize}
+                      onValueChange={(val) => handleUpdate({ textSize: val })}
+                    />
+                  </div>
                 </>
               )}
 
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-300">Font Family</Label>
-                <Select
-                  value={activeSettings.fontFamily}
-                  onValueChange={(val) => handleUpdate({ fontFamily: val })}
-                >
-                  <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-                    <SelectItem value="'Inter', sans-serif">Inter</SelectItem>
-                    <SelectItem value="'Roboto', sans-serif">Roboto</SelectItem>
-                    <SelectItem value="'Playfair Display', serif">
-                      Playfair Display
-                    </SelectItem>
-                    <SelectItem value="'Montserrat', sans-serif">
-                      Montserrat
-                    </SelectItem>
-                    <SelectItem value="'Open Sans', sans-serif">
-                      Open Sans
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {editTarget === "live" && (
+                <Tabs defaultValue="content">
+                  <TabsList className="bg-[#0a0614] border border-gray-700">
+                    <TabsTrigger value="content">Content</TabsTrigger>
+                    <TabsTrigger value="reference">Reference</TabsTrigger>
+                  </TabsList>
 
-              <ColorPickerField
-                label="Text Colour"
-                value={activeSettings.fontColor}
-                onChange={(v) => handleUpdate({ fontColor: v })}
-              />
+                  <TabsContent value="content" className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Family</Label>
+                      <FontFamilySelect
+                        value={settings.fontFamily}
+                        onValueChange={(val) => setSettings({ fontFamily: val })}
+                      />
+                    </div>
+                    <ColorPickerField
+                      label="Text Colour"
+                      value={settings.fontColor}
+                      onChange={(v) => setSettings({ fontColor: v })}
+                    />
+                    <TypographyBoldItalicToggle
+                      bold={settings.bold}
+                      italic={settings.italic}
+                      onToggleBold={() => setSettings({ bold: !settings.bold })}
+                      onToggleItalic={() => setSettings({ italic: !settings.italic })}
+                    />
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Text Size</Label>
+                      <TextSizeSelect
+                        value={settings.textSize}
+                        onValueChange={(val) => setSettings({ textSize: val })}
+                      />
+                      <p className="text-[11px] text-gray-500">
+                        Matches the same size scale used by the live console's
+                        own in-session text size control.
+                      </p>
+                    </div>
+                  </TabsContent>
 
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-300">Text Size</Label>
-                <Select
-                  value={activeSettings.textSize}
-                  onValueChange={(val: LiveConsoleSettings["textSize"]) =>
-                    handleUpdate({ textSize: val })
-                  }
-                >
-                  <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-                    {TEXT_SIZE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-gray-500">
-                  Matches the same size scale used by the live console's own
-                  in-session text size control.
-                </p>
-              </div>
+                  <TabsContent value="reference" className="space-y-5 mt-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Family</Label>
+                      <FontFamilySelect
+                        value={settings.referenceFontFamily}
+                        onValueChange={(val) => setSettings({ referenceFontFamily: val })}
+                      />
+                    </div>
+                    <ColorPickerField
+                      label="Text Colour"
+                      value={settings.referenceFontColor}
+                      onChange={(v) => setSettings({ referenceFontColor: v })}
+                    />
+                    <TypographyBoldItalicToggle
+                      bold={settings.referenceBold}
+                      italic={settings.referenceItalic}
+                      onToggleBold={() => setSettings({ referenceBold: !settings.referenceBold })}
+                      onToggleItalic={() => setSettings({ referenceItalic: !settings.referenceItalic })}
+                    />
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Text Size</Label>
+                      <TextSizeSelect
+                        value={settings.referenceTextSize}
+                        onValueChange={(val) => setSettings({ referenceTextSize: val })}
+                      />
+                      <p className="text-[11px] text-gray-500">
+                        Independent from the verse content's text size above.
+                      </p>
+                    </div>
+                    <PositionPicker
+                      value={settings.referencePosition}
+                      onChange={(position) => setSettings({ referencePosition: position })}
+                    />
+                  </TabsContent>
+                </Tabs>
+              )}
             </section>
 
             {/* Text box - Live Web Screen only; the idle Default Web Screen has no slide text box to strip */}
@@ -872,32 +1051,57 @@ export function LivePresentationSettingsPage({
               )}
 
               {editTarget === "live" ? (
-                <div
-                  ref={liveCardRef}
-                  className={`relative z-10 ${
-                    settings.hideTextBox
-                      ? ""
-                      : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
-                  }`}
-                >
                   <div
-                    ref={liveTextRef}
-                    className="text-center whitespace-pre-wrap leading-relaxed"
-                    style={{
-                      color: activeSettings.fontColor,
-                      fontFamily: activeSettings.fontFamily,
-                      fontWeight: activeSettings.bold ? 700 : 300,
-                      fontStyle: activeSettings.italic ? "italic" : "normal",
-                    }}
+                    ref={liveCardRef}
+                    className={`relative z-10 ${
+                      settings.hideTextBox
+                        ? ""
+                        : "bg-black/60 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl p-8"
+                    }`}
                   >
-                    For God so loved the world that he gave his one and only
-                    Son, that whoever believes in him shall not perish but have
-                    eternal life.
-                    <div className="text-[0.5em] opacity-80 mt-2 font-medium tracking-wide">
-                      John 3:16 — KJV
+                    {!isReferenceBottomPosition(settings.referencePosition) && (
+                      <div
+                        ref={liveReferenceRef}
+                        className={`mb-2 font-medium tracking-wide ${getReferencePositionClass(settings.referencePosition)}`}
+                        style={{
+                          color: settings.referenceFontColor,
+                          fontFamily: settings.referenceFontFamily,
+                          fontWeight: settings.referenceBold ? 700 : 400,
+                          fontStyle: settings.referenceItalic ? "italic" : "normal",
+                        }}
+                      >
+                        John 3:16 — KJV
+                      </div>
+                    )}
+                    <div
+                      ref={liveTextRef}
+                      className="text-center whitespace-pre-wrap leading-relaxed"
+                      style={{
+                        color: activeSettings.fontColor,
+                        fontFamily: activeSettings.fontFamily,
+                        fontWeight: activeSettings.bold ? 700 : 300,
+                        fontStyle: activeSettings.italic ? "italic" : "normal",
+                      }}
+                    >
+                      For God so loved the world that he gave his one and only
+                      Son, that whoever believes in him shall not perish but have
+                      eternal life.
                     </div>
+                    {isReferenceBottomPosition(settings.referencePosition) && (
+                      <div
+                        ref={liveReferenceRef}
+                        className={`mt-2 font-medium tracking-wide ${getReferencePositionClass(settings.referencePosition)}`}
+                        style={{
+                          color: settings.referenceFontColor,
+                          fontFamily: settings.referenceFontFamily,
+                          fontWeight: settings.referenceBold ? 700 : 400,
+                          fontStyle: settings.referenceItalic ? "italic" : "normal",
+                        }}
+                      >
+                        John 3:16 — KJV
+                      </div>
+                    )}
                   </div>
-                </div>
               ) : (
                 <div className="relative z-10 w-full h-full flex flex-col items-center justify-center gap-2">
                   {(!defaultScreenSettings.titleHidden || revealHidden) && (

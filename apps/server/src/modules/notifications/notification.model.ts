@@ -37,6 +37,11 @@ const NotificationSchema = new Schema<INotification>(
         'admin_general',
         // User activity
         'recording_saved',
+        // Referral programme
+        'referral_new_organization',
+        'referral_org_activated',
+        'referral_commission_earned',
+        'referral_withdrawal_paid',
       ],
     },
     category: {

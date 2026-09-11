@@ -91,6 +91,11 @@ export function useLivePresentationState() {
   const [liveProjection, setLiveProjection] = useState<string>("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+  // Set only when Go Live was triggered with a specific external screen
+  // (features/dashboard/hooks/useExternalDisplayDetection.ts) - lets the
+  // click-to-fullscreen handler in LivePresentationV2.tsx target that exact
+  // screen instead of whichever one this window happened to land on.
+  const [targetScreenPosition, setTargetScreenPosition] = useState<{ left: number; top: number } | null>(null);
 
   // Song projection state
   const [isSongWidgetOpen, setIsSongWidgetOpen] = useState(false);
@@ -244,6 +249,27 @@ export function useLivePresentationState() {
   const [liveConsoleItalic, setLiveConsoleItalic] = useState(
     () => readLiveConsoleSeed()?.italic ?? false,
   );
+  // Same seed pattern, for the Bible verse reference's independent styling.
+  const [liveConsoleReferenceFontFamily, setLiveConsoleReferenceFontFamily] = useState(
+    () => readLiveConsoleSeed()?.referenceFontFamily || "Lufgord",
+  );
+  const [liveConsoleReferenceFontColor, setLiveConsoleReferenceFontColor] = useState(
+    () => readLiveConsoleSeed()?.referenceFontColor || "#ffffff",
+  );
+  const [liveConsoleReferenceBold, setLiveConsoleReferenceBold] = useState(
+    () => readLiveConsoleSeed()?.referenceBold ?? true,
+  );
+  const [liveConsoleReferenceItalic, setLiveConsoleReferenceItalic] = useState(
+    () => readLiveConsoleSeed()?.referenceItalic ?? false,
+  );
+  const [liveConsoleReferencePosition, setLiveConsoleReferencePosition] = useState(
+    () => readLiveConsoleSeed()?.referencePosition || "top-center",
+  );
+  // Independent from slideTextSize below - lets the reference be sized
+  // separately from the verse content instead of scaling together.
+  const [liveConsoleReferenceTextSize, setLiveConsoleReferenceTextSize] = useState(
+    () => readLiveConsoleSeed()?.referenceTextSize || "small",
+  );
 
   // Dashboard-configured Default Web Screen settings - styles the idle
   // "Live Service / Now presenting..." screen shown when nothing is
@@ -331,6 +357,12 @@ export function useLivePresentationState() {
           setSlideTextSize(seed.textSize);
           setLiveConsoleBold(seed.bold);
           setLiveConsoleItalic(seed.italic);
+          setLiveConsoleReferenceFontFamily(seed.referenceFontFamily);
+          setLiveConsoleReferenceFontColor(seed.referenceFontColor);
+          setLiveConsoleReferenceBold(seed.referenceBold);
+          setLiveConsoleReferenceItalic(seed.referenceItalic);
+          setLiveConsoleReferencePosition(seed.referencePosition);
+          setLiveConsoleReferenceTextSize(seed.referenceTextSize);
           setAppliedBackgroundType(seed.backgroundType);
           setAppliedBackgroundColor(seed.backgroundColor);
           setAppliedBackgroundImage(seed.backgroundImage);
@@ -1120,6 +1152,27 @@ export function useLivePresentationState() {
     }
   };
 
+  // The Bible reference (John 3:16, etc) is positioned relative to the verse
+  // content, not pinned to the screen edges: "top"/"bottom" picks which side
+  // of the verse it sits on (with the same small gap either way — callers
+  // place it before or after the content in DOM order using
+  // isReferenceBottomPosition below), and "left"/"center"/"right" is purely
+  // horizontal alignment within that row via flex self-align + text-align.
+  const getReferencePositionClass = (position: string) => {
+    switch (position) {
+      case "top-left":
+      case "bottom-left":
+        return "self-start text-left";
+      case "top-right":
+      case "bottom-right":
+        return "self-end text-right";
+      default:
+        return "self-center text-center";
+    }
+  };
+
+  const isReferenceBottomPosition = (position: string) => position.startsWith("bottom");
+
   // Auto advance slides functionality
   useEffect(() => {
     if (
@@ -1220,13 +1273,24 @@ export function useLivePresentationState() {
         case "SLIDE_CHANGE":
           setCurrentSlide(data.slideNumber);
 
-          // Switch display mode to 'slides' when navigating slides
-          // This ensures we return to slide display after HFB Bible or Song projections
-          useDisplayModeStore.getState().setMode("slides");
+          // isInitialSync marks a startup/reconnect sync of "where the deck
+          // currently is" (goLive's retried sendInitialData, the LIVE_READY
+          // handshake) rather than the operator navigating - those fire on
+          // a timer independent of anything the operator is doing, and used
+          // to unconditionally stomp an active Hands-Free Bible/Song
+          // projection that had just started in the same window, which is
+          // why the very first HFB command right after Go Live could get
+          // silently reverted to the Default Web Screen. Only a real
+          // navigation event should switch mode back to slides.
+          if (!data.isInitialSync) {
+            // Switch display mode to 'slides' when navigating slides
+            // This ensures we return to slide display after HFB Bible or Song projections
+            useDisplayModeStore.getState().setMode("slides");
 
-          // Clear any song/bible projection to show slide content
-          setCurrentSongProjection(null);
-          setProjectionType(null);
+            // Clear any song/bible projection to show slide content
+            setCurrentSongProjection(null);
+            setProjectionType(null);
+          }
 
           // Store background data if provided
           if (data.background && data.itemId) {
@@ -1338,6 +1402,11 @@ export function useLivePresentationState() {
           }
           break;
         case "SLIDES_SYNC":
+          // Captured regardless of whether slides are present yet - external
+          // display targeting shouldn't depend on slide data arriving.
+          if (data.targetScreenPosition) {
+            setTargetScreenPosition(data.targetScreenPosition);
+          }
           // Sync core slide data only (editorState handled by EDITOR_STATE_SYNC)
           if (data.slides && data.slides.length > 0) {
             setSlides(data.slides);
@@ -2831,6 +2900,12 @@ export function useLivePresentationState() {
     liveConsoleFontColor,
     liveConsoleBold,
     liveConsoleItalic,
+    liveConsoleReferenceFontFamily,
+    liveConsoleReferenceFontColor,
+    liveConsoleReferenceBold,
+    liveConsoleReferenceItalic,
+    liveConsoleReferencePosition,
+    liveConsoleReferenceTextSize,
     isDefaultScreenActive,
     effectiveBackgroundType,
     effectiveBackgroundVideo,
@@ -2887,6 +2962,8 @@ export function useLivePresentationState() {
     setObsSettings,
     setTotalSlides,
     getPositionClass,
+    getReferencePositionClass,
+    isReferenceBottomPosition,
     showTimestamp,
     isBibleWidgetOpen,
     setShowSlideCounter,
@@ -2942,6 +3019,7 @@ export function useLivePresentationState() {
     appliedBackgroundColor,
     getSlideTransitionClass,
     isFullscreen,
+    targetScreenPosition,
     setBackgroundVideo,
     backgroundImage,
     setSlideNumberPosition,

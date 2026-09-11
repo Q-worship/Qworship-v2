@@ -17,6 +17,7 @@ export interface IOrganization extends Document {
   ownerId: mongoose.Types.ObjectId;
   referredBy?: mongoose.Types.ObjectId;
   referralCodeUsed?: string;
+  campaignId?: mongoose.Types.ObjectId;
   hearAboutUsSource?: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +49,7 @@ const OrganizationSchema = new Schema<IOrganization>(
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     referredBy: { type: Schema.Types.ObjectId, ref: "User" },
     referralCodeUsed: { type: String },
+    campaignId: { type: Schema.Types.ObjectId, ref: "Campaign" },
     hearAboutUsSource: { type: [String], default: [] },
   },
   { timestamps: true },

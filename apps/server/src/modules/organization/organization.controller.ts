@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Organization } from './organization.model.js';
 import { User } from '../auth/auth.model.js';
+import { notifyReferralOrgActivated } from '../notifications/notification.service.js';
 
 export const getOrganization = async (req: Request, res: Response) => {
   try {
@@ -96,13 +97,19 @@ export const adminUpdateOrganizationSubscription = async (req: Request, res: Res
     if (subscriptionType !== undefined) {
       organization.subscriptionType = subscriptionType;
     }
+    let justActivated = false;
     if (subscriptionStatus !== undefined) {
       if (subscriptionStatus === 'active' && organization.subscriptionStatus !== 'active') {
         organization.activatedAt = new Date();
+        justActivated = true;
       }
       organization.subscriptionStatus = subscriptionStatus;
     }
     await organization.save();
+
+    if (justActivated && organization.referredBy) {
+      notifyReferralOrgActivated(organization.referredBy as any, organization.name).catch(() => {});
+    }
 
     return res.status(200).json({ success: true, organization });
   } catch (error) {

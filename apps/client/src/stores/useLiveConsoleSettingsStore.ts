@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { BibleReferencePosition } from "@/features/dashboard/hooks/useWysiwygEditor";
 
 // Matches the live console's own slideTextSize preset scale exactly
 // (features/dashboard/live/useLivePresentationState.ts's getTextSizeClass),
@@ -31,6 +32,20 @@ export interface LiveConsoleSettings {
   textSize: LiveConsoleTextSize;
   bold: boolean;
   italic: boolean;
+  // Independent styling for the Bible verse reference (e.g. "John 3:16"),
+  // separate from the verse content styled by the fields above - defaults
+  // here are the floor a per-session Bible editor override falls back to
+  // (features/dashboard/live/components/LiveSlideLayer.tsx).
+  referenceFontColor: string;
+  referenceFontFamily: string;
+  referenceBold: boolean;
+  referenceItalic: boolean;
+  referencePosition: BibleReferencePosition;
+  // Independent from textSize above - the verse content and the reference
+  // each have their own size preset so changing one doesn't resize the
+  // other (both still shrink together, proportionally, only if the pair
+  // together would otherwise overflow the box).
+  referenceTextSize: LiveConsoleTextSize;
 }
 
 export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
@@ -45,6 +60,12 @@ export const DEFAULT_LIVE_CONSOLE_SETTINGS: LiveConsoleSettings = {
   textSize: "large",
   bold: false,
   italic: false,
+  referenceFontColor: "#ffffff",
+  referenceFontFamily: "Inter, sans-serif",
+  referenceBold: true,
+  referenceItalic: false,
+  referencePosition: "top-center",
+  referenceTextSize: "small",
 };
 
 const STORAGE_KEY = "qworship-live-console-settings-page";
@@ -69,6 +90,12 @@ export interface LiveWindowSeed {
   textSize: LiveConsoleTextSize;
   bold: boolean;
   italic: boolean;
+  referenceFontColor: string;
+  referenceFontFamily: string;
+  referenceBold: boolean;
+  referenceItalic: boolean;
+  referencePosition: BibleReferencePosition;
+  referenceTextSize: LiveConsoleTextSize;
 }
 
 export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed {
@@ -79,6 +106,12 @@ export function toLiveWindowSeed(settings: LiveConsoleSettings): LiveWindowSeed 
     textSize: settings.textSize,
     bold: settings.bold,
     italic: settings.italic,
+    referenceFontColor: settings.referenceFontColor,
+    referenceFontFamily: settings.referenceFontFamily,
+    referenceBold: settings.referenceBold,
+    referenceItalic: settings.referenceItalic,
+    referencePosition: settings.referencePosition,
+    referenceTextSize: settings.referenceTextSize,
   };
 
   if (settings.backgroundType === "media") {

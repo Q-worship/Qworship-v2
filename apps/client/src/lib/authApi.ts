@@ -357,6 +357,7 @@ export function saveOnboardingOrganization(payload: ChurchInfoPayload) {
 export interface ReferralSourcePayload {
   referralCode?: string
   hearAboutUsSource?: string[]
+  campaign?: string
 }
 
 export function saveOnboardingPreferences(selectedFeatures: string[], referralSource?: ReferralSourcePayload) {

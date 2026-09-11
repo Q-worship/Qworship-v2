@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import type { Item as ServiceItem, Slide } from "@/types";
 import { useWysiwygEditor } from "@/features/dashboard/hooks/useWysiwygEditor";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
 
 // SlideEditorPanel Props Interface
 export interface SlideEditorPanelProps {
@@ -836,18 +837,11 @@ export const SlideEditorPanel: React.FC<SlideEditorPanelProps> = ({
                     }}
                     title="Font Family"
                   >
-                    <option className="bg-[#2d1f4a]" value="Lufgord">
-                      Lufgord
-                    </option>
-                    <option className="bg-[#2d1f4a]" value="Arial">
-                      Arial
-                    </option>
-                    <option className="bg-[#2d1f4a]" value="Helvetica">
-                      Helvetica
-                    </option>
-                    <option className="bg-[#2d1f4a]" value="Times New Roman">
-                      Times New Roman
-                    </option>
+                    {FONT_OPTIONS.map((font) => (
+                      <option key={font} className="bg-[#2d1f4a]" value={font}>
+                        {font}
+                      </option>
+                    ))}
                   </select>
 
                   <div className="h-5 w-px bg-gray-500 hidden sm:block"></div>

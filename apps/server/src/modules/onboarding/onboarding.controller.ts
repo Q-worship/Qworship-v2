@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { Organization } from '../organization/organization.model.js';
 import { User } from '../auth/auth.model.js';
+import { Campaign } from '../referral/campaign.model.js';
+import { notifyReferralNewOrganization } from '../notifications/notification.service.js';
 
 const TRIAL_DAYS = 30;
 
@@ -68,16 +70,29 @@ export async function savePreferences(req: Request, res: Response) {
 
   const organization = await Organization.findOne({ ownerId: user._id });
   if (organization) {
+    const isNewReferral = !!referee && String(organization.referredBy || '') !== String(referee._id);
     if (referee) {
       organization.referredBy = referee._id as any;
       organization.referralCodeUsed = referralCode;
       organization.hearAboutUsSource = [];
+
+      // Campaign attribution is best-effort: an unknown/foreign slug is ignored
+      // silently rather than blocking signup over an attribution mismatch.
+      const rawCampaign = req.body.campaign;
+      const campaignSlug = typeof rawCampaign === 'string' ? rawCampaign.trim().toLowerCase() : '';
+      if (campaignSlug) {
+        const campaign = await Campaign.findOne({ refereeId: referee._id, slug: campaignSlug });
+        organization.campaignId = campaign ? (campaign._id as any) : undefined;
+      }
     } else if (Array.isArray(hearAboutUsSource)) {
       organization.hearAboutUsSource = [...new Set(hearAboutUsSource.map((value: string) => value.trim()).filter(Boolean))];
       organization.referredBy = undefined;
       organization.referralCodeUsed = undefined;
     }
     await organization.save();
+    if (isNewReferral && referee) {
+      notifyReferralNewOrganization(referee._id as any, organization.name).catch(() => {});
+    }
   }
 
   user.selectedFeatures = [...new Set(selectedFeatures.map(value => value.trim()).filter(Boolean))];

@@ -27,7 +27,7 @@ export const BibleWorkspace: React.FC = () => {
       
       {/* Left Column: Editor */}
       <div className="w-1/2 min-w-[500px] border-r border-gray-700 flex flex-col h-full overflow-hidden">
-        <OnScreenBibleEditor 
+        <OnScreenBibleEditor
           content={activeContent}
           onUpdate={(updatedContent) => {
              setActiveContent(updatedContent);

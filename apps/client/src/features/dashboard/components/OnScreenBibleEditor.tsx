@@ -331,19 +331,19 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
     <div className="h-full flex flex-col bg-[#4a3a6b]">
       {/* Bible Editor: Rich Text Editor Toolbar - Same as Song Editor 2 */}
       <div className="bg-[#2d1f4a] border-b border-gray-600 flex-shrink-0">
-        
+
         {/* Formatting Toolbar - Single Responsive Row */}
         <div className="flex flex-wrap items-center gap-2 px-4 py-2 overflow-x-auto">
           {/* Undo/Redo */}
           <div className="flex items-center">
-            <button 
+            <button
               className="p-1.5 rounded transition-colors text-gray-500 cursor-not-allowed"
               disabled
               title="Undo (Ctrl+Z)"
             >
               <Undo2 className="w-4 h-4" />
             </button>
-            <button 
+            <button
               className="p-1.5 rounded transition-colors text-gray-500 cursor-not-allowed"
               disabled
               title="Redo (Ctrl+Y)"

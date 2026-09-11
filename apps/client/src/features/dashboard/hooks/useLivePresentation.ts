@@ -38,16 +38,27 @@ export const useLivePresentation = ({
   const { clearProjection: clearZustandProjection } = useBibleProjectionStore();
   const { setMode: setDisplayMode } = useDisplayModeStore();
 
-  const goLive = () => {
+  const goLive = (targetScreen?: ScreenDetailed) => {
+    // If a live window is already open (e.g. the operator went live on their
+    // own screen, then connected and chose an external display), close it
+    // first so there's only ever one live window - the one actually
+    // connected to this call - instead of a stray, unnoticed second one.
+    if (liveWindow && !liveWindow.closed) {
+      liveWindow.close();
+    }
+
     clearZustandProjection();
     setDisplayMode("slides");
     localStorage.removeItem("qworship-live-background");
 
-    const newWindow = window.open(
-      "/live",
-      "_blank",
-      "fullscreen=yes,scrollbars=no,resizable=no",
-    );
+    // Plain "Go Live" (no targetScreen) keeps today's exact behavior - the
+    // window features string only gains left/top/width/height when a
+    // specific external screen was chosen via external-display detection.
+    const features = targetScreen
+      ? `left=${targetScreen.availLeft},top=${targetScreen.availTop},width=${targetScreen.availWidth},height=${targetScreen.availHeight},scrollbars=no,resizable=no`
+      : "fullscreen=yes,scrollbars=no,resizable=no";
+
+    const newWindow = window.open("/live", "_blank", features);
 
     if (newWindow) {
       setLiveWindow(newWindow);
@@ -71,6 +82,13 @@ export const useLivePresentation = ({
                 totalSlides,
                 titleEditorState,
                 itemBackgrounds,
+                // Lets the live window re-derive the same ScreenDetailed via
+                // its own getScreenDetails() call (matched by position) so
+                // its existing click-to-fullscreen handler can target this
+                // specific screen instead of "whichever screen I'm on".
+                targetScreenPosition: targetScreen
+                  ? { left: targetScreen.left, top: targetScreen.top }
+                  : null,
               },
             },
             window.location.origin,
@@ -90,6 +108,12 @@ export const useLivePresentation = ({
                 slideNumber: currentSlide,
                 background: currentBackground,
                 itemId: currentItemId,
+                // This is a startup sync of "where the deck currently is,"
+                // not the operator navigating - must not clear an active
+                // Hands-Free Bible/Song projection that started in the same
+                // window as these retries (see the receiving handler in
+                // useLivePresentationState.ts).
+                isInitialSync: true,
               },
             },
             window.location.origin,
@@ -420,7 +444,9 @@ export const useLivePresentation = ({
             liveWindow.postMessage(
               {
                 type: "SLIDE_CHANGE",
-                data: { slideNumber: currentSlide },
+                // Startup handshake sync, not real navigation - see the
+                // isInitialSync note in goLive()'s sendInitialData above.
+                data: { slideNumber: currentSlide, isInitialSync: true },
               },
               window.location.origin,
             );

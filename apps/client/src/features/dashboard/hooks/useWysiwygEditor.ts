@@ -1,5 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 
+export type BibleReferencePosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
+export interface BibleReferenceStyle {
+  color: string | null;
+  fontFamily: string | null;
+  isBold: boolean;
+  isItalic: boolean;
+  position: BibleReferencePosition;
+}
+
 export interface EditorState {
   selectedFont: string;
   selectedHeading: string;
@@ -21,6 +37,9 @@ export interface EditorState {
   listType: string;
   canUndo: boolean;
   canRedo: boolean;
+  // Independent styling for the Bible verse reference (e.g. "John 3:16"),
+  // separate from the verse content styled by the fields above.
+  referenceStyle: BibleReferenceStyle;
 }
 
 export interface TitleEditorState {
@@ -71,6 +90,13 @@ export const useWysiwygEditor = ({
     listType: "none",
     canUndo: false,
     canRedo: false,
+    referenceStyle: {
+      color: null,
+      fontFamily: null,
+      isBold: true,
+      isItalic: false,
+      position: "top-center",
+    },
   });
 
   const [titleEditorState, setTitleEditorState] = useState<TitleEditorState>({
@@ -482,6 +508,34 @@ export const useWysiwygEditor = ({
     }
   };
 
+  // Bible reference styling is a flat, discrete style — not part of the
+  // rich-text selection/undo-redo command system the functions above drive.
+  const setReferenceColor = (color: string) => {
+    setEditorState((prev) => ({ ...prev, referenceStyle: { ...prev.referenceStyle, color } }));
+  };
+
+  const setReferenceFontFamily = (fontFamily: string) => {
+    setEditorState((prev) => ({ ...prev, referenceStyle: { ...prev.referenceStyle, fontFamily } }));
+  };
+
+  const toggleReferenceBold = () => {
+    setEditorState((prev) => ({
+      ...prev,
+      referenceStyle: { ...prev.referenceStyle, isBold: !prev.referenceStyle.isBold },
+    }));
+  };
+
+  const toggleReferenceItalic = () => {
+    setEditorState((prev) => ({
+      ...prev,
+      referenceStyle: { ...prev.referenceStyle, isItalic: !prev.referenceStyle.isItalic },
+    }));
+  };
+
+  const setReferencePosition = (position: BibleReferencePosition) => {
+    setEditorState((prev) => ({ ...prev, referenceStyle: { ...prev.referenceStyle, position } }));
+  };
+
   const applyVisualStyleToTextarea = (
     textarea: HTMLTextAreaElement,
     styleName: string,
@@ -718,6 +772,11 @@ export const useWysiwygEditor = ({
   return {
     editorState,
     setEditorState,
+    setReferenceColor,
+    setReferenceFontFamily,
+    toggleReferenceBold,
+    toggleReferenceItalic,
+    setReferencePosition,
     titleEditorState,
     setTitleEditorState,
     activeTextarea,

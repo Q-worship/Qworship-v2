@@ -25,6 +25,7 @@ import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
 import { SlideCanvasEditor } from "./SlideCanvasEditor";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
+import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
 
 export const DashboardMainWorkspace = (props: any) => {
   const {
@@ -1031,186 +1032,11 @@ export const DashboardMainWorkspace = (props: any) => {
                             }}
                             title="Font Family"
                           >
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Lufgord"
-                            >
-                              Lufgord
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Arial"
-                            >
-                              Arial
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Helvetica"
-                            >
-                              Helvetica
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Times New Roman"
-                            >
-                              Times New Roman
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Georgia"
-                            >
-                              Georgia
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Verdana"
-                            >
-                              Verdana
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Tahoma"
-                            >
-                              Tahoma
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Trebuchet MS"
-                            >
-                              Trebuchet MS
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Impact"
-                            >
-                              Impact
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Palatino"
-                            >
-                              Palatino
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Garamond"
-                            >
-                              Garamond
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Bookman"
-                            >
-                              Bookman
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Comic Sans MS"
-                            >
-                              Comic Sans MS
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Courier New"
-                            >
-                              Courier New
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Lucida Console"
-                            >
-                              Lucida Console
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Monaco"
-                            >
-                              Monaco
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Roboto"
-                            >
-                              Roboto
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Open Sans"
-                            >
-                              Open Sans
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Lato"
-                            >
-                              Lato
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Montserrat"
-                            >
-                              Montserrat
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Source Sans Pro"
-                            >
-                              Source Sans Pro
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Poppins"
-                            >
-                              Poppins
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Nunito"
-                            >
-                              Nunito
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Inter"
-                            >
-                              Inter
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Playfair Display"
-                            >
-                              Playfair Display
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Merriweather"
-                            >
-                              Merriweather
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="PT Serif"
-                            >
-                              PT Serif
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Crimson Text"
-                            >
-                              Crimson Text
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Dancing Script"
-                            >
-                              Dancing Script
-                            </option>
-                            <option
-                              className="bg-[#2d1f4a]"
-                              value="Great Vibes"
-                            >
-                              Great Vibes
-                            </option>
+                            {FONT_OPTIONS.map((font) => (
+                              <option key={font} className="bg-[#2d1f4a]" value={font}>
+                                {font}
+                              </option>
+                            ))}
                           </select>
 
                           {/* Chain Link Icons */}
@@ -3472,17 +3298,11 @@ import type { Slide } from "@/types";\n${text}`,
                                   }}
                                   title="Font Family"
                                 >
-                                  <option className="bg-[#2d1f4a]" value="Lufgord">Lufgord</option>
-                                  <option className="bg-[#2d1f4a]" value="Arial">Arial</option>
-                                  <option className="bg-[#2d1f4a]" value="Helvetica">Helvetica</option>
-                                  <option className="bg-[#2d1f4a]" value="Times New Roman">Times New Roman</option>
-                                  <option className="bg-[#2d1f4a]" value="Georgia">Georgia</option>
-                                  <option className="bg-[#2d1f4a]" value="Roboto">Roboto</option>
-                                  <option className="bg-[#2d1f4a]" value="Open Sans">Open Sans</option>
-                                  <option className="bg-[#2d1f4a]" value="Montserrat">Montserrat</option>
-                                  <option className="bg-[#2d1f4a]" value="Poppins">Poppins</option>
-                                  <option className="bg-[#2d1f4a]" value="Inter">Inter</option>
-                                  <option className="bg-[#2d1f4a]" value="Playfair Display">Playfair Display</option>
+                                  {FONT_OPTIONS.map((font) => (
+                                    <option key={font} className="bg-[#2d1f4a]" value={font}>
+                                      {font}
+                                    </option>
+                                  ))}
                                 </select>
 
                                 {/* Chain Link Icons */}
