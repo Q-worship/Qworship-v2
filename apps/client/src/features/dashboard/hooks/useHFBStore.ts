@@ -30,6 +30,8 @@ const readStoredPinnedVersions = (): BibleVersionCode[] => {
 };
 
 
+import { BIBLE_BOOKS_LCC } from '../data/bibleBooks';
+
 export interface HFBChapterVerse {
   number: number;
   text: string;
@@ -58,6 +60,38 @@ export interface HFBProjectedVerse {
   version: string;
 }
 
+/** QUOTE MODE (trial): a verse the pastor appears to be quoting, awaiting operator confirmation. */
+export type HFBSubMode = 'reference' | 'quote';
+
+export interface HFBSuggestedVerse {
+  book: string;
+  chapter: number;
+  verse: number;
+  verseEnd?: number;
+  reference: string;
+  /** 'read-along' = matched against the loaded chapter; 'global' = matched against the whole KJV. */
+  origin: 'read-along' | 'global';
+  /** Translation the quote was matched in (read-along uses whatever chapter is loaded). */
+  matchedVersion: string;
+  /** Verse text in matchedVersion, for the pill preview. */
+  text: string;
+  matchedText: string;
+  confidence: number; // 0–1
+  consecutiveWords: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+}
+
+export interface HFBResolvedVerse {
+  number: number;
+  text: string;
+  source: "ram" | "indexeddb" | "network";
+}
+
+/** Canonical verse count for a chapter; falls back to canon max. */
+export const chapterVerseCount = (book: string, chapter: number): number =>
+  BIBLE_BOOKS_LCC.find(item => item.name === book)?.verses[chapter - 1] ?? 176;
+
 export async function resolveCachedHFBVerse(
   book: string,
   chapter: number,
@@ -80,6 +114,96 @@ export async function resolveCachedHFBVerse(
   return null;
 }
 
+/**
+ * In-flight chapter fetches, keyed `version|book|chapter`.
+ * Concurrent interim frames that miss cache for the same chapter reuse the single request.
+ */
+const chapterFetches = new Map<string, Promise<HFBChapterVerse[] | null>>();
+
+/**
+ * Tier 2. Fetches an entire chapter from the API, seeds IndexedDB and RAM,
+ * and returns the normalized verses. Returns null on failure without throwing.
+ */
+export async function fetchChapterFromNetwork(
+  book: string,
+  chapter: number,
+  version: string,
+): Promise<HFBChapterVerse[] | null> {
+  const vKey = version.toLowerCase();
+  const cacheKey = `${vKey}|${book}|${chapter}`;
+  const inFlight = chapterFetches.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const request = (async (): Promise<HFBChapterVerse[] | null> => {
+    try {
+      const response = await apiClient.post('/bible/search', {
+        book,
+        chapter,
+        verseStart: 1,
+        verseEnd: chapterVerseCount(book, chapter),
+        version: vKey,
+      });
+
+      const data = response.data;
+      if (!data?.success || !data?.result?.verses?.length) {
+        console.warn(`[HFB] Network lookup returned no verses for ${book} ${chapter} (${vKey})`);
+        return null;
+      }
+
+      const verses: HFBChapterVerse[] = (data.result.verses as any[])
+        .map(item => ({
+          number: Number(item.number ?? item.verse ?? 0),
+          text: String(item[vKey] ?? item.text ?? '').trim(),
+        }))
+        .filter(item => item.number > 0 && item.text.length > 0)
+        .sort((left, right) => left.number - right.number);
+
+      if (!verses.length) return null;
+
+      // Seed both IndexedDB and RAM so subsequent lookups are instant (~0ms)
+      try {
+        await db.verses.bulkPut(verses.map(item => ({
+          version: vKey, book, chapter, verse: item.number, text: item.text,
+        })));
+      } catch (dbError) {
+        console.error('[HFB] Failed to seed IndexedDB', dbError);
+      }
+      useBibleRAMCache.getState().setChapterInRam(vKey, book, chapter, verses);
+
+      return verses;
+    } catch (error) {
+      console.warn(`[HFB] Network lookup failed for ${book} ${chapter} (${vKey})`, error);
+      return null;
+    } finally {
+      chapterFetches.delete(cacheKey);
+    }
+  })();
+
+  chapterFetches.set(cacheKey, request);
+  return request;
+}
+
+/**
+ * Full tiered resolver. RAM -> IndexedDB -> Network.
+ */
+export async function resolveHFBVerse(
+  book: string,
+  chapter: number,
+  verse: number,
+  version: string,
+): Promise<HFBResolvedVerse | null> {
+  const cached = await resolveCachedHFBVerse(book, chapter, verse, version);
+  if (cached) return cached;
+
+  const verses = await fetchChapterFromNetwork(book, chapter, version);
+  const match = verses?.find(item => item.number === verse);
+  if (!match) {
+    console.warn(`[HFB] Unresolvable reference: ${book} ${chapter}:${verse} (${version})`);
+    return null;
+  }
+  return { number: match.number, text: match.text, source: 'network' };
+}
+
 interface HFBStore {
   // Version config
   hfbVersion: string;
@@ -98,6 +222,8 @@ interface HFBStore {
   hfbBookName: string;
   hfbChapter: number;
   hfbChapterVerses: HFBChapterVerse[];
+  /** Lower-case version code the loaded hfbChapterVerses belong to (may lag hfbVersion mid-switch). */
+  hfbChapterVersion: string;
   hfbChapterLoading: boolean;
   hfbActiveVerseNum: number | null;
 
@@ -111,7 +237,27 @@ interface HFBStore {
   clearHfbTranscript: () => void;
   hfbCurrentPartial: string;
   hfbCurrentPartialReferences: Array<{ book: string; chapter: number; verse: number; formatted: string }>;
+  hfbLiveTokens: {
+    committedText: string;
+    candidate?: {
+      text: string;
+      type: 'reference' | 'navigation' | 'version';
+      status: 'evaluating' | 'executed';
+      label: string;
+    };
+    liveTailText: string;
+  };
   setHfbCurrentPartial: (text: string, references?: Array<{ book: string; chapter: number; verse: number; formatted: string }>) => void;
+  setHfbLiveTokens: (tokens: {
+    committedText: string;
+    candidate?: {
+      text: string;
+      type: 'reference' | 'navigation' | 'version';
+      status: 'evaluating' | 'executed';
+      label: string;
+    };
+    liveTailText: string;
+  }) => void;
 
   // Detected verses
   hfbDetectedVerses: HFBDetectedVerse[];
@@ -120,6 +266,14 @@ interface HFBStore {
 
   hfbCurrentProjected: HFBProjectedVerse | null;
   setHfbCurrentProjected: (projected: HFBProjectedVerse | null) => void;
+
+  // QUOTE MODE (trial)
+  hfbSubMode: HFBSubMode;
+  setHfbSubMode: (mode: HFBSubMode) => void;
+  hfbSuggestedVerse: HFBSuggestedVerse | null;
+  setHfbSuggestedVerse: (
+    suggestion: HFBSuggestedVerse | null | ((prev: HFBSuggestedVerse | null) => HFBSuggestedVerse | null),
+  ) => void;
   
   // Connection state
   hfbConnectionStatus: "idle" | "connecting" | "ready" | "reconnecting" | "disconnected";
@@ -179,13 +333,24 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
   hfbStrictMode: false,
   setHfbStrictMode: (strict) => set({ hfbStrictMode: strict }),
 
+  hfbSubMode: 'reference',
+  setHfbSubMode: (mode) => set({ hfbSubMode: mode, hfbSuggestedVerse: null }),
+  hfbSuggestedVerse: null,
+  setHfbSuggestedVerse: (suggestion) => set((state) => ({
+    hfbSuggestedVerse: typeof suggestion === 'function' ? suggestion(state.hfbSuggestedVerse) : suggestion,
+  })),
+
   hfbBookName: '',
   hfbChapter: 0,
   hfbChapterVerses: [],
+  hfbChapterVersion: '',
   hfbChapterLoading: false,
   hfbActiveVerseNum: null,
 
-  setHfbChapterView: (book, chapter, verses) => set({ hfbBookName: book, hfbChapter: chapter, hfbChapterVerses: verses, hfbChapterLoading: false }),
+  setHfbChapterView: (book, chapter, verses) => set((state) => ({
+    hfbBookName: book, hfbChapter: chapter, hfbChapterVerses: verses,
+    hfbChapterVersion: state.hfbVersion.toLowerCase(), hfbChapterLoading: false,
+  })),
   setHfbChapterLoading: (loading) => set({ hfbChapterLoading: loading }),
   setHfbActiveVerseNum: (num) => set({ hfbActiveVerseNum: num }),
 
@@ -199,13 +364,16 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     hfbTranscriptLines: [],
     hfbCurrentPartial: '',
     hfbCurrentPartialReferences: [],
+    hfbLiveTokens: { committedText: '', liveTailText: '' },
   }),
   hfbCurrentPartial: '',
   hfbCurrentPartialReferences: [],
+  hfbLiveTokens: { committedText: '', liveTailText: '' },
   setHfbCurrentPartial: (text, references) => set({
     hfbCurrentPartial: text,
     hfbCurrentPartialReferences: references || [],
   }),
+  setHfbLiveTokens: (tokens) => set({ hfbLiveTokens: tokens }),
 
   hfbDetectedVerses: [],
   setHfbDetectedVerses: (verses) => set((state) => ({
@@ -233,10 +401,13 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     // If the requested chapter is already loaded in Center Stage for this EXACT version, just update the active verse highlight
     const current = get();
     const vKey = version.toLowerCase();
+    // Compare against the version the loaded verses actually belong to —
+    // callers set hfbVersion before fetching, so hfbVersion alone would
+    // short-circuit a translation switch and leave the old text on stage.
     if (
       current.hfbBookName === book &&
       current.hfbChapter === chapter &&
-      current.hfbVersion?.toLowerCase() === vKey &&
+      current.hfbChapterVersion === vKey &&
       current.hfbChapterVerses.length > 0
     ) {
       if (highlightVerse !== undefined) {
@@ -250,6 +421,7 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       hfbBookName: book,
       hfbChapter: chapter,
       hfbVersion: version.toUpperCase(),
+      hfbChapterVersion: vKey,
       hfbChapterLoading: true,
       hfbActiveVerseNum: highlightVerse !== undefined ? highlightVerse : null,
       hfbChapterVerses: [],
@@ -314,44 +486,16 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
       }
 
       console.warn(`[Local DB] Verses not found for ${book} ${chapter} (${vKey}). Falling back to Cloud API...`);
-      
-      const resp = await apiClient.post('/bible/search', {
-        book, chapter, verseStart: 1, verseEnd: 150, version: vKey
-      });
+
+      const verses = await fetchChapterFromNetwork(book, chapter, version);
       if (fetchSeq !== latestChapterFetchSequence) return;
-      const data = resp.data;
-      if (data?.success && data?.result) {
-        const verses = (data.result.verses as any[]).map((v: any) => ({
-          number: Number(v.number ?? v.verse ?? 1),
-          text: String(v[vKey] || v.text || "").trim(),
-        }));
 
-        // --- LAZY SEEDING: Cache to IndexedDB for next time ---
-        try {
-          const dbVerses = verses.map((v: any) => ({
-             version: vKey,
-             book: book,
-             chapter: chapter,
-             verse: v.number,
-             text: v.text
-          }));
-          await db.verses.bulkPut(dbVerses);
-          console.log(`✅ [Lazy Seed] Cached ${book} ${chapter} (${vKey}) to IndexedDB`);
-        } catch (dbErr) {
-          console.error("[Lazy Seed] Failed to cache to IndexedDB:", dbErr);
-        }
-
-        // Also seed RAM cache so next access is instant
-        const ramVerses = verses.map((v: any) => ({ number: v.number, text: v.text }));
-        useBibleRAMCache.getState().setChapterInRam(vKey, book, chapter, ramVerses);
-
-        if (fetchSeq !== latestChapterFetchSequence) return;
+      if (verses && verses.length > 0) {
         set({ hfbChapterVerses: verses, hfbChapterLoading: false });
         if (highlightVerse !== undefined) {
            set({ hfbActiveVerseNum: highlightVerse });
         }
       } else {
-        if (fetchSeq !== latestChapterFetchSequence) return;
         set({ hfbChapterLoading: false });
       }
     } catch (err) {
@@ -365,11 +509,15 @@ export const useHFBStore = create<HFBStore>((set, get) => ({
     hfbBookName: '',
     hfbChapter: 0,
     hfbChapterVerses: [],
+    hfbChapterVersion: '',
     hfbActiveVerseNum: null,
     hfbTranscriptLines: [],
     hfbCurrentPartial: '',
+    hfbCurrentPartialReferences: [],
+    hfbLiveTokens: { committedText: '', liveTailText: '' },
     hfbDetectedVerses: [],
     hfbCurrentProjected: null,
+    hfbSuggestedVerse: null,
     hfbLastLatencyMs: null,
     hfbLastLatencySource: null,
   })

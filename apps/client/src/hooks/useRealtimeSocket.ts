@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 interface RealtimeSocketProps {
+  onSocketOpen?: () => void;
   onBibleMatch: (result: any) => void;
   onPartialTranscript?: (text: string, metadata?: {
     confidence?: number;
@@ -27,6 +28,23 @@ interface RealtimeSocketProps {
   }) => void;
   onError?: (message: string) => void;
   onAudioStatus?: (status: "receiving") => void;
+  /** QUOTE MODE (trial) */
+  onVerseSuggestion?: (data: {
+    seq: number;
+    matchedVersion: string;
+    candidate: {
+      book: string;
+      chapter: number;
+      verse: number;
+      verseEnd?: number;
+      consecutiveWords: number;
+      score: number;
+      startsAtVerseStart: boolean;
+      text: string;
+      matchedText: string;
+    };
+    serverDetectedAt?: number;
+  }) => void;
   onNavigation?: (
     commandType: string,
     direction: "next" | "previous" | undefined,
@@ -46,9 +64,11 @@ export const useRealtimeSocket = ({
   onVersionChange,
   onConnectionStatus,
   onReferenceStage,
+  onSocketOpen,
   onError,
   onAudioStatus,
   onNavigation,
+  onVerseSuggestion,
 }: RealtimeSocketProps) => {
   const socketRef = useRef<WebSocket | null>(null);
   const pendingAudioRef = useRef<Int16Array[]>([]);
@@ -58,6 +78,7 @@ export const useRealtimeSocket = ({
 
   // Store callbacks in refs to avoid causing re-renders/re-creation of connect()
   const callbacks = useRef<RealtimeSocketProps>({
+    onSocketOpen,
     onBibleMatch,
     onPartialTranscript,
     onFinalTranscript,
@@ -69,11 +90,13 @@ export const useRealtimeSocket = ({
     onError,
     onAudioStatus,
     onNavigation,
+    onVerseSuggestion,
   });
 
   // Update refs on every render
   useEffect(() => {
     callbacks.current = {
+      onSocketOpen,
       onBibleMatch,
       onPartialTranscript,
       onFinalTranscript,
@@ -85,6 +108,7 @@ export const useRealtimeSocket = ({
       onError,
       onAudioStatus,
       onNavigation,
+      onVerseSuggestion,
     };
   });
 
@@ -109,6 +133,7 @@ export const useRealtimeSocket = ({
         queuedChunks: pendingAudioRef.current.length,
       });
       setIsConnected(true);
+      callbacks.current.onSocketOpen?.();
       for (const message of pendingControlRef.current) ws.send(message);
       pendingControlRef.current = [];
       for (const chunk of pendingAudioRef.current) ws.send(chunk);
@@ -172,6 +197,9 @@ export const useRealtimeSocket = ({
             break;
           case "reference_stage":
             cb.onReferenceStage?.(data);
+            break;
+          case "verse_suggestion":
+            cb.onVerseSuggestion?.(data);
             break;
           case "error":
             console.error("[RealtimeSocket] Server error:", data.message);
@@ -271,6 +299,16 @@ export const useRealtimeSocket = ({
     }
   }, []);
 
+  /** QUOTE MODE (trial): tell the server whether to run the KJV quote matcher. */
+  const setHfbSubMode = useCallback((mode: "reference" | "quote") => {
+    const message = JSON.stringify({ type: "set_hfb_sub_mode", mode });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(message);
+    } else {
+      pendingControlRef.current.push(message);
+    }
+  }, []);
+
   const beginSessionTrace = useCallback((clientClickAt: number) => {
     const message = JSON.stringify({
       type: "hfb_trace_start",
@@ -293,5 +331,6 @@ export const useRealtimeSocket = ({
     setBibleVersion,
     setBibleContext,
     beginSessionTrace,
+    setHfbSubMode,
   };
 };

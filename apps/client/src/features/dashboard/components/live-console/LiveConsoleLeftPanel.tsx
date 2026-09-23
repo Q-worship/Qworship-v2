@@ -1,12 +1,13 @@
-import { BookOpen, Music, X, Mic, MicOff } from "lucide-react";
+import { BookOpen, Music, X, Mic, MicOff, Quote } from "lucide-react";
 import qworshipLogo from "@assets/Group 1_1753843572404.png";
 import { useLiveConsoleStore } from "../../hooks/useLiveConsoleStore";
 import { InlineBibleBrowser } from "../InlineBibleBrowser";
 import { InlineSongBrowser } from "../InlineSongBrowser";
-import { useHandsfreeBible } from "../../hooks/useHandsfreeBible";
-import { MutableRefObject, useRef, useEffect } from "react";
+import { useHandsfreeBibleContext } from "../../providers/HandsfreeBibleProvider";
+import { useRef, useEffect } from "react";
 import { useHFBStore } from "../../hooks/useHFBStore";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
+import { HFBQuoteSuggestionPill } from "./HFBQuoteSuggestionPill"; // QUOTE MODE (trial)
 
 interface LeftPanelProps {
   bibleProps: any;
@@ -16,14 +17,9 @@ interface LeftPanelProps {
 
 export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: LeftPanelProps) {
   const store = useLiveConsoleStore();
-  const dummyRef = useRef<HTMLElement | null>(null);
   
-  // Initialize HFB hook for the left panel 
-  const hfb = useHandsfreeBible({
-    liveWindow,
-    handsfreeBibleButtonRef: dummyRef,
-    isPanelActive: store.leftPanelTab === 'hfb',
-  });
+  // Consume singleton HFB instance from provider (prevents duplicate WebSockets and audio streams)
+  const hfb = useHandsfreeBibleContext();
 
   const hfbStore = useHFBStore();
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -199,6 +195,34 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
               <Music className="w-2.5 h-2.5" />
               Song
             </button>
+
+            {/* QUOTE MODE (trial): HFB sub-mode toggle */}
+            <div
+              className="ml-auto flex items-center rounded border border-gray-800 bg-[#0d0d1a] p-0.5"
+              title="Reference: project spoken references. Quote: suggest verses the speaker is quoting for you to confirm."
+            >
+              <button
+                onClick={() => hfbStore.setHfbSubMode('reference')}
+                className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
+                  hfbStore.hfbSubMode === 'reference'
+                    ? 'bg-purple-900/50 text-purple-200'
+                    : 'text-gray-600 hover:text-gray-400'
+                }`}
+              >
+                Ref
+              </button>
+              <button
+                onClick={() => hfbStore.setHfbSubMode('quote')}
+                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
+                  hfbStore.hfbSubMode === 'quote'
+                    ? 'bg-[#0DCC85]/20 text-[#0DCC85]'
+                    : 'text-gray-600 hover:text-gray-400'
+                }`}
+              >
+                <Quote className="w-2 h-2" />
+                Quote
+              </button>
+            </div>
           </div>
 
           {/* LIVE TRANSCRIPT */}
@@ -241,12 +265,52 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 })
               )}
               {hfbStore.hfbCurrentPartial && (
-                <div className="flex flex-col gap-1 pl-1.5 border-l-2 border-cyan-500/30 -ml-0.5">
-                  <div className="flex gap-1.5 items-start">
-                    <span className="text-[8px] text-gray-700 shrink-0 mt-0.5 whitespace-nowrap">NOW</span>
-                    <span className="text-[10px] leading-snug text-cyan-200 italic">
-                      {hfbStore.hfbCurrentPartial}
-                    </span>
+                <div className="flex flex-col gap-1.5 pl-2 border-l-2 border-cyan-500/50 -ml-0.5 bg-cyan-950/10 py-1 rounded-r">
+                  <div className="flex gap-1.5 items-start flex-wrap">
+                    <span className="text-[8px] font-bold text-cyan-500 shrink-0 mt-0.5 whitespace-nowrap tracking-wider">LIVE</span>
+                    <div className="text-[10px] leading-snug flex flex-wrap items-center gap-1">
+                      {hfbStore.hfbLiveTokens?.committedText && (
+                        <span className="text-gray-500 font-normal">
+                          {hfbStore.hfbLiveTokens.committedText}
+                        </span>
+                      )}
+                      {hfbStore.hfbLiveTokens?.candidate && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border shadow-sm ${
+                            hfbStore.hfbLiveTokens.candidate.status === "executed"
+                              ? hfbStore.hfbLiveTokens.candidate.type === "reference"
+                                ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/60 shadow-emerald-900/30"
+                                : hfbStore.hfbLiveTokens.candidate.type === "navigation"
+                                  ? "bg-cyan-950/80 text-cyan-300 border-cyan-500/60 shadow-cyan-900/30"
+                                  : "bg-purple-950/80 text-purple-300 border-purple-500/60 shadow-purple-900/30"
+                              : "bg-amber-950/80 text-amber-300 border-amber-500/60 animate-pulse shadow-amber-900/30"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              hfbStore.hfbLiveTokens.candidate.status === "executed"
+                                ? hfbStore.hfbLiveTokens.candidate.type === "reference"
+                                  ? "bg-emerald-400"
+                                  : hfbStore.hfbLiveTokens.candidate.type === "navigation"
+                                    ? "bg-cyan-400"
+                                    : "bg-purple-400"
+                                : "bg-amber-400"
+                            }`}
+                          />
+                          {hfbStore.hfbLiveTokens.candidate.type === "reference"
+                            ? "📖 "
+                            : hfbStore.hfbLiveTokens.candidate.type === "navigation"
+                              ? "⚡ "
+                              : "🌐 "}
+                          {hfbStore.hfbLiveTokens.candidate.label}
+                        </span>
+                      )}
+                      <span className="text-cyan-200 italic font-medium">
+                        {hfbStore.hfbLiveTokens?.liveTailText !== undefined
+                          ? hfbStore.hfbLiveTokens.liveTailText
+                          : hfbStore.hfbCurrentPartial}
+                      </span>
+                    </div>
                   </div>
                   {hfbStore.hfbCurrentPartialReferences && hfbStore.hfbCurrentPartialReferences.length > 0 && (
                     <div className="flex flex-wrap gap-1 ml-5">
@@ -279,6 +343,15 @@ export function LiveConsoleLeftPanel({ bibleProps, songProps, liveWindow }: Left
                 </button>
               )}
             </div>
+            {/* QUOTE MODE (trial): single suggestion pill, operator confirms */}
+            {hfbStore.hfbSubMode === 'quote' && (
+              <div className="px-2 pt-1.5 shrink-0">
+                <HFBQuoteSuggestionPill
+                  onConfirm={() => { void hfb.confirmQuoteSuggestion(); }}
+                  onDismiss={hfb.dismissQuoteSuggestion}
+                />
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto bible-nav-scroll px-2 py-1.5 space-y-1">
               {hfbStore.hfbDetectedVerses.length === 0 ? (
                 <p className="text-[10px] text-gray-700 italic px-1">No verses detected yet</p>

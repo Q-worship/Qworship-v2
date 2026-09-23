@@ -35,19 +35,36 @@ const voiceAliases = BIBLE_TRANSLATIONS
   .flatMap(translation => translation.voiceAliases.map(alias => ({ alias, code: translation.code })))
   .sort((left, right) => right.alias.length - left.alias.length);
 
-/** Recognize explicit translation commands without waiting for a final transcript. */
+const AMBIGUOUS_ALIASES = new Set(["message", "the message", "web", "good news", "gn"]);
+
+/** Recognize explicit translation commands without accidental false positives. */
 export const parseBibleVersionCommand = (value: string): BibleVersionCode | null => {
   const normalized = value.toLowerCase().replace(/[.,!?;:]+/g, " ").replace(/\s+/g, " ").trim();
   if (!normalized) return null;
-  const hasCommandCue = /\b(?:show|switch|change|use|read|display|give|see|version|translation|bible)\b/i.test(normalized);
+
+  const hasExplicitVersionCue = /\b(?:switch(?:\s+to)?|change(?:\s+to)?|use|read\s+in|in\s+the|translation|version)\b/i.test(normalized);
 
   let latestMatch: { code: BibleVersionCode; index: number } | null = null;
   for (const { alias, code } of voiceAliases) {
     const aliasPattern = new RegExp(`(?:^|\\b)${escapeRegex(alias)}(?:$|\\b)`, "i");
     const match = aliasPattern.exec(normalized);
-    if (match && (hasCommandCue || normalized === alias)) {
-      const aliasIndex = match.index + match[0].toLowerCase().lastIndexOf(alias.toLowerCase());
-      if (!latestMatch || aliasIndex > latestMatch.index) latestMatch = { code, index: aliasIndex };
+    if (!match) continue;
+
+    if (AMBIGUOUS_ALIASES.has(alias)) {
+      const hasStrictBibleContext = new RegExp(
+        `\\b(?:switch\\s+to|change\\s+to|read\\s+in|in\\s+the|version|translation|bible)\\s+${escapeRegex(alias)}|${escapeRegex(alias)}\\s+(?:version|translation|bible)\\b`,
+        "i",
+      ).test(normalized);
+      if (!hasStrictBibleContext && normalized !== alias) continue;
+    } else {
+      const isExact = normalized === alias;
+      const hasCue = hasExplicitVersionCue || /\b(?:version|translation|bible)\b/i.test(alias);
+      if (!isExact && !hasCue) continue;
+    }
+
+    const aliasIndex = match.index + match[0].toLowerCase().lastIndexOf(alias.toLowerCase());
+    if (!latestMatch || aliasIndex > latestMatch.index) {
+      latestMatch = { code, index: aliasIndex };
     }
   }
   return latestMatch?.code || null;

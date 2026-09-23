@@ -4,6 +4,7 @@ import { DeepgramTranscriptionService } from "./deepgram.service.js";
 import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
 import { isBibleVersionCode } from "./bible-translations.js";
+import { kjvQuoteIndex, normalizeQuoteText } from "./handsfreeBible/kjvQuoteIndex.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -159,6 +160,47 @@ export function setupAudioSocket(server: Server) {
     let commandQueue: Promise<void> = Promise.resolve();
     const executedOccurrences = new Map<string, number>();
     const interimOccurrences = new Map<string, { count: number; lastSeenAt: number }>();
+
+    // ── QUOTE MODE (trial) ────────────────────────────────────────────────
+    // When the client toggles the HFB sub-mode to "quote", every partial is
+    // also run through the KJV shingle index and the best candidate is sent
+    // as a `verse_suggestion`. The client decides what to show; the server
+    // never projects from this path. Remove this block + the two call sites
+    // below to drop the feature.
+    let quoteModeEnabled = false;
+    let quoteSequence = 0;
+    let quoteLastRunAt = 0;
+    /** Words from finalised utterances so a quote split across a pause still resolves. */
+    let quoteRecentWords: string[] = [];
+    const QUOTE_WINDOW_WORDS = 20;
+    const QUOTE_HISTORY_WORDS = 40;
+    const QUOTE_THROTTLE_MS = 200;
+
+    const runQuoteMatch = (partialText: string, force = false) => {
+      if (!quoteModeEnabled || !kjvQuoteIndex.isReady) return;
+      const now = Date.now();
+      if (!force && now - quoteLastRunAt < QUOTE_THROTTLE_MS) return;
+      quoteLastRunAt = now;
+
+      const partialWords = normalizeQuoteText(partialText);
+      const words = [...quoteRecentWords, ...partialWords].slice(-QUOTE_WINDOW_WORDS);
+      const candidate = kjvQuoteIndex.match(words);
+      if (!candidate) return;
+
+      quoteSequence += 1;
+      ws.send(JSON.stringify({
+        type: "verse_suggestion",
+        seq: quoteSequence,
+        matchedVersion: "kjv",
+        candidate,
+        serverDetectedAt: now,
+      }));
+    };
+
+    const commitQuoteWords = (finalText: string) => {
+      if (!quoteModeEnabled) return;
+      quoteRecentWords = [...quoteRecentWords, ...normalizeQuoteText(finalText)].slice(-QUOTE_HISTORY_WORDS);
+    };
 
     // Occurrence tracking handles partial/final replay for the whole utterance.
     // These short guards only collapse duplicate transport events; navigation
@@ -559,58 +601,64 @@ export function setupAudioSocket(server: Server) {
         serverReceivedAt: Date.now(),
       }));
 
-      const versionCommand = FastBibleParser.parse(text);
-      if (versionCommand?.name === "switch_bible_version") {
-        const occurrenceKey = `${utteranceSequence}:${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
-        if (!executedOccurrences.has(occurrenceKey) && confidence >= 0.5) {
-          executedOccurrences.set(occurrenceKey, Date.now());
-          await enqueueCommand(versionCommand, "Partial");
+      runQuoteMatch(text); // QUOTE MODE (trial)
+
+      const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
+
+      if (ENABLE_SERVER_COMMANDS) {
+        const versionCommand = FastBibleParser.parse(text);
+        if (versionCommand?.name === "switch_bible_version") {
+          const occurrenceKey = `${utteranceSequence}:${versionCommand.name}:${JSON.stringify(versionCommand.arguments)}#1`;
+          if (!executedOccurrences.has(occurrenceKey) && confidence >= 0.5) {
+            executedOccurrences.set(occurrenceKey, Date.now());
+            await enqueueCommand(versionCommand, "Partial");
+          }
         }
-      }
 
-      if (await executeTranscriptCommands(text, "Partial", confidence, false)) {
-        resetPartialState();
-        return;
-      }
-
-      // ── Step 2: Progressive accumulation ──────────────────────────────
-      const stage = FastBibleParser.parseStage(text);
-
-      if (!stage) {
-        // No book detected yet — if we had a state older than 5s, reset it
-        if (partialState.book && Date.now() - partialState.bookDetectedAt > 5000) {
+        if (await executeTranscriptCommands(text, "Partial", confidence, false)) {
           resetPartialState();
-        }
-        return;
-      }
-
-      if (stage.type === "book_only") {
-        // New book detected — start or update accumulator
-        if (partialState.book !== stage.book) {
-          console.log(`[AudioSocket] Predictive: book detected → "${stage.book}"`);
-          partialState.book = stage.book;
-          partialState.chapter = null;
-          partialState.verse = null;
-          partialState.bookDetectedAt = Date.now();
-          // Notify UI that a book has been detected (for visual feedback)
-          ws.send(JSON.stringify({ type: "book_detected", book: stage.book }));
+          return;
         }
 
-      } else if (stage.type === "book_chapter" && stage.book && stage.chapter) {
-        // Book + chapter detected — update accumulator
-        if (partialState.book !== stage.book || partialState.chapter !== stage.chapter) {
-          console.log(`[AudioSocket] Predictive: book+chapter → "${stage.book} ${stage.chapter}"`);
-          partialState.book = stage.book;
-          partialState.chapter = stage.chapter;
-          partialState.verse = null;
-          if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
-          ws.send(JSON.stringify({
-            type: "reference_stage",
-            stage: "book_chapter",
-            book: stage.book,
-            chapter: stage.chapter,
-            serverDetectedAt: Date.now(),
-          }));
+        // ── Step 2: Progressive accumulation ──────────────────────────────
+        const stage = FastBibleParser.parseStage(text);
+
+        if (!stage) {
+          // No book detected yet — if we had a state older than 5s, reset it
+          if (partialState.book && Date.now() - partialState.bookDetectedAt > 5000) {
+            resetPartialState();
+          }
+          return;
+        }
+
+        if (stage.type === "book_only") {
+          // New book detected — start or update accumulator
+          if (partialState.book !== stage.book) {
+            console.log(`[AudioSocket] Predictive: book detected → "${stage.book}"`);
+            partialState.book = stage.book;
+            partialState.chapter = null;
+            partialState.verse = null;
+            partialState.bookDetectedAt = Date.now();
+            // Notify UI that a book has been detected (for visual feedback)
+            ws.send(JSON.stringify({ type: "book_detected", book: stage.book }));
+          }
+
+        } else if (stage.type === "book_chapter" && stage.book && stage.chapter) {
+          // Book + chapter detected — update accumulator
+          if (partialState.book !== stage.book || partialState.chapter !== stage.chapter) {
+            console.log(`[AudioSocket] Predictive: book+chapter → "${stage.book} ${stage.chapter}"`);
+            partialState.book = stage.book;
+            partialState.chapter = stage.chapter;
+            partialState.verse = null;
+            if (!partialState.bookDetectedAt) partialState.bookDetectedAt = Date.now();
+            ws.send(JSON.stringify({
+              type: "reference_stage",
+              stage: "book_chapter",
+              book: stage.book,
+              chapter: stage.chapter,
+              serverDetectedAt: Date.now(),
+            }));
+          }
         }
       }
     };
@@ -650,9 +698,12 @@ export function setupAudioSocket(server: Server) {
 
       console.log(`[AudioSocket] ${label} — flushing: "${textToFlush}"`);
 
-      if (!await executeTranscriptCommands(textToFlush, label, 1, true, turnSequence)) {
-        const cmd = FastBibleParser.parse(textToFlush);
-        if (cmd && cmd.name === "switch_bible_version") await enqueueCommand(cmd, label);
+      const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
+      if (ENABLE_SERVER_COMMANDS) {
+        if (!await executeTranscriptCommands(textToFlush, label, 1, true, turnSequence)) {
+          const cmd = FastBibleParser.parse(textToFlush);
+          if (cmd && cmd.name === "switch_bible_version") await enqueueCommand(cmd, label);
+        }
       }
 
       resetPartialState();
@@ -679,18 +730,25 @@ export function setupAudioSocket(server: Server) {
 
       ws.send(JSON.stringify({ type: "transcript_final", text: displayText }));
 
-      const deterministicCommand = FastBibleParser.parse(textToParse);
+      // QUOTE MODE (trial): run once more on the final wording, then bank it.
+      runQuoteMatch(textToParse, true);
+      commitQuoteWords(textToParse);
 
-      if (confidence != null && confidence < 0.5) {
-        if (!isDeterministicNavigation(deterministicCommand) || confidence < 0.35) {
-          console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
-          return;
+      const ENABLE_SERVER_COMMANDS = process.env.ENABLE_SERVER_BIBLE_COMMANDS === "true";
+      if (ENABLE_SERVER_COMMANDS) {
+        const deterministicCommand = FastBibleParser.parse(textToParse);
+
+        if (confidence != null && confidence < 0.5) {
+          if (!isDeterministicNavigation(deterministicCommand) || confidence < 0.35) {
+            console.log(`[AudioSocket] Final below threshold (${confidence?.toFixed(2)}) — skipping`);
+            return;
+          }
         }
-      }
 
-      if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true, turnSequence)) {
-        if (deterministicCommand?.name === "switch_bible_version") {
-          await enqueueCommand(deterministicCommand, "Final");
+        if (!await executeTranscriptCommands(textToParse, "Final", confidence ?? 1, true, turnSequence)) {
+          if (deterministicCommand?.name === "switch_bible_version") {
+            await enqueueCommand(deterministicCommand, "Final");
+          }
         }
       }
     });
@@ -722,6 +780,18 @@ export function setupAudioSocket(server: Server) {
             if (isBibleVersionCode(requestedVersion)) {
               activeVersion = requestedVersion;
               console.log(`[AudioSocket] Active Bible version: ${activeVersion.toUpperCase()}`);
+            }
+          }
+
+          // QUOTE MODE (trial)
+          if (msg.type === "set_hfb_sub_mode") {
+            quoteModeEnabled = msg.mode === "quote";
+            quoteRecentWords = [];
+            console.log(`[AudioSocket] HFB sub-mode: ${quoteModeEnabled ? "quote" : "reference"}`);
+            if (quoteModeEnabled) {
+              kjvQuoteIndex.ensureBuilt().catch((err) =>
+                console.error("[AudioSocket] Failed to build KJV quote index", err),
+              );
             }
           }
 

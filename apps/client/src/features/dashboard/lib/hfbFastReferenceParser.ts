@@ -7,11 +7,33 @@ export interface HFBParsedReference {
   verseEnd?: number;
   confidence: number;
   explicit: true;
+  start: number;
+  end: number;
+  rawText: string;
 }
 
 export interface HFBContextNavigation {
   chapter: number;
   verse: number;
+  start: number;
+  end: number;
+  rawText: string;
+}
+
+/**
+ * A bare "verse N" command. If the speaker had already said "chapter N" (or
+ * "Book chapter N") earlier in the same unconsumed segment without a verse,
+ * that pending context is attached so the caller can complete the reference
+ * instead of jumping within the current chapter.
+ */
+export interface HFBVerseNavigation {
+  verse: number;
+  verseEnd?: number;
+  start: number;
+  end: number;
+  rawText: string;
+  pendingBook?: string;
+  pendingChapter?: number;
 }
 
 const aliases = new Map<string, string>();
@@ -63,6 +85,25 @@ const parseNumber = (value: string): number => {
     const uMap: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
     return `10${uMap[unit] || unit}`;
   });
+
+  // Handle spoken 3-digit compounds like "one fifteen" -> 115, "one nineteen" -> 119
+  cleanValue = cleanValue.replace(/\b(?:one|1)\s+(ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)\b/gi, (_, teen) => {
+    const teenMap: Record<string, number> = {
+      ten: 110, eleven: 111, twelve: 112, thirteen: 113, fourteen: 114,
+      fifteen: 115, sixteen: 116, seventeen: 117, eighteen: 118, nineteen: 119
+    };
+    return String(teenMap[teen.toLowerCase()] || teen);
+  });
+
+  // Handle spoken 3-digit compounds like "one twenty" -> 120, "one twenty three" -> 123
+  cleanValue = cleanValue.replace(/\b(?:one|1)\s+(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:\s+(one|two|three|four|five|six|seven|eight|nine))?\b/gi, (_, tenWord, unitWord) => {
+    const tMap: Record<string, number> = { twenty: 120, thirty: 130, forty: 140, fifty: 150, sixty: 160, seventy: 170, eighty: 180, ninety: 190 };
+    const uMap: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+    const base = tMap[tenWord.toLowerCase()] || 100;
+    const extra = unitWord ? (uMap[unitWord.toLowerCase()] || 0) : 0;
+    return String(base + extra);
+  });
+
   if (/^\d+$/.test(cleanValue)) return Number(cleanValue);
   if (/^(\d\s+){1,4}\d$/.test(cleanValue)) return Number(cleanValue.replace(/\s+/g, ""));
 
@@ -101,22 +142,26 @@ const contextualChapterVersePattern = new RegExp(
  */
 export function scanHFBContextNavigations(
   text: string,
-): Array<HFBContextNavigation & { index: number; text: string }> {
+  fromIndex = 0,
+): HFBContextNavigation[] {
   const clean = text
     .toLowerCase()
     .replace(/[!?;,.:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const results: Array<HFBContextNavigation & { index: number; text: string }> = [];
+  const results: HFBContextNavigation[] = [];
   const matcher = new RegExp(contextualChapterVersePattern.source, "gi");
   let match: RegExpExecArray | null;
 
   while ((match = matcher.exec(clean)) !== null) {
+    if (match.index < fromIndex) continue;
+
     const prefix = clean.slice(0, match.index).trim();
     let hasPrecedingBook = false;
     if (prefix.length > 0) {
+      const tail = prefix.slice(-30).trim();
       for (const [alias] of aliases) {
-        if (new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i").test(prefix)) {
+        if (new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s+chapter)?\\s*$`, "i").test(tail)) {
           hasPrecedingBook = true;
           break;
         }
@@ -130,8 +175,104 @@ export function scanHFBContextNavigations(
       Number.isInteger(chapter) && chapter >= 1 && chapter <= 150 &&
       Number.isInteger(verse) && verse >= 1 && verse <= 176
     ) {
-      results.push({ chapter, verse, index: match.index, text: match[0] });
+      results.push({
+        chapter,
+        verse,
+        start: match.index,
+        end: match.index + match[0].length,
+        rawText: match[0],
+      });
     }
+  }
+
+  return results;
+}
+
+const verseOnlyPattern = new RegExp(
+  `\\b(?:(?:go|jump|move|skip)\\s+to\\s+|take\\s+me\\s+to\\s+|show\\s+me\\s+|read\\s+)?verse\\s+(${numberWords})(?:\\s+(?:to|through)\\s+(${numberWords}))?\\b`,
+  "i",
+);
+const pendingChapterPattern = new RegExp(
+  `\\b(?:(${bookAlternation})\\s+)?chapter\\s+(${numberWords})\\b`,
+  "i",
+);
+
+/** Spans of every full reference / chapter+verse command in the cleaned text. */
+function collectReferenceSpans(clean: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  for (const pattern of patterns) {
+    const matcher = new RegExp(pattern.source, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = matcher.exec(clean)) !== null) {
+      spans.push([match.index, match.index + match[0].length]);
+    }
+  }
+  const ctx = new RegExp(contextualChapterVersePattern.source, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = ctx.exec(clean)) !== null) {
+    spans.push([match.index, match.index + match[0].length]);
+  }
+  return spans;
+}
+
+/**
+ * Scan bare "verse N" commands (no book, no chapter) in a transcript.
+ * Occurrences that are part of a fuller reference are skipped — those belong
+ * to parseHFBReference / scanHFBContextNavigations.
+ */
+export function scanHFBVerseNavigations(
+  text: string,
+  fromIndex = 0,
+): HFBVerseNavigation[] {
+  const clean = text
+    .toLowerCase()
+    .replace(/[!?;,.:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const spans = collectReferenceSpans(clean);
+  const overlaps = (start: number, end: number) =>
+    spans.some(([s, e]) => start < e && end > s);
+
+  const results: HFBVerseNavigation[] = [];
+  const matcher = new RegExp(verseOnlyPattern.source, "gi");
+  let match: RegExpExecArray | null;
+
+  while ((match = matcher.exec(clean)) !== null) {
+    if (match.index < fromIndex) continue;
+    const end = match.index + match[0].length;
+    if (overlaps(match.index, end)) continue;
+
+    const verse = parseNumber(match[1]);
+    const verseEnd = match[2] ? parseNumber(match[2]) : undefined;
+    if (!Number.isInteger(verse) || verse < 1 || verse > 176) continue;
+    if (verseEnd !== undefined && (!Number.isInteger(verseEnd) || verseEnd < verse)) continue;
+
+    // Look back over the unconsumed segment for a "chapter N" (optionally
+    // with a book) that never got its verse — the speaker paused mid-reference.
+    let pendingBook: string | undefined;
+    let pendingChapter: number | undefined;
+    const lookback = clean.slice(fromIndex, match.index);
+    const pendingMatcher = new RegExp(pendingChapterPattern.source, "gi");
+    let pending: RegExpExecArray | null;
+    while ((pending = pendingMatcher.exec(lookback)) !== null) {
+      const pStart = fromIndex + pending.index;
+      const pEnd = pStart + pending[0].length;
+      if (overlaps(pStart, pEnd)) continue;
+      const chapter = parseNumber(pending[2]);
+      if (!Number.isInteger(chapter) || chapter < 1 || chapter > 150) continue;
+      pendingBook = pending[1] ? aliases.get(pending[1].toLowerCase()) : undefined;
+      pendingChapter = chapter;
+    }
+
+    results.push({
+      verse,
+      verseEnd,
+      start: match.index,
+      end,
+      rawText: match[0],
+      pendingBook,
+      pendingChapter,
+    });
   }
 
   return results;
@@ -139,18 +280,20 @@ export function scanHFBContextNavigations(
 
 export function parseHFBContextNavigation(
   text: string,
+  fromIndex = 0,
 ): HFBContextNavigation | null {
-  const all = scanHFBContextNavigations(text);
+  const all = scanHFBContextNavigations(text, fromIndex);
   return all.length > 0 ? all[all.length - 1] : null;
 }
 
-export function parseHFBReference(text: string): HFBParsedReference | null {
+export function parseHFBReference(text: string, fromIndex = 0): HFBParsedReference | null {
   const clean = text.toLowerCase().replace(/[!?;,]+/g, " ").replace(/\s+/g, " ").trim();
-  let latest: (HFBParsedReference & { start: number; patternIndex: number }) | null = null;
+  let latest: (HFBParsedReference & { patternIndex: number }) | null = null;
   for (let index = 0; index < patterns.length; index++) {
     const matcher = new RegExp(patterns[index].source, "gi");
     let match: RegExpExecArray | null;
     while ((match = matcher.exec(clean)) !== null) {
+      if (match.index < fromIndex) continue;
       const book = aliases.get(match[1].toLowerCase());
       const chapter = parseNumber(match[2]);
       const verse = parseNumber(match[3]);
@@ -160,11 +303,13 @@ export function parseHFBReference(text: string): HFBParsedReference | null {
           (verseEnd !== undefined && (!Number.isInteger(verseEnd) || verseEnd < verse))) continue;
       const bookData = BIBLE_BOOKS_LCC.find(item => item.name === book);
       if (!bookData || chapter > bookData.chapters) continue;
-      const candidate = {
+      const candidate: HFBParsedReference & { patternIndex: number } = {
         book, chapter, verse, verseEnd,
         confidence: index === 3 ? 0.99 : index === 0 ? 0.96 : index === 2 ? 0.94 : 0.9,
         explicit: true as const,
         start: match.index,
+        end: match.index + match[0].length,
+        rawText: match[0],
         patternIndex: index,
       };
       if (!latest || candidate.start > latest.start ||
@@ -174,6 +319,6 @@ export function parseHFBReference(text: string): HFBParsedReference | null {
     }
   }
   if (!latest) return null;
-  const { start: _start, patternIndex: _patternIndex, ...reference } = latest;
+  const { patternIndex: _patternIndex, ...reference } = latest;
   return reference;
 }

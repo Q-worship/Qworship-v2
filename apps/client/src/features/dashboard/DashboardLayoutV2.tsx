@@ -70,7 +70,10 @@ import { useAudioDevices } from "@/hooks/use-audio-devices";
 import { useRecordingManager } from "@/features/dashboard/hooks/useRecordingManager";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useLivePresentation } from "@/features/dashboard/hooks/useLivePresentation";
-import { useExternalDisplayDetection, useExternalDisplayAutoAttach } from "@/features/dashboard/hooks/useExternalDisplayDetection";
+import {
+  useExternalDisplayDetection,
+  useExternalDisplayAutoAttach,
+} from "@/features/dashboard/hooks/useExternalDisplayDetection";
 import { ExternalDisplayPrompt } from "@/features/dashboard/components/ExternalDisplayPrompt";
 import { useProjectManager } from "@/features/dashboard/hooks/useProjectManager";
 import { useProjectMutations } from "@/features/dashboard/hooks/useProjectMutations";
@@ -100,6 +103,7 @@ import {
   useDashboardPresentation,
   DashboardPresentationProvider,
 } from "@/features/dashboard/providers/DashboardPresentationProvider";
+import { HandsfreeBibleProvider } from "@/features/dashboard/providers/HandsfreeBibleProvider";
 import { DashboardMainWorkspace } from "@/features/dashboard/components/DashboardMainWorkspace";
 
 // CloudMediaTab, MyMediaTab, and MediaBrowserContent are imported from ../components/
@@ -210,17 +214,31 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           ltProjectScripture(verseText, ref, ver, currentUserId);
         }
         if (mpEnabled) {
-          mpProjectScripture(verseText, ref, ver, currentUserId != null ? String(currentUserId) : null);
+          mpProjectScripture(
+            verseText,
+            ref,
+            ver,
+            currentUserId != null ? String(currentUserId) : null,
+          );
         }
       } else if (!nowProjecting && prevProjecting) {
         if (ltEnabled) ltClear(currentUserId);
-        if (mpEnabled) mpClear(currentUserId != null ? String(currentUserId) : null);
+        if (mpEnabled)
+          mpClear(currentUserId != null ? String(currentUserId) : null);
       }
 
       prevProjecting = nowProjecting;
     });
     return unsubscribe;
-  }, [ltEnabled, ltProjectScripture, ltClear, mpEnabled, mpProjectScripture, mpClear, currentUserId]);
+  }, [
+    ltEnabled,
+    ltProjectScripture,
+    ltClear,
+    mpEnabled,
+    mpProjectScripture,
+    mpClear,
+    currentUserId,
+  ]);
   const [, setLocation] = useLocation();
   const {
     activeTab,
@@ -700,21 +718,42 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   const getItemBackground = (itemId: string) => {
     // If it is a media item, its content is effectively the background for the live window!
     const item = serviceItems.find((i) => i.id === itemId);
-    if (item && item.type === "media" && (item.subtype === "image" || item.subtype === "video" || item.subtype === "slideshow")) {
+    if (
+      item &&
+      item.type === "media" &&
+      (item.subtype === "image" ||
+        item.subtype === "video" ||
+        item.subtype === "slideshow")
+    ) {
       // For slideshow/image items with multiple slides, use the currently displayed slide's content
       let mediaUrl: string | undefined;
-      if ((item.subtype === "slideshow" || item.subtype === "image") && item.slides?.length > 0) {
+      if (
+        (item.subtype === "slideshow" || item.subtype === "image") &&
+        item.slides?.length > 0
+      ) {
         // Find which of this item's slides is currently being displayed
         const currentSlideObj = currentlyDisplayedSlide;
-        if (currentSlideObj && item.slides.some((s: any) => s.id === currentSlideObj.id)) {
-          mediaUrl = typeof currentSlideObj.content === "string" ? currentSlideObj.content : undefined;
+        if (
+          currentSlideObj &&
+          item.slides.some((s: any) => s.id === currentSlideObj.id)
+        ) {
+          mediaUrl =
+            typeof currentSlideObj.content === "string"
+              ? currentSlideObj.content
+              : undefined;
         }
         // Fallback to the first slide
         if (!mediaUrl) {
-          mediaUrl = typeof item.slides[0].content === "string" ? item.slides[0].content : undefined;
+          mediaUrl =
+            typeof item.slides[0].content === "string"
+              ? item.slides[0].content
+              : undefined;
         }
       } else {
-        mediaUrl = typeof item.content === "string" ? item.content : item.slides?.[0]?.content;
+        mediaUrl =
+          typeof item.content === "string"
+            ? item.content
+            : item.slides?.[0]?.content;
       }
       if (mediaUrl && typeof mediaUrl === "string") {
         return {
@@ -837,13 +876,19 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // Clear slide editor state so the announcement editor shows
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
-      } else if (parentItem.type === "media" && parentItem.subtype === "webpage") {
+      } else if (
+        parentItem.type === "media" &&
+        parentItem.subtype === "webpage"
+      ) {
         // For webpage items, route to the WebPage Editor
         setEditingContent(parentItem);
         setSelectedContentType("webpage");
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
-      } else if (parentItem.type === "media" && parentItem.subtype === "canvas") {
+      } else if (
+        parentItem.type === "media" &&
+        parentItem.subtype === "canvas"
+      ) {
         // For canvas items, route to the full Slide Canvas Editor
         const activeCanvasContent =
           slide?.content && typeof slide.content === "object"
@@ -857,9 +902,20 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         setSelectedContentType("canvas");
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
-      } else if (parentItem.type === "media" && (parentItem.subtype === "slideshow" || parentItem.subtype === "image" || parentItem.subtype === "video")) {
+      } else if (
+        parentItem.type === "media" &&
+        (parentItem.subtype === "slideshow" ||
+          parentItem.subtype === "image" ||
+          parentItem.subtype === "video")
+      ) {
         setEditingContent(parentItem);
-        setSelectedContentType(parentItem.subtype === "slideshow" ? "slideshow" : parentItem.subtype === "video" ? "video" : "image");
+        setSelectedContentType(
+          parentItem.subtype === "slideshow"
+            ? "slideshow"
+            : parentItem.subtype === "video"
+              ? "video"
+              : "image",
+        );
         setSelectedSlide(null);
         setIsSlideEditorOpen(false);
       } else {
@@ -882,7 +938,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       if (liveWindow && !liveWindow.closed) {
         // For media items (image/slideshow), use the slide's content directly as background
         let slideItemBackground: any = null;
-        if (parentItem.type === "media" && (parentItem.subtype === "image" || parentItem.subtype === "slideshow") && slide.content) {
+        if (
+          parentItem.type === "media" &&
+          (parentItem.subtype === "image" ||
+            parentItem.subtype === "slideshow") &&
+          slide.content
+        ) {
           slideItemBackground = { type: "image", value: slide.content };
         } else {
           slideItemBackground = getItemBackground(parentItem.id);
@@ -1078,7 +1139,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       const reference: string =
         slide.bibleReference ?? slide.reference ?? slide.title ?? "";
       const version: string = slide.bibleVersion ?? slide.version ?? "KJV";
-      if (ltEnabled) ltProjectScripture(content, reference, version, currentUserId);
+      if (ltEnabled)
+        ltProjectScripture(content, reference, version, currentUserId);
       if (mpEnabled) mpProjectScripture(content, reference, version, mpUserId);
     } else if (type === "verse" || type === "chorus" || type === "song") {
       const label: string = slide.sectionLabel ?? slide.title ?? "";
@@ -1088,8 +1150,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     } else if (type === "announcement") {
       const category: string = slide.category ?? slide.title ?? "";
       const subtitle: string = slide.subtitle ?? "";
-      if (ltEnabled) ltProjectAnnouncement(content, category, subtitle, currentUserId);
-      if (mpEnabled) mpProjectAnnouncement(content, category, subtitle, mpUserId);
+      if (ltEnabled)
+        ltProjectAnnouncement(content, category, subtitle, currentUserId);
+      if (mpEnabled)
+        mpProjectAnnouncement(content, category, subtitle, mpUserId);
     } else {
       if (ltEnabled) ltClear(currentUserId);
       if (mpEnabled) mpClear(mpUserId);
@@ -1111,6 +1175,11 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     currentUserId,
   ]);
 
+  const hfb = useHandsfreeBible({
+    liveWindow,
+    handsfreeBibleButtonRef,
+  });
+
   const {
     isHandsfreeBibleOpen,
     isWidgetVisible,
@@ -1131,10 +1200,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     setDetectedCommands,
     volume,
     executeNavigation,
-  } = useHandsfreeBible({
-    liveWindow,
-    handsfreeBibleButtonRef,
-  });
+  } = hfb;
 
   const [showListStyleDropdown, setShowListStyleDropdown] = useState(false);
   const listDropdownRef = useRef<HTMLDivElement>(null);
@@ -1330,7 +1396,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false);
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
-  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] =
+    useState(false);
   const [isSongbookOpen, setIsSongbookOpen] = useState(false);
   const [isSongEditorOpen, setIsSongEditorOpen] = useState(false);
   const [importedSongData, setImportedSongData] = useState<any>(null);
@@ -1571,8 +1638,16 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // For media items (image/slideshow), use the slide's content directly as background
         let slideBackground: any = null;
         if (slideToDisplay?.itemId) {
-          const parentItem = serviceItems.find((i: any) => i.id === slideToDisplay.itemId);
-          if (parentItem && parentItem.type === "media" && (parentItem.subtype === "image" || parentItem.subtype === "slideshow") && slideToDisplay.content) {
+          const parentItem = serviceItems.find(
+            (i: any) => i.id === slideToDisplay.itemId,
+          );
+          if (
+            parentItem &&
+            parentItem.type === "media" &&
+            (parentItem.subtype === "image" ||
+              parentItem.subtype === "slideshow") &&
+            slideToDisplay.content
+          ) {
             slideBackground = { type: "image", value: slideToDisplay.content };
           } else {
             slideBackground = getItemBackground(slideToDisplay.itemId);
@@ -1610,8 +1685,16 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // For media items (image/slideshow), use the slide's content directly as background
         let slideBackground: any = null;
         if (slideToDisplay?.itemId) {
-          const parentItem = serviceItems.find((i: any) => i.id === slideToDisplay.itemId);
-          if (parentItem && parentItem.type === "media" && (parentItem.subtype === "image" || parentItem.subtype === "slideshow") && slideToDisplay.content) {
+          const parentItem = serviceItems.find(
+            (i: any) => i.id === slideToDisplay.itemId,
+          );
+          if (
+            parentItem &&
+            parentItem.type === "media" &&
+            (parentItem.subtype === "image" ||
+              parentItem.subtype === "slideshow") &&
+            slideToDisplay.content
+          ) {
             slideBackground = { type: "image", value: slideToDisplay.content };
           } else {
             slideBackground = getItemBackground(slideToDisplay.itemId);
@@ -1663,14 +1746,24 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     let timerId: NodeJS.Timeout;
 
     if (isLive && currentlyDisplayedSlide?.itemId) {
-      const parentItem = serviceItems.find((item: any) => item.id === currentlyDisplayedSlide.itemId);
-      
-      if (parentItem && parentItem.type === "media" && (parentItem.subtype === "slideshow" || parentItem.subtype === "image")) {
-        const settings = typeof parentItem.content === "object" ? parentItem.content : {};
+      const parentItem = serviceItems.find(
+        (item: any) => item.id === currentlyDisplayedSlide.itemId,
+      );
+
+      if (
+        parentItem &&
+        parentItem.type === "media" &&
+        (parentItem.subtype === "slideshow" || parentItem.subtype === "image")
+      ) {
+        const settings =
+          typeof parentItem.content === "object" ? parentItem.content : {};
         const isAutoAdvance = settings.autoAdvance ?? true;
         const timerSeconds = settings.timer || 5;
 
-        if (isAutoAdvance && (parentItem.slides?.length > 1 || slides.length > 1)) {
+        if (
+          isAutoAdvance &&
+          (parentItem.slides?.length > 1 || slides.length > 1)
+        ) {
           timerId = setTimeout(() => {
             if (currentSlide < totalSlides) {
               const newSlide = currentSlide + 1;
@@ -1679,8 +1772,20 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               if (slideToDisplay) {
                 setCurrentlyDisplayedSlide(slideToDisplay);
                 if (liveWindow && !liveWindow.closed) {
-                  const slideBackground = slideToDisplay?.itemId ? getItemBackground(slideToDisplay.itemId) : null;
-                  liveWindow.postMessage({ type: "SLIDE_CHANGE", data: { slideNumber: newSlide, slide: slideToDisplay, appliedBackground: slideBackground } }, "*");
+                  const slideBackground = slideToDisplay?.itemId
+                    ? getItemBackground(slideToDisplay.itemId)
+                    : null;
+                  liveWindow.postMessage(
+                    {
+                      type: "SLIDE_CHANGE",
+                      data: {
+                        slideNumber: newSlide,
+                        slide: slideToDisplay,
+                        appliedBackground: slideBackground,
+                      },
+                    },
+                    "*",
+                  );
                 }
               }
             } else {
@@ -1690,8 +1795,20 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               if (slideToDisplay) {
                 setCurrentlyDisplayedSlide(slideToDisplay);
                 if (liveWindow && !liveWindow.closed) {
-                  const slideBackground = slideToDisplay?.itemId ? getItemBackground(slideToDisplay.itemId) : null;
-                  liveWindow.postMessage({ type: "SLIDE_CHANGE", data: { slideNumber: 1, slide: slideToDisplay, appliedBackground: slideBackground } }, "*");
+                  const slideBackground = slideToDisplay?.itemId
+                    ? getItemBackground(slideToDisplay.itemId)
+                    : null;
+                  liveWindow.postMessage(
+                    {
+                      type: "SLIDE_CHANGE",
+                      data: {
+                        slideNumber: 1,
+                        slide: slideToDisplay,
+                        appliedBackground: slideBackground,
+                      },
+                    },
+                    "*",
+                  );
                 }
               }
             }
@@ -2197,12 +2314,15 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   });
 
   const normalizeCanvasContent = (rawContent: any) => {
-    if (rawContent && typeof rawContent === "object" && !Array.isArray(rawContent)) {
+    if (
+      rawContent &&
+      typeof rawContent === "object" &&
+      !Array.isArray(rawContent)
+    ) {
       return {
         ...rawContent,
         elements: Array.isArray(rawContent.elements) ? rawContent.elements : [],
-        canvasBackground:
-          rawContent.canvasBackground ||
+        canvasBackground: rawContent.canvasBackground ||
           rawContent.background || { type: "transparent", value: "" },
       };
     }
@@ -2218,9 +2338,11 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               elements: Array.isArray((parsed as any).elements)
                 ? (parsed as any).elements
                 : [],
-              canvasBackground:
-                (parsed as any).canvasBackground ||
-                (parsed as any).background || { type: "transparent", value: "" },
+              canvasBackground: (parsed as any).canvasBackground ||
+                (parsed as any).background || {
+                  type: "transparent",
+                  value: "",
+                },
             };
           }
         } catch {
@@ -2247,47 +2369,76 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       if (slides) return slides;
       if (existingItem?.type === "announcement") {
         const merged = { ...existingItem, ...(metadata || {}) };
-        const contentStr = typeof newContent === "string" ? newContent : (typeof merged.content === "string" ? merged.content : "");
-        return [{
-          id: existingItem.slides?.[0]?.id || `slide-${itemId}-${Date.now()}`,
-          type: "announcement" as const,
-          title: newTitle,
-          content: contentStr,
-          location: merged.location || "",
-          eventDate: merged.eventDate || "",
-          eventTime: merged.eventTime || "",
-          contact: merged.contact || "",
-          sectionLabel: "Announcement",
-        }];
+        const contentStr =
+          typeof newContent === "string"
+            ? newContent
+            : typeof merged.content === "string"
+              ? merged.content
+              : "";
+        return [
+          {
+            id: existingItem.slides?.[0]?.id || `slide-${itemId}-${Date.now()}`,
+            type: "announcement" as const,
+            title: newTitle,
+            content: contentStr,
+            location: merged.location || "",
+            eventDate: merged.eventDate || "",
+            eventTime: merged.eventTime || "",
+            contact: merged.contact || "",
+            sectionLabel: "Announcement",
+          },
+        ];
       } else if (existingItem?.type === "media") {
         if (existingItem.slides && existingItem.slides.length > 0) {
           // If we already have slides, preserve them and update titles.
-          return existingItem.slides.map((s: any) => ({ ...s, title: newTitle }));
+          return existingItem.slides.map((s: any) => ({
+            ...s,
+            title: newTitle,
+          }));
         }
 
         const merged = { ...existingItem, ...(metadata || {}) };
-        
+
         let contentVal;
         if (merged.subtype === "canvas") {
-           contentVal = normalizeCanvasContent(
-             typeof newContent === "object" ? newContent : merged.content
-           );
+          contentVal = normalizeCanvasContent(
+            typeof newContent === "object" ? newContent : merged.content,
+          );
         } else {
-           contentVal = typeof newContent === "string" ? newContent : 
-                             (typeof newContent === "object" && newContent !== null && newContent.url ? newContent.url :
-                             (typeof merged.content === "string" ? merged.content : 
-                             (typeof merged.content === "object" && merged.content !== null && merged.content.url ? merged.content.url : "")));
+          contentVal =
+            typeof newContent === "string"
+              ? newContent
+              : typeof newContent === "object" &&
+                  newContent !== null &&
+                  newContent.url
+                ? newContent.url
+                : typeof merged.content === "string"
+                  ? merged.content
+                  : typeof merged.content === "object" &&
+                      merged.content !== null &&
+                      merged.content.url
+                    ? merged.content.url
+                    : "";
         }
-                           
-        return [{
-          id: existingItem.slides?.[0]?.id || `slide-${itemId}-${Date.now()}`,
-          type: "media" as const,
-          title: newTitle,
-          content: contentVal,
-          videoSettings: merged.subtype === "video" ? (typeof newContent === 'object' ? newContent : typeof merged.content === 'object' ? merged.content : {}) : undefined,
-          subtype: merged.subtype || "image",
-          sectionLabel: "Media",
-        }];
+
+        return [
+          {
+            id: existingItem.slides?.[0]?.id || `slide-${itemId}-${Date.now()}`,
+            type: "media" as const,
+            title: newTitle,
+            content: contentVal,
+            videoSettings:
+              merged.subtype === "video"
+                ? typeof newContent === "object"
+                  ? newContent
+                  : typeof merged.content === "object"
+                    ? merged.content
+                    : {}
+                : undefined,
+            subtype: merged.subtype || "image",
+            sectionLabel: "Media",
+          },
+        ];
       }
       return existingItem?.slides;
     };
@@ -2342,7 +2493,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           };
         }
         return item;
-      })
+      }),
     );
 
     // Update editing content
@@ -2363,9 +2514,13 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
     setCurrentlyDisplayedSlide((prev: any) => {
       if (prev && prev.id) {
-        const itemWithSlide = nextServiceItems.find(i => i.slides?.some((s: any) => s.id === prev.id));
+        const itemWithSlide = nextServiceItems.find((i) =>
+          i.slides?.some((s: any) => s.id === prev.id),
+        );
         if (itemWithSlide) {
-          return itemWithSlide.slides.find((s: any) => s.id === prev.id) || prev;
+          return (
+            itemWithSlide.slides.find((s: any) => s.id === prev.id) || prev
+          );
         }
       }
       return prev;
@@ -2622,7 +2777,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     // ACTION 1: Create generic item in selected service section
     const nextSectionItems = {
       ...sectionItems,
-      [selectedServiceSection]: [...(sectionItems[selectedServiceSection] || []), item],
+      [selectedServiceSection]: [
+        ...(sectionItems[selectedServiceSection] || []),
+        item,
+      ],
     };
     setSectionItems(nextSectionItems);
 
@@ -2660,29 +2818,52 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       eventDate: item.eventDate || "",
       eventTime: item.eventTime || "",
       contact: item.contact || "",
-      slides: (item.subtype === "slideshow" || item.subtype === "image") ? (item.slides || []) : [
-        {
-          id: `slide-${item.id}-${Date.now()}`,
-          type: item.type === "song" ? ("song" as const) : item.type === "announcement" ? ("announcement" as const) : item.type === "media" ? ("media" as const) : ("custom" as const),
-          title: item.title,
-          content:
-            item.type === "song"
-              ? "Please select a song"
-              : item.type === "media" && item.subtype === "canvas"
-                ? normalizeCanvasContent(item.content)
-                : (typeof item.content === "string" ? item.content : "Ready for content"),
-          sectionLabel: item.type === "song" ? "Song" : item.type === "announcement" ? "Announcement" : item.type === "media" ? "Media" : "Content",
-          ...(item.type === "announcement" ? {
-            location: item.location || "",
-            eventDate: item.eventDate || "",
-            eventTime: item.eventTime || "",
-            contact: item.contact || "",
-          } : {}),
-          ...(item.type === "media" ? {
-            subtype: item.subtype || "image",
-          } : {}),
-        },
-      ],
+      slides:
+        item.subtype === "slideshow" || item.subtype === "image"
+          ? item.slides || []
+          : [
+              {
+                id: `slide-${item.id}-${Date.now()}`,
+                type:
+                  item.type === "song"
+                    ? ("song" as const)
+                    : item.type === "announcement"
+                      ? ("announcement" as const)
+                      : item.type === "media"
+                        ? ("media" as const)
+                        : ("custom" as const),
+                title: item.title,
+                content:
+                  item.type === "song"
+                    ? "Please select a song"
+                    : item.type === "media" && item.subtype === "canvas"
+                      ? normalizeCanvasContent(item.content)
+                      : typeof item.content === "string"
+                        ? item.content
+                        : "Ready for content",
+                sectionLabel:
+                  item.type === "song"
+                    ? "Song"
+                    : item.type === "announcement"
+                      ? "Announcement"
+                      : item.type === "media"
+                        ? "Media"
+                        : "Content",
+                ...(item.type === "announcement"
+                  ? {
+                      location: item.location || "",
+                      eventDate: item.eventDate || "",
+                      eventTime: item.eventTime || "",
+                      contact: item.contact || "",
+                    }
+                  : {}),
+                ...(item.type === "media"
+                  ? {
+                      subtype: item.subtype || "image",
+                    }
+                  : {}),
+              },
+            ],
     };
 
     // Add to serviceItems for slide display
@@ -2725,7 +2906,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           id: `item-${item.id}-${Date.now()}`,
           type: "announcement" as const,
           title: item.title || "Announcement",
-          content: typeof item.content === "string" ? item.content : (item.title || "Announcement"),
+          content:
+            typeof item.content === "string"
+              ? item.content
+              : item.title || "Announcement",
           location: item.location || "",
           eventDate: item.eventDate || "",
           eventTime: item.eventTime || "",
@@ -2743,7 +2927,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           content:
             item.subtype === "canvas"
               ? normalizeCanvasContent(item.content)
-              : (typeof item.content === "string" ? item.content : ""),
+              : typeof item.content === "string"
+                ? item.content
+                : "",
           subtype: item.subtype || "image",
           sectionLabel: "Media",
         },
@@ -2822,8 +3008,14 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     // Manually compute next section items to pipeline into rebuild
     const nextSectionItems = { ...sectionItems };
     sectionIds.forEach((sectionId) => {
-      const itemWithUniqueId = { ...songItem, id: `song-${songItem.songId}-${sectionId}-${Date.now()}` };
-      nextSectionItems[sectionId] = [...(nextSectionItems[sectionId] || []), itemWithUniqueId];
+      const itemWithUniqueId = {
+        ...songItem,
+        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
+      };
+      nextSectionItems[sectionId] = [
+        ...(nextSectionItems[sectionId] || []),
+        itemWithUniqueId,
+      ];
     });
 
     // Rebuild slides to append new song slides using explicit state mapping
@@ -2872,7 +3064,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   // Function to rebuild all slides based on service section items order
   const rebuildSlidesFromServiceItems = (
     currentServiceItems = serviceItems,
-    currentSectionItems = sectionItems
+    currentSectionItems = sectionItems,
   ) => {
     // Preserve existing slides from current serviceItems
     const existingSlides: any[] = [];
@@ -2893,7 +3085,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         // Guard against `undefined === undefined` match for items without a `songId`
         const itemAlreadyHasSlides = existingSlides.some(
           (slide) =>
-            (item.songId && slide.songId === item.songId) || 
+            (item.songId && slide.songId === item.songId) ||
             slide.id?.includes(item.id) ||
             slide.itemId === item.id,
         );
@@ -2933,7 +3125,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             id: `song-${item.id}-${Date.now()}`,
             type: "song" as const,
             title: item.title || "Song",
-            content: typeof item.content === "string" ? item.content : (item.content?.lyrics || item.lyrics || "Ready for lyrics"),
+            content:
+              typeof item.content === "string"
+                ? item.content
+                : item.content?.lyrics || item.lyrics || "Ready for lyrics",
             songId: item.id,
             sectionLabel: "Song",
           };
@@ -2944,7 +3139,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             id: `item-${item.id}-${Date.now()}`,
             type: "announcement" as const,
             title: item.title || "Announcement",
-            content: typeof item.content === "string" ? item.content : (item.title || "Announcement"),
+            content:
+              typeof item.content === "string"
+                ? item.content
+                : item.title || "Announcement",
             location: item.location || "",
             eventDate: item.eventDate || "",
             eventTime: item.eventTime || "",
@@ -2969,7 +3167,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             id: `item-${item.id}-${Date.now()}`,
             type: "custom" as const,
             title: item.title || "Untitled",
-            content: typeof item.content === "string" ? item.content : (item.title || "Custom Content"),
+            content:
+              typeof item.content === "string"
+                ? item.content
+                : item.title || "Custom Content",
           };
           allSlides.push(singleSlide); // Append to existing slides
         }
@@ -2989,7 +3190,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             (item.songId && slide.songId === item.songId) ||
             (item.id && slide.songId === item.id) ||
             slide.id?.includes(item.id) ||
-            slide.itemId === item.id
+            slide.itemId === item.id,
         );
 
         // Add slides property to the item
@@ -4335,8 +4536,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             setSelectedDate(savedDate);
             setModalSelectedDate(savedDate);
             setNewPresentationDate(toLocalDateKey(savedDate));
-            setCurrentMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
-            setModalCurrentMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
+            setCurrentMonth(
+              new Date(savedDate.getFullYear(), savedDate.getMonth(), 1),
+            );
+            setModalCurrentMonth(
+              new Date(savedDate.getFullYear(), savedDate.getMonth(), 1),
+            );
           }
         }
 
@@ -4552,1234 +4757,1253 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     );
 
   return (
-    <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
-      <ExternalDisplayPrompt
-        visible={externalDisplay.externalScreenAvailable}
-        onSetAsDefault={() => {
-          externalDisplay.setDefaultOutput("hdmi");
-          externalDisplay.dismiss();
-        }}
-        onDismiss={externalDisplay.dismiss}
-      />
-      {/* Blur Overlay for Preview Mode */}
-      {!isBuildMode && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-30 pointer-events-none"></div>
-      )}
-      {/* Fixed Header Container */}
-      <AppHeader
-        isBuildMode={isBuildMode}
-        isFullscreen={isFullscreen}
-        toggleFullscreen={toggleFullscreen}
-        currentPresentationName={currentPresentationName}
-        isEditingProjectName={isEditingProjectName}
-        editingProjectName={editingProjectName}
-        setEditingProjectName={setEditingProjectName}
-        projectNameInputRef={projectNameInputRef}
-        startEditingProjectName={startEditingProjectName}
-        saveProjectName={saveProjectName}
-        handleProjectNameKeyDown={handleProjectNameKeyDown}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        navItems={navItems}
-        activeDropdown={activeDropdown}
-        setActiveDropdown={setActiveDropdown}
-        hoveredSubmenu={hoveredSubmenu}
-        setHoveredSubmenu={setHoveredSubmenu}
-        setLocation={setLocation}
-        setIsSongbookOpen={setIsSongbookOpen}
-        projectMenuItems={projectMenuItems}
-        insertItemMenuItems={insertItemMenuItems}
-        settingsMenuItems={settingsMenuItems}
-        getRecentPresentations={getRecentPresentations}
-        calculateSlideCount={calculateSlideCount}
-        formatProjectDate={formatProjectDate}
-        handleOpenRecentPresentation={handleOpenRecentPresentation}
-        handleDuplicateRecentPresentation={handleDuplicateRecentPresentation}
-        performUndo={performUndo}
-        performRedo={performRedo}
-        actionHistory={actionHistory}
-        actionHistoryIndex={actionHistoryIndex}
-        isRecording={isRecording}
-        startRecording={startRecording}
-        recordingDropdownOpen={recordingDropdownOpen}
-        showRecordingControls={showRecordingControls}
-        setShowRecordingControls={setShowRecordingControls}
-        isPaused={isPaused}
-        resumeRecording={resumeRecording}
-        pauseRecording={pauseRecording}
-        stopRecording={stopRecording}
-        recordingTime={recordingTime}
-        formatRecordingTime={formatRecordingTime}
-        isLive={isLive}
-        isInPreview={isInPreview}
-        setIsBuildMode={setIsBuildMode}
-        setIsInPreview={setIsInPreview}
-        isLiveConsoleOpen={isLiveConsoleOpen}
-        setIsLiveConsoleOpen={setIsLiveConsoleOpen}
-        setDisplayMode={() => setDisplayMode}
-        setCurrentSlide={setCurrentSlide}
-        liveWindow={liveWindow}
-        slides={slides}
-        itemBackgrounds={itemBackgrounds}
-        goLive={startGoLive}
-        exitLive={exitLive}
-        isProfileMenuOpen={isProfileMenuOpen}
-        setIsProfileMenuOpen={setIsProfileMenuOpen}
-        currentUser={currentUserResponse?.user || null}
-        notifications={notifications}
-        unreadCount={unreadCount}
-        getNotificationIcon={getNotificationIcon}
-        formatTimestamp={formatTimestamp}
-        markNotificationAsRead={markNotificationAsRead}
-        setIsProfileSettingsOpen={setIsProfileSettingsOpen}
-        setIsSubscriptionOpen={setIsSubscriptionOpen}
-        setIsNotificationsModalOpen={setIsNotificationsModalOpen}
-        handleLogout={handleLogout}
-      />
+    <HandsfreeBibleProvider value={hfb}>
+      <div className="bg-[#2a1f4b] w-full min-h-screen flex flex-col relative">
+        {/* Blur Overlay for Preview Mode */}
+        {!isBuildMode && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-30 pointer-events-none"></div>
+        )}
+        {/* Fixed Header Container */}
+        <AppHeader
+          isBuildMode={isBuildMode}
+          isFullscreen={isFullscreen}
+          toggleFullscreen={toggleFullscreen}
+          currentPresentationName={currentPresentationName}
+          isEditingProjectName={isEditingProjectName}
+          editingProjectName={editingProjectName}
+          setEditingProjectName={setEditingProjectName}
+          projectNameInputRef={projectNameInputRef}
+          startEditingProjectName={startEditingProjectName}
+          saveProjectName={saveProjectName}
+          handleProjectNameKeyDown={handleProjectNameKeyDown}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          navItems={navItems}
+          activeDropdown={activeDropdown}
+          setActiveDropdown={setActiveDropdown}
+          hoveredSubmenu={hoveredSubmenu}
+          setHoveredSubmenu={setHoveredSubmenu}
+          setLocation={setLocation}
+          setIsSongbookOpen={setIsSongbookOpen}
+          projectMenuItems={projectMenuItems}
+          insertItemMenuItems={insertItemMenuItems}
+          settingsMenuItems={settingsMenuItems}
+          getRecentPresentations={getRecentPresentations}
+          calculateSlideCount={calculateSlideCount}
+          formatProjectDate={formatProjectDate}
+          handleOpenRecentPresentation={handleOpenRecentPresentation}
+          handleDuplicateRecentPresentation={handleDuplicateRecentPresentation}
+          performUndo={performUndo}
+          performRedo={performRedo}
+          actionHistory={actionHistory}
+          actionHistoryIndex={actionHistoryIndex}
+          isRecording={isRecording}
+          startRecording={startRecording}
+          recordingDropdownOpen={recordingDropdownOpen}
+          showRecordingControls={showRecordingControls}
+          setShowRecordingControls={setShowRecordingControls}
+          isPaused={isPaused}
+          resumeRecording={resumeRecording}
+          pauseRecording={pauseRecording}
+          stopRecording={stopRecording}
+          recordingTime={recordingTime}
+          formatRecordingTime={formatRecordingTime}
+          isLive={isLive}
+          isInPreview={isInPreview}
+          setIsBuildMode={setIsBuildMode}
+          setIsInPreview={setIsInPreview}
+          isLiveConsoleOpen={isLiveConsoleOpen}
+          setIsLiveConsoleOpen={setIsLiveConsoleOpen}
+          setDisplayMode={() => setDisplayMode}
+          setCurrentSlide={setCurrentSlide}
+          liveWindow={liveWindow}
+          slides={slides}
+          itemBackgrounds={itemBackgrounds}
+          goLive={startGoLive}
+          exitLive={exitLive}
+          isProfileMenuOpen={isProfileMenuOpen}
+          setIsProfileMenuOpen={setIsProfileMenuOpen}
+          currentUser={currentUserResponse?.user || null}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          getNotificationIcon={getNotificationIcon}
+          formatTimestamp={formatTimestamp}
+          markNotificationAsRead={markNotificationAsRead}
+          setIsProfileSettingsOpen={setIsProfileSettingsOpen}
+          setIsSubscriptionOpen={setIsSubscriptionOpen}
+          setIsNotificationsModalOpen={setIsNotificationsModalOpen}
+          handleLogout={handleLogout}
+        />
 
-      {/* Main Content Area */}
-      <div className="flex flex-1 pt-[128px] h-screen overflow-hidden">
-        {/* Container for secondary nav and content */}
-        <div className="flex flex-col w-full h-full">
-          {/* Secondary Navigation Bar */}
-          <SecondaryToolbar
-            isSidebarCollapsed={isSidebarCollapsed}
-            isBackgroundDropdownOpen={isBackgroundDropdownOpen}
-            setIsBackgroundDropdownOpen={setIsBackgroundDropdownOpen}
-            setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
-            setBackgroundModalMode={(mode: string) =>
-              setBackgroundModalMode(mode as "browse" | "import")
-            }
-            setIsImportImageOpen={setIsImportImageOpen}
-            gradientBackgrounds={gradientBackgrounds}
-            fillColorBackgrounds={fillColorBackgrounds}
-            getCurrentItemId={getCurrentItemId}
-            serviceItems={serviceItems}
-            applyBackgroundToCurrentItem={(bg: any) =>
-              applyBackgroundToCurrentItem(bg)
-            }
-            setSelectedBackgroundType={(type: string) =>
-              setSelectedBackgroundType(
-                type as "none" | "gradient" | "fill" | "media",
-              )
-            }
-            isBiblePreferencesOpen={isBiblePreferencesOpen}
-            setIsBiblePreferencesOpen={setIsBiblePreferencesOpen}
-            selectedBibleMode={selectedBibleMode}
-            setSelectedBibleMode={setSelectedBibleMode}
-            handsfreeBibleButtonRef={handsfreeBibleButtonRef}
-            toggleHandsfreeBible={toggleHandsfreeBible}
-          />
-
-          {/* Content Area with Sidebar and Main */}
-          <div className="flex flex-1 h-full overflow-hidden">
-            {/* Left Sidebar (Nav Bar 2) */}
-            <ServiceSectionsSidebar
+        {/* Main Content Area */}
+        <div className="flex flex-1 pt-[128px] h-screen overflow-hidden">
+          {/* Container for secondary nav and content */}
+          <div className="flex flex-col w-full h-full">
+            {/* Secondary Navigation Bar */}
+            <SecondaryToolbar
               isSidebarCollapsed={isSidebarCollapsed}
-              isCalendarOpen={isCalendarOpen}
-              setIsCalendarOpen={setIsCalendarOpen}
-              selectedDate={selectedDate}
-              renderCalendar={renderCalendar}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              isSearchFocused={isSearchFocused}
-              setIsSearchFocused={setIsSearchFocused}
-              isVoiceMenuOpen={isVoiceMenuOpen}
-              setIsVoiceMenuOpen={setIsVoiceMenuOpen}
-              isListeningMode={isListeningMode}
-              toggleListening={toggleListening}
-              isSuggestedItemsVisible={isSuggestedItemsVisible}
-              setIsSuggestedItemsVisible={setIsSuggestedItemsVisible}
-              serviceSections={serviceSections}
-              selectedServiceSection={selectedServiceSection}
-              setSelectedServiceSection={setSelectedServiceSection}
-              sectionItems={sectionItems}
-              toggleSection={toggleSection}
-              expandedSections={expandedSections}
-              setEditingContent={setEditingContent}
-              setSelectedContentType={setSelectedContentType}
-              setCurrentSongTitle={setCurrentSongTitle}
-              setSongEditorContent={setSongEditorContent}
-              parseLyricsIntoSections={parseLyricsIntoSections}
-              setParsedLyrics={setParsedLyrics}
-              setSongArrangement={setSongArrangement}
-              setSelectedSlide={setSelectedSlide}
-              editingContent={editingContent}
-              showDeleteConfirmation={showDeleteConfirmation}
-              isAddItemVisible={isAddItemVisible}
-              setIsAddItemVisible={setIsAddItemVisible}
-            />
-
-            {/* Warning Notification */}
-            {showSectionWarning && (
-              <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
-                <div className="bg-orange-500 border border-orange-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 animate-bounce">
-                  <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
-                    <span className="text-orange-500 text-sm font-bold">!</span>
-                  </div>
-                  <span className="font-medium">
-                    Please select a service section first (PRE-SERVICE, WARM-UP,
-                    etc.)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Main Content Area - Build/Preview Mode */}
-            <DashboardMainWorkspace
-              isBuildMode={isBuildMode}
-              editingContent={editingContent}
-              selectedServiceSection={selectedServiceSection}
-              handleSlideClick={handleSlideClick}
-              setEditingContent={setEditingContent}
-              updateItemContent={updateItemContent}
-              isFullScreen={isFullscreen}
-              toggleFullscreen={toggleFullscreen}
-              isLive={isLive}
-              parseLyricsIntoSections={parseLyricsIntoSections}
-              setParsedLyrics={setParsedLyrics}
-              setSongArrangement={setSongArrangement}
-              setSelectedContentType={setSelectedContentType}
-              setCurrentSongTitle={setCurrentSongTitle}
-              setSongEditorContent={setSongEditorContent}
-              showDeleteConfirmation={showDeleteConfirmation}
-              isListeningMode={isListeningMode}
-              toggleListening={toggleListening}
-              toggleSection={toggleSection}
-              activeMediaTab={activeMediaTab}
+              isBackgroundDropdownOpen={isBackgroundDropdownOpen}
+              setIsBackgroundDropdownOpen={setIsBackgroundDropdownOpen}
+              setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
+              setBackgroundModalMode={(mode: string) =>
+                setBackgroundModalMode(mode as "browse" | "import")
+              }
+              setIsImportImageOpen={setIsImportImageOpen}
               gradientBackgrounds={gradientBackgrounds}
               fillColorBackgrounds={fillColorBackgrounds}
-              applyBackgroundToCurrentItem={applyBackgroundToCurrentItem}
-              getItemBackground={getItemBackground}
-              currentUserId={currentUserId}
-              goLive={startGoLive}
-              exitLive={exitLive}
-              editorState={editorState}
-              titleEditorState={titleEditorState}
-              activeTextarea={activeTextarea}
-              handleUndo={handleUndo}
-              handleRedo={handleRedo}
-              setEditorState={setEditorState}
-              applyFontFamily={applyFontFamily}
-              applyFormatting={applyFormatting}
-              listDropdownRef={listDropdownRef}
-              setShowListStyleDropdown={setShowListStyleDropdown}
-              showListStyleDropdown={showListStyleDropdown}
-              insertTextAtCursor={insertTextAtCursor}
-              parsedLyrics={parsedLyrics}
-              currentSongTitle={currentSongTitle}
-              titleTextAreaRef={titleTextAreaRef}
-              setActiveTextarea={setActiveTextarea}
-              applyStylesToTextarea={applyStylesToTextarea}
-              showAuthorOnScreen={showAuthorOnScreen}
-              setShowAuthorOnScreen={setShowAuthorOnScreen}
-              songArrangement={songArrangement}
-              createSlidesFromSong={createSlidesFromSong}
-              songSearchTerm={songSearchTerm}
-              setSongSearchTerm={setSongSearchTerm}
-              showSearchResults={showSearchResults}
-              filteredSongs={filteredSongs}
-              setShowSearchResults={setShowSearchResults}
-              handleSelectSong={handleSelectSong}
-              insertedItems={insertedItems}
-              setActiveTab={setActiveTab}
-              togglePreview={togglePreview}
-              currentlyDisplayedSlide={currentlyDisplayedSlide}
-              previousSlide={previousSlide}
-              nextSlide={nextSlide}
               getCurrentItemId={getCurrentItemId}
-              setCurrentlyDisplayedSlide={setCurrentlyDisplayedSlide}
-              clearZustandProjection={clearZustandProjection}
-              liveWindow={liveWindow}
-              itemBackgrounds={itemBackgrounds}
+              serviceItems={serviceItems}
+              applyBackgroundToCurrentItem={(bg: any) =>
+                applyBackgroundToCurrentItem(bg)
+              }
+              setSelectedBackgroundType={(type: string) =>
+                setSelectedBackgroundType(
+                  type as "none" | "gradient" | "fill" | "media",
+                )
+              }
+              isBiblePreferencesOpen={isBiblePreferencesOpen}
+              setIsBiblePreferencesOpen={setIsBiblePreferencesOpen}
+              selectedBibleMode={selectedBibleMode}
+              setSelectedBibleMode={setSelectedBibleMode}
+              handsfreeBibleButtonRef={handsfreeBibleButtonRef}
               toggleHandsfreeBible={toggleHandsfreeBible}
-              setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
-              setBackgroundModalMode={setBackgroundModalMode}
-              setIsImportImageOpen={setIsImportImageOpen}
-              recentlyUploadedMediaId={recentlyUploadedMediaId}
-              setRecentlyUploadedMediaId={setRecentlyUploadedMediaId}
             />
+
+            {/* Content Area with Sidebar and Main */}
+            <div className="flex flex-1 h-full overflow-hidden">
+              {/* Left Sidebar (Nav Bar 2) */}
+              <ServiceSectionsSidebar
+                isSidebarCollapsed={isSidebarCollapsed}
+                isCalendarOpen={isCalendarOpen}
+                setIsCalendarOpen={setIsCalendarOpen}
+                selectedDate={selectedDate}
+                renderCalendar={renderCalendar}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                isSearchFocused={isSearchFocused}
+                setIsSearchFocused={setIsSearchFocused}
+                isVoiceMenuOpen={isVoiceMenuOpen}
+                setIsVoiceMenuOpen={setIsVoiceMenuOpen}
+                isListeningMode={isListeningMode}
+                toggleListening={toggleListening}
+                isSuggestedItemsVisible={isSuggestedItemsVisible}
+                setIsSuggestedItemsVisible={setIsSuggestedItemsVisible}
+                serviceSections={serviceSections}
+                selectedServiceSection={selectedServiceSection}
+                setSelectedServiceSection={setSelectedServiceSection}
+                sectionItems={sectionItems}
+                toggleSection={toggleSection}
+                expandedSections={expandedSections}
+                setEditingContent={setEditingContent}
+                setSelectedContentType={setSelectedContentType}
+                setCurrentSongTitle={setCurrentSongTitle}
+                setSongEditorContent={setSongEditorContent}
+                parseLyricsIntoSections={parseLyricsIntoSections}
+                setParsedLyrics={setParsedLyrics}
+                setSongArrangement={setSongArrangement}
+                setSelectedSlide={setSelectedSlide}
+                editingContent={editingContent}
+                showDeleteConfirmation={showDeleteConfirmation}
+                isAddItemVisible={isAddItemVisible}
+                setIsAddItemVisible={setIsAddItemVisible}
+              />
+
+              {/* Warning Notification */}
+              {showSectionWarning && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+                  <div className="bg-orange-500 border border-orange-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 animate-bounce">
+                    <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center">
+                      <span className="text-orange-500 text-sm font-bold">
+                        !
+                      </span>
+                    </div>
+                    <span className="font-medium">
+                      Please select a service section first (PRE-SERVICE,
+                      WARM-UP, etc.)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Main Content Area - Build/Preview Mode */}
+              <DashboardMainWorkspace
+                isBuildMode={isBuildMode}
+                editingContent={editingContent}
+                selectedServiceSection={selectedServiceSection}
+                handleSlideClick={handleSlideClick}
+                setEditingContent={setEditingContent}
+                updateItemContent={updateItemContent}
+                isFullScreen={isFullscreen}
+                toggleFullscreen={toggleFullscreen}
+                isLive={isLive}
+                parseLyricsIntoSections={parseLyricsIntoSections}
+                setParsedLyrics={setParsedLyrics}
+                setSongArrangement={setSongArrangement}
+                setSelectedContentType={setSelectedContentType}
+                setCurrentSongTitle={setCurrentSongTitle}
+                setSongEditorContent={setSongEditorContent}
+                showDeleteConfirmation={showDeleteConfirmation}
+                isListeningMode={isListeningMode}
+                toggleListening={toggleListening}
+                toggleSection={toggleSection}
+                activeMediaTab={activeMediaTab}
+                gradientBackgrounds={gradientBackgrounds}
+                fillColorBackgrounds={fillColorBackgrounds}
+                applyBackgroundToCurrentItem={applyBackgroundToCurrentItem}
+                getItemBackground={getItemBackground}
+                currentUserId={currentUserId}
+                goLive={startGoLive}
+                exitLive={exitLive}
+                editorState={editorState}
+                titleEditorState={titleEditorState}
+                activeTextarea={activeTextarea}
+                handleUndo={handleUndo}
+                handleRedo={handleRedo}
+                setEditorState={setEditorState}
+                applyFontFamily={applyFontFamily}
+                applyFormatting={applyFormatting}
+                listDropdownRef={listDropdownRef}
+                setShowListStyleDropdown={setShowListStyleDropdown}
+                showListStyleDropdown={showListStyleDropdown}
+                insertTextAtCursor={insertTextAtCursor}
+                parsedLyrics={parsedLyrics}
+                currentSongTitle={currentSongTitle}
+                titleTextAreaRef={titleTextAreaRef}
+                setActiveTextarea={setActiveTextarea}
+                applyStylesToTextarea={applyStylesToTextarea}
+                showAuthorOnScreen={showAuthorOnScreen}
+                setShowAuthorOnScreen={setShowAuthorOnScreen}
+                songArrangement={songArrangement}
+                createSlidesFromSong={createSlidesFromSong}
+                songSearchTerm={songSearchTerm}
+                setSongSearchTerm={setSongSearchTerm}
+                showSearchResults={showSearchResults}
+                filteredSongs={filteredSongs}
+                setShowSearchResults={setShowSearchResults}
+                handleSelectSong={handleSelectSong}
+                insertedItems={insertedItems}
+                setActiveTab={setActiveTab}
+                togglePreview={togglePreview}
+                currentlyDisplayedSlide={currentlyDisplayedSlide}
+                previousSlide={previousSlide}
+                nextSlide={nextSlide}
+                getCurrentItemId={getCurrentItemId}
+                setCurrentlyDisplayedSlide={setCurrentlyDisplayedSlide}
+                clearZustandProjection={clearZustandProjection}
+                liveWindow={liveWindow}
+                itemBackgrounds={itemBackgrounds}
+                toggleHandsfreeBible={toggleHandsfreeBible}
+                setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
+                setBackgroundModalMode={setBackgroundModalMode}
+                setIsImportImageOpen={setIsImportImageOpen}
+                recentlyUploadedMediaId={recentlyUploadedMediaId}
+                setRecentlyUploadedMediaId={setRecentlyUploadedMediaId}
+              />
+            </div>
           </div>
         </div>
-      </div>
-      {/* Hands-Free Bible Widget - Floating */}
-      {isHandsfreeBibleOpen && (
-        <div
-          className="fixed z-50 bg-[#1a0f2e] border border-gray-600 rounded-lg shadow-xl cursor-move transition-opacity duration-200"
-          style={{
-            left: `${widgetPosition.x}px`,
-            top: `${widgetPosition.y}px`,
-            minWidth:
-              selectedBibleMode === "Classic Hands-free Bible"
-                ? "500px"
-                : "400px",
-            maxWidth:
-              selectedBibleMode === "Classic Hands-free Bible"
-                ? "600px"
-                : "500px",
-            opacity: isWidgetVisible ? 1 : 0,
-            visibility: isWidgetVisible ? "visible" : "hidden",
-          }}
-          onMouseDown={handleDragStart}
-        >
-          {selectedBibleMode === "Classic Hands-free Bible" ? (
-            /* Classic Hands-free Bible Widget */
-            <>
-              {/* Close Button - Top Right */}
-              <button
-                onClick={toggleHandsfreeBible}
-                className="absolute top-4 right-4 text-gray-400 hover:text-white no-drag z-10"
-              >
-                <XIcon className="w-5 h-5" />
-              </button>
-              {/* Content */}
-              <div className="p-6 space-y-6 text-center">
-                {/* Q-worship Logo */}
-                <div className="flex justify-center">
-                  <img
-                    src={qworshipLogo}
-                    alt="Q-worship Logo"
-                    className="w-12 h-12"
-                  />
-                </div>
-
-                {/* Title with LIVE indicator */}
-                <div className="flex items-center justify-center gap-3">
-                  <h2 className="text-white text-2xl font-medium">
-                    Hands-free Bible Companion
-                  </h2>
-                  {liveWindow && !liveWindow.closed && (
-                    <span className="flex items-center gap-1 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded animate-pulse">
-                      <span className="w-2 h-2 bg-white rounded-full"></span>
-                      LIVE
-                    </span>
-                  )}
-                </div>
-
-                {/* Listening Status Bar */}
-                <div
-                  className={`rounded-full p-3 flex items-center justify-between ${
-                    isSleepMode ? "bg-[#3D3D3D]" : "bg-[#444444]"
-                  }`}
+        {/* Hands-Free Bible Widget - Floating */}
+        {isHandsfreeBibleOpen && (
+          <div
+            className="fixed z-50 bg-[#1a0f2e] border border-gray-600 rounded-lg shadow-xl cursor-move transition-opacity duration-200"
+            style={{
+              left: `${widgetPosition.x}px`,
+              top: `${widgetPosition.y}px`,
+              minWidth:
+                selectedBibleMode === "Classic Hands-free Bible"
+                  ? "500px"
+                  : "400px",
+              maxWidth:
+                selectedBibleMode === "Classic Hands-free Bible"
+                  ? "600px"
+                  : "500px",
+              opacity: isWidgetVisible ? 1 : 0,
+              visibility: isWidgetVisible ? "visible" : "hidden",
+            }}
+            onMouseDown={handleDragStart}
+          >
+            {selectedBibleMode === "Classic Hands-free Bible" ? (
+              /* Classic Hands-free Bible Widget */
+              <>
+                {/* Close Button - Top Right */}
+                <button
+                  onClick={toggleHandsfreeBible}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-white no-drag z-10"
                 >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center relative ${
-                        isSleepMode
-                          ? "bg-amber-600"
-                          : isListeningMode
-                            ? "bg-[#8356F3]"
-                            : "bg-gray-600"
-                      }`}
-                    >
-                      <Mic
-                        className={`w-5 h-5 ${
-                          isSleepMode
-                            ? "text-amber-200"
-                            : isListeningMode
-                              ? "text-white"
-                              : "text-gray-400"
-                        } ${isListeningMode && !isSleepMode ? "animate-pulse" : ""}`}
-                      />
-                      {/* Mic off indicator */}
-                      {!isListeningMode && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-6 h-0.5 bg-red-500 rotate-45 absolute"></div>
-                        </div>
-                      )}
-                      {/* Beeping animation when actively listening (not sleeping) */}
-                      {isListeningMode && !isSleepMode && (
-                        <>
-                          <div className="absolute inset-0 rounded-full bg-[#8356F3] animate-ping opacity-30"></div>
-                          <div className="absolute inset-0 rounded-full bg-[#8356F3] animate-pulse opacity-20"></div>
-                        </>
-                      )}
-                      {/* Sleep mode indicator - gentle pulse */}
-                      {isListeningMode && isSleepMode && (
-                        <div className="absolute inset-0 rounded-full bg-amber-600 animate-pulse opacity-30"></div>
-                      )}
-                    </div>
-                    <span
-                      className={`text-sm ${isSleepMode ? "text-amber-300" : "text-gray-300"}`}
-                    >
-                      {isSleepMode
-                        ? 'Sleeping... Say "Bible"'
-                        : isListeningMode
-                          ? "Q-worship is listening"
-                          : "Q-worship is off"}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2 no-drag">
-                    <span
-                      className={`text-xs ${
-                        isSleepMode
-                          ? "text-amber-400"
-                          : isListeningMode
-                            ? "text-white"
-                            : "text-gray-400"
-                      }`}
-                    >
-                      {isSleepMode ? "SLEEP" : isListeningMode ? "ON" : "OFF"}
-                    </span>
-                    <Switch
-                      checked={isListeningMode}
-                      onCheckedChange={toggleMicrophone}
-                      className={`${isSleepMode ? "data-[state=checked]:bg-amber-600" : "data-[state=checked]:bg-[#8356F3]"} data-[state=unchecked]:bg-gray-600`}
+                  <XIcon className="w-5 h-5" />
+                </button>
+                {/* Content */}
+                <div className="p-6 space-y-6 text-center">
+                  {/* Q-worship Logo */}
+                  <div className="flex justify-center">
+                    <img
+                      src={qworshipLogo}
+                      alt="Q-worship Logo"
+                      className="w-12 h-12"
                     />
                   </div>
-                </div>
 
-                {/* Microphone Status and Commands Display - Only show when listening */}
-                {isListeningMode && (
+                  {/* Title with LIVE indicator */}
+                  <div className="flex items-center justify-center gap-3">
+                    <h2 className="text-white text-2xl font-medium">
+                      Hands-free Bible Companion
+                    </h2>
+                    {liveWindow && !liveWindow.closed && (
+                      <span className="flex items-center gap-1 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded animate-pulse">
+                        <span className="w-2 h-2 bg-white rounded-full"></span>
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Listening Status Bar */}
                   <div
-                    className={`rounded-lg p-4 space-y-3 ${isSleepMode ? "bg-[#2D2518]" : "bg-[#2D1B42]"}`}
+                    className={`rounded-full p-3 flex items-center justify-between ${
+                      isSleepMode ? "bg-[#3D3D3D]" : "bg-[#444444]"
+                    }`}
                   >
                     <div className="flex items-center space-x-3">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          isSleepMode ? "bg-amber-600" : "bg-[#8356F3]"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center relative ${
+                          isSleepMode
+                            ? "bg-amber-600"
+                            : isListeningMode
+                              ? "bg-[#8356F3]"
+                              : "bg-gray-600"
                         }`}
                       >
                         <Mic
-                          className={`w-4 h-4 ${isSleepMode ? "text-amber-200" : "text-white"}`}
+                          className={`w-5 h-5 ${
+                            isSleepMode
+                              ? "text-amber-200"
+                              : isListeningMode
+                                ? "text-white"
+                                : "text-gray-400"
+                          } ${isListeningMode && !isSleepMode ? "animate-pulse" : ""}`}
                         />
-                      </div>
-                      <div>
-                        <span
-                          className={`text-sm font-medium block ${isSleepMode ? "text-amber-300" : "text-white"}`}
-                        >
-                          {isSleepMode
-                            ? "Sleeping - waiting for wake phrase"
-                            : "Listening for commands"}
-                        </span>
-                        <span
-                          className={`text-xs ${isSleepMode ? "text-amber-400" : "text-gray-400"}`}
-                        >
-                          {microphoneStatus}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-left">
-                      <div
-                        className={`text-xs mb-1 ${isSleepMode ? "text-amber-400" : "text-gray-400"}`}
-                      >
-                        {isSleepMode
-                          ? 'Say "Bible" or "I\'m ready":'
-                          : "Latest Detection:"}
-                      </div>
-                      <div
-                        className={`text-sm rounded p-2 font-mono ${isSleepMode ? "text-amber-200 bg-[#1a1408]" : "text-white bg-[#1a0f2e]"}`}
-                      >
-                        {detectedCommands}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Scripture Display Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-white text-lg font-medium">
-                      Scripture Display
-                    </h3>
-                    <button className="text-gray-400 hover:text-white no-drag">
-                      <SettingsIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Bible Version Tabs */}
-                  <div className="bg-[#444444] rounded-lg p-1 flex space-x-1 no-drag">
-                    {["KJV", "NKJV", "NIV", "AMP", "GN", "MSG", "ESV"].map(
-                      (version) => (
-                        <button
-                          key={version}
-                          onClick={() => {
-                            setSelectedBibleVersion(version);
-                            setZustandBibleVersion(version.toLowerCase());
-                          }}
-                          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                            selectedBibleVersion === version
-                              ? "bg-[#8356F3] text-white"
-                              : "text-gray-300 hover:text-white hover:bg-gray-600"
-                          }`}
-                        >
-                          {version}
-                        </button>
-                      ),
-                    )}
-                  </div>
-
-                  {/* Scripture Content Area */}
-                  <div className="bg-[#444444] rounded-lg p-6 min-h-[120px]">
-                    {widgetVerseData && widgetVerseData[0] ? (
-                      <div className="space-y-3">
-                        {/* Reference Header */}
-                        {widgetFormattedReference && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-purple-400 text-sm font-medium">
-                              {widgetFormattedReference}
-                            </span>
-                            <span className="text-gray-500 text-xs">
-                              {selectedBibleVersion}
-                            </span>
+                        {/* Mic off indicator */}
+                        {!isListeningMode && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-6 h-0.5 bg-red-500 rotate-45 absolute"></div>
                           </div>
                         )}
-                        {/* Verse Text */}
-                        <p className="text-white text-base leading-relaxed">
-                          {(() => {
-                            const versionKey =
-                              selectedBibleVersion.toLowerCase();
-                            const verseText =
-                              (widgetVerseData[0] as Record<string, any>)[
-                                versionKey
-                              ] ||
-                              widgetVerseData[0].kjv ||
-                              "";
-                            return (
-                              verseText ||
-                              "Verse text not available for this version"
-                            );
-                          })()}
-                        </p>
+                        {/* Beeping animation when actively listening (not sleeping) */}
+                        {isListeningMode && !isSleepMode && (
+                          <>
+                            <div className="absolute inset-0 rounded-full bg-[#8356F3] animate-ping opacity-30"></div>
+                            <div className="absolute inset-0 rounded-full bg-[#8356F3] animate-pulse opacity-20"></div>
+                          </>
+                        )}
+                        {/* Sleep mode indicator - gentle pulse */}
+                        {isListeningMode && isSleepMode && (
+                          <div className="absolute inset-0 rounded-full bg-amber-600 animate-pulse opacity-30"></div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <p className="text-gray-400 text-center">
-                          {detectedCommands === "No commands detected"
-                            ? "Say a Bible reference or use voice commands..."
-                            : detectedCommands}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Navigation Controls */}
-                  <div className="flex items-center justify-center space-x-4">
-                    <button
-                      className="w-10 h-10 rounded-full border-2 border-gray-500 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-400 transition-colors no-drag"
-                      onClick={() =>
-                        executeNavigation("verse_change", "previous")
-                      }
-                    >
-                      <ChevronLeftIcon className="w-5 h-5" />
-                    </button>
-                    <span className="text-gray-400 text-sm px-4">
-                      Verse change
-                    </span>
-                    <button
-                      className="w-10 h-10 rounded-full border-2 border-gray-500 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-400 transition-colors no-drag"
-                      onClick={() => executeNavigation("verse_change", "next")}
-                    >
-                      <ChevronRightIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            /* HFB-Editor: Standard Hands-free Bible Widget with Speech-to-text (Editor/Dashboard View) */
-            <div
-              className="fixed z-50 bg-[#1a0f2e] border border-gray-600 rounded-lg shadow-xl w-80"
-              style={{ left: widgetPosition.x, top: widgetPosition.y }}
-            >
-              <HandsfreeBibleWidget
-                isFullscreen={false}
-                isLive={liveWindow !== null && !liveWindow.closed}
-                onClose={toggleHandsfreeBible}
-                isListeningMode={isListeningMode}
-                onToggleMicrophone={toggleMicrophone}
-                selectedBibleVersion={selectedBibleVersion}
-                setSelectedBibleVersion={setSelectedBibleVersion}
-                detectedCommands={detectedCommands}
-                setDetectedCommands={setDetectedCommands}
-                verseData={widgetVerseData}
-                formattedReference={widgetFormattedReference}
-                volume={volume}
-                onNavigate={(dir) => executeNavigation("verse_change", dir)}
-              />
-            </div>
-          )}
-        </div>
-      )}
-      {/* Profile Settings Modal */}
-      <ProfileSettings
-        isOpen={isProfileSettingsOpen}
-        onClose={() => setIsProfileSettingsOpen(false)}
-      />
-      {/* Notifications History Modal */}
-      <NotificationsModal
-        isOpen={isNotificationsModalOpen}
-        onClose={() => setIsNotificationsModalOpen(false)}
-      />
-      {/* Subscription Management Modal */}
-      <SubscriptionManagement
-        isOpen={isSubscriptionOpen}
-        onClose={() => setIsSubscriptionOpen(false)}
-      />
-      {/* Songbook Modal */}
-      <SongbookModal
-        isOpen={isSongbookOpen}
-        onClose={() => setIsSongbookOpen(false)}
-        onOpenSongEditor={(songData?: any) => {
-          setImportedSongData(songData || null);
-          setIsSongEditorOpen(true);
-        }}
-        savedSongs={savedSongs}
-        onAddToServiceSection={addSongToServiceSections}
-      />
-      {/* Song Editor Modal */}
-      <SongEditorModal
-        isOpen={isSongEditorOpen}
-        onClose={() => {
-          setIsSongEditorOpen(false);
-          setImportedSongData(null);
-        }}
-        initialData={importedSongData}
-        onSave={(songData) => {
-          console.log("Song saved:", songData);
-          // No need to manually update state, as the song is already saved to the database
-          // The query will automatically refresh to show the new song
-          setIsSongEditorOpen(false);
-          setImportedSongData(null);
-        }}
-      />
-      {/* Song Search Modal */}
-      <SongSearchModal
-        isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
-        onSelectSong={handleSelectSong}
-        searchTerm={songSearchTerm}
-        onSearchTermChange={setSongSearchTerm}
-        filteredSongs={filteredSongs || []}
-        onSearch={handleModalSearch}
-      />
-      {/* Fixed Position Visual Styles Dropdown */}
-      <StylesDropdown
-        isOpen={isStylesDropdownOpen}
-        position={dropdownPosition}
-        onApplyStyle={applyFormatting}
-        onClose={() => setIsStylesDropdownOpen(false)}
-      />
-      {/* Browse Media Modal */}
-      {isMediaBrowserOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsMediaBrowserOpen(false);
-            }
-          }}
-        >
-          <div
-            className="bg-[#1a0f2e] border border-gray-600 rounded-lg shadow-xl w-[95vw] h-[85vh] max-w-[1400px] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-600">
-              <h3 className="text-white text-lg font-medium">
-                Select Background Media
-              </h3>
-              <button
-                onClick={() => setIsMediaBrowserOpen(false)}
-                className="text-gray-400 hover:text-white p-1"
-              >
-                <XIcon className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Media Browser Content - With Left Filter Panel */}
-            <div className="flex h-full bg-[#0f0920]">
-              {/* Left - Filter Panel */}
-              <div className="w-64 border-r border-gray-600 bg-[#0f0920]">
-                <div className="p-4 space-y-6 h-full overflow-y-auto">
-                  {/* Search */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Search
-                    </h3>
-                    <div className="relative">
-                      <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        placeholder="Search media..."
-                        value={mediaSearchQuery}
-                        onChange={(e) => setMediaSearchQuery(e.target.value)}
-                        className="pl-10 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
+                      <span
+                        className={`text-sm ${isSleepMode ? "text-amber-300" : "text-gray-300"}`}
+                      >
+                        {isSleepMode
+                          ? 'Sleeping... Say "Bible"'
+                          : isListeningMode
+                            ? "Q-worship is listening"
+                            : "Q-worship is off"}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2 no-drag">
+                      <span
+                        className={`text-xs ${
+                          isSleepMode
+                            ? "text-amber-400"
+                            : isListeningMode
+                              ? "text-white"
+                              : "text-gray-400"
+                        }`}
+                      >
+                        {isSleepMode ? "SLEEP" : isListeningMode ? "ON" : "OFF"}
+                      </span>
+                      <Switch
+                        checked={isListeningMode}
+                        onCheckedChange={toggleMicrophone}
+                        className={`${isSleepMode ? "data-[state=checked]:bg-amber-600" : "data-[state=checked]:bg-[#8356F3]"} data-[state=unchecked]:bg-gray-600`}
                       />
                     </div>
                   </div>
 
-                  {/* Media Type Filter */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Media Type
-                    </h3>
-                    <div className="space-y-2">
-                      {[
-                        "Motion Background",
-                        "Motion Backgrounds",
-                        "Images",
-                        "Videos",
-                        "Slides",
-                      ].map((type) => (
-                        <label
-                          key={type}
-                          className="flex items-center space-x-2 cursor-pointer"
+                  {/* Microphone Status and Commands Display - Only show when listening */}
+                  {isListeningMode && (
+                    <div
+                      className={`rounded-lg p-4 space-y-3 ${isSleepMode ? "bg-[#2D2518]" : "bg-[#2D1B42]"}`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            isSleepMode ? "bg-amber-600" : "bg-[#8356F3]"
+                          }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={mediaTypeFilters.includes(type)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setMediaTypeFilters([
-                                  ...mediaTypeFilters,
-                                  type,
-                                ]);
-                              } else {
-                                setMediaTypeFilters(
-                                  mediaTypeFilters.filter((f) => f !== type),
-                                );
-                              }
-                            }}
-                            className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
+                          <Mic
+                            className={`w-4 h-4 ${isSleepMode ? "text-amber-200" : "text-white"}`}
                           />
-                          <span className="text-gray-300 text-sm">{type}</span>
-                        </label>
-                      ))}
+                        </div>
+                        <div>
+                          <span
+                            className={`text-sm font-medium block ${isSleepMode ? "text-amber-300" : "text-white"}`}
+                          >
+                            {isSleepMode
+                              ? "Sleeping - waiting for wake phrase"
+                              : "Listening for commands"}
+                          </span>
+                          <span
+                            className={`text-xs ${isSleepMode ? "text-amber-400" : "text-gray-400"}`}
+                          >
+                            {microphoneStatus}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-left">
+                        <div
+                          className={`text-xs mb-1 ${isSleepMode ? "text-amber-400" : "text-gray-400"}`}
+                        >
+                          {isSleepMode
+                            ? 'Say "Bible" or "I\'m ready":'
+                            : "Latest Detection:"}
+                        </div>
+                        <div
+                          className={`text-sm rounded p-2 font-mono ${isSleepMode ? "text-amber-200 bg-[#1a1408]" : "text-white bg-[#1a0f2e]"}`}
+                        >
+                          {detectedCommands}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scripture Display Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-white text-lg font-medium">
+                        Scripture Display
+                      </h3>
+                      <button className="text-gray-400 hover:text-white no-drag">
+                        <SettingsIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Bible Version Tabs */}
+                    <div className="bg-[#444444] rounded-lg p-1 flex space-x-1 no-drag">
+                      {["KJV", "NKJV", "NIV", "AMP", "GN", "MSG", "ESV"].map(
+                        (version) => (
+                          <button
+                            key={version}
+                            onClick={() => {
+                              setSelectedBibleVersion(version);
+                              setZustandBibleVersion(version.toLowerCase());
+                            }}
+                            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                              selectedBibleVersion === version
+                                ? "bg-[#8356F3] text-white"
+                                : "text-gray-300 hover:text-white hover:bg-gray-600"
+                            }`}
+                          >
+                            {version}
+                          </button>
+                        ),
+                      )}
+                    </div>
+
+                    {/* Scripture Content Area */}
+                    <div className="bg-[#444444] rounded-lg p-6 min-h-[120px]">
+                      {widgetVerseData && widgetVerseData[0] ? (
+                        <div className="space-y-3">
+                          {/* Reference Header */}
+                          {widgetFormattedReference && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-purple-400 text-sm font-medium">
+                                {widgetFormattedReference}
+                              </span>
+                              <span className="text-gray-500 text-xs">
+                                {selectedBibleVersion}
+                              </span>
+                            </div>
+                          )}
+                          {/* Verse Text */}
+                          <p className="text-white text-base leading-relaxed">
+                            {(() => {
+                              const versionKey =
+                                selectedBibleVersion.toLowerCase();
+                              const verseText =
+                                (widgetVerseData[0] as Record<string, any>)[
+                                  versionKey
+                                ] ||
+                                widgetVerseData[0].kjv ||
+                                "";
+                              return (
+                                verseText ||
+                                "Verse text not available for this version"
+                              );
+                            })()}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <p className="text-gray-400 text-center">
+                            {detectedCommands === "No commands detected"
+                              ? "Say a Bible reference or use voice commands..."
+                              : detectedCommands}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Navigation Controls */}
+                    <div className="flex items-center justify-center space-x-4">
+                      <button
+                        className="w-10 h-10 rounded-full border-2 border-gray-500 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-400 transition-colors no-drag"
+                        onClick={() =>
+                          executeNavigation("verse_change", "previous")
+                        }
+                      >
+                        <ChevronLeftIcon className="w-5 h-5" />
+                      </button>
+                      <span className="text-gray-400 text-sm px-4">
+                        Verse change
+                      </span>
+                      <button
+                        className="w-10 h-10 rounded-full border-2 border-gray-500 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-400 transition-colors no-drag"
+                        onClick={() =>
+                          executeNavigation("verse_change", "next")
+                        }
+                      >
+                        <ChevronRightIcon className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
+                </div>
+              </>
+            ) : (
+              /* HFB-Editor: Standard Hands-free Bible Widget with Speech-to-text (Editor/Dashboard View) */
+              <div
+                className="fixed z-50 bg-[#1a0f2e] border border-gray-600 rounded-lg shadow-xl w-80"
+                style={{ left: widgetPosition.x, top: widgetPosition.y }}
+              >
+                <HandsfreeBibleWidget
+                  isFullscreen={false}
+                  isLive={liveWindow !== null && !liveWindow.closed}
+                  onClose={toggleHandsfreeBible}
+                  isListeningMode={isListeningMode}
+                  onToggleMicrophone={toggleMicrophone}
+                  selectedBibleVersion={selectedBibleVersion}
+                  setSelectedBibleVersion={setSelectedBibleVersion}
+                  detectedCommands={detectedCommands}
+                  setDetectedCommands={setDetectedCommands}
+                  verseData={widgetVerseData}
+                  formattedReference={widgetFormattedReference}
+                  volume={volume}
+                  onNavigate={(dir) => executeNavigation("verse_change", dir)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {/* Profile Settings Modal */}
+        <ProfileSettings
+          isOpen={isProfileSettingsOpen}
+          onClose={() => setIsProfileSettingsOpen(false)}
+        />
+        {/* Notifications History Modal */}
+        <NotificationsModal
+          isOpen={isNotificationsModalOpen}
+          onClose={() => setIsNotificationsModalOpen(false)}
+        />
+        {/* Subscription Management Modal */}
+        <SubscriptionManagement
+          isOpen={isSubscriptionOpen}
+          onClose={() => setIsSubscriptionOpen(false)}
+        />
+        {/* Songbook Modal */}
+        <SongbookModal
+          isOpen={isSongbookOpen}
+          onClose={() => setIsSongbookOpen(false)}
+          onOpenSongEditor={(songData?: any) => {
+            setImportedSongData(songData || null);
+            setIsSongEditorOpen(true);
+          }}
+          savedSongs={savedSongs}
+          onAddToServiceSection={addSongToServiceSections}
+        />
+        {/* Song Editor Modal */}
+        <SongEditorModal
+          isOpen={isSongEditorOpen}
+          onClose={() => {
+            setIsSongEditorOpen(false);
+            setImportedSongData(null);
+          }}
+          initialData={importedSongData}
+          onSave={(songData) => {
+            console.log("Song saved:", songData);
+            // No need to manually update state, as the song is already saved to the database
+            // The query will automatically refresh to show the new song
+            setIsSongEditorOpen(false);
+            setImportedSongData(null);
+          }}
+        />
+        {/* Song Search Modal */}
+        <SongSearchModal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          onSelectSong={handleSelectSong}
+          searchTerm={songSearchTerm}
+          onSearchTermChange={setSongSearchTerm}
+          filteredSongs={filteredSongs || []}
+          onSearch={handleModalSearch}
+        />
+        {/* Fixed Position Visual Styles Dropdown */}
+        <StylesDropdown
+          isOpen={isStylesDropdownOpen}
+          position={dropdownPosition}
+          onApplyStyle={applyFormatting}
+          onClose={() => setIsStylesDropdownOpen(false)}
+        />
+        {/* Browse Media Modal */}
+        {isMediaBrowserOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsMediaBrowserOpen(false);
+              }
+            }}
+          >
+            <div
+              className="bg-[#1a0f2e] border border-gray-600 rounded-lg shadow-xl w-[95vw] h-[85vh] max-w-[1400px] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-600">
+                <h3 className="text-white text-lg font-medium">
+                  Select Background Media
+                </h3>
+                <button
+                  onClick={() => setIsMediaBrowserOpen(false)}
+                  className="text-gray-400 hover:text-white p-1"
+                >
+                  <XIcon className="w-5 h-5" />
+                </button>
+              </div>
 
-                  {/* Categories/Tags Filter */}
-                  {activeMediaTab === "cloud" && (
+              {/* Media Browser Content - With Left Filter Panel */}
+              <div className="flex h-full bg-[#0f0920]">
+                {/* Left - Filter Panel */}
+                <div className="w-64 border-r border-gray-600 bg-[#0f0920]">
+                  <div className="p-4 space-y-6 h-full overflow-y-auto">
+                    {/* Search */}
                     <div>
                       <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                        Categories
+                        Search
+                      </h3>
+                      <div className="relative">
+                        <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                          placeholder="Search media..."
+                          value={mediaSearchQuery}
+                          onChange={(e) => setMediaSearchQuery(e.target.value)}
+                          className="pl-10 bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Media Type Filter */}
+                    <div>
+                      <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                        Media Type
                       </h3>
                       <div className="space-y-2">
                         {[
-                          "All Categories",
-                          "Worship",
-                          "Nature",
-                          "Abstract",
-                          "Biblical",
-                          "Seasonal",
-                        ].map((category) => (
+                          "Motion Background",
+                          "Motion Backgrounds",
+                          "Images",
+                          "Videos",
+                          "Slides",
+                        ].map((type) => (
                           <label
-                            key={category}
+                            key={type}
                             className="flex items-center space-x-2 cursor-pointer"
                           >
                             <input
                               type="checkbox"
-                              checked={mediaCategoryFilters.includes(category)}
+                              checked={mediaTypeFilters.includes(type)}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  setMediaCategoryFilters([
-                                    ...mediaCategoryFilters,
-                                    category,
+                                  setMediaTypeFilters([
+                                    ...mediaTypeFilters,
+                                    type,
                                   ]);
                                 } else {
-                                  setMediaCategoryFilters(
-                                    mediaCategoryFilters.filter(
-                                      (f) => f !== category,
-                                    ),
+                                  setMediaTypeFilters(
+                                    mediaTypeFilters.filter((f) => f !== type),
                                   );
                                 }
                               }}
                               className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
                             />
                             <span className="text-gray-300 text-sm">
-                              {category}
+                              {type}
                             </span>
                           </label>
                         ))}
                       </div>
                     </div>
-                  )}
 
-                  {/* Recent */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Recent
-                    </h3>
-                    <div className="space-y-2">
-                      {["Recently used", "Recently added"].map((item) => (
-                        <label
-                          key={item}
-                          className="flex items-center space-x-2 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={mediaTypeFilters.includes(item)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setMediaTypeFilters([
-                                  ...mediaTypeFilters,
-                                  item,
-                                ]);
-                              } else {
-                                setMediaTypeFilters(
-                                  mediaTypeFilters.filter((f) => f !== item),
-                                );
-                              }
-                            }}
-                            className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
-                          />
-                          <span className="text-gray-300 text-sm">{item}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                    {/* Categories/Tags Filter */}
+                    {activeMediaTab === "cloud" && (
+                      <div>
+                        <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                          Categories
+                        </h3>
+                        <div className="space-y-2">
+                          {[
+                            "All Categories",
+                            "Worship",
+                            "Nature",
+                            "Abstract",
+                            "Biblical",
+                            "Seasonal",
+                          ].map((category) => (
+                            <label
+                              key={category}
+                              className="flex items-center space-x-2 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={mediaCategoryFilters.includes(
+                                  category,
+                                )}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setMediaCategoryFilters([
+                                      ...mediaCategoryFilters,
+                                      category,
+                                    ]);
+                                  } else {
+                                    setMediaCategoryFilters(
+                                      mediaCategoryFilters.filter(
+                                        (f) => f !== category,
+                                      ),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
+                              />
+                              <span className="text-gray-300 text-sm">
+                                {category}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                  {/* Media Tags & Collections */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Media Tags & Collections
-                    </h3>
-                    <div className="space-y-2">
-                      {(() => {
-                        // Show user-specific tags when on MY MEDIA tab, static tags for CLOUD MEDIA
-                        const tagsToShow =
-                          activeMediaTab === "my"
-                            ? getUserMediaTags()
-                            : [
-                                "Waves",
-                                "Science Visuals",
-                                "Trees",
-                                "Flowers",
-                                "Backgrounds",
-                                "Nature",
-                                "Abstract",
-                              ];
-
-                        if (
-                          activeMediaTab === "my" &&
-                          tagsToShow.length === 0
-                        ) {
-                          return (
-                            <div className="text-gray-400 text-sm italic">
-                              No tags found in your media
-                            </div>
-                          );
-                        }
-
-                        return tagsToShow.map((tag) => (
+                    {/* Recent */}
+                    <div>
+                      <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                        Recent
+                      </h3>
+                      <div className="space-y-2">
+                        {["Recently used", "Recently added"].map((item) => (
                           <label
-                            key={tag}
+                            key={item}
                             className="flex items-center space-x-2 cursor-pointer"
                           >
                             <input
                               type="checkbox"
-                              checked={mediaTagFilters.includes(tag)}
+                              checked={mediaTypeFilters.includes(item)}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  setMediaTagFilters([...mediaTagFilters, tag]);
+                                  setMediaTypeFilters([
+                                    ...mediaTypeFilters,
+                                    item,
+                                  ]);
                                 } else {
-                                  setMediaTagFilters(
-                                    mediaTagFilters.filter((f) => f !== tag),
+                                  setMediaTypeFilters(
+                                    mediaTypeFilters.filter((f) => f !== item),
                                   );
                                 }
                               }}
                               className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
                             />
-                            <span className="text-gray-300 text-sm">{tag}</span>
+                            <span className="text-gray-300 text-sm">
+                              {item}
+                            </span>
                           </label>
-                        ));
-                      })()}
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Seasons */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Seasons
-                    </h3>
-                    <div className="space-y-2">
-                      {[
-                        "Easter",
-                        "Christmas",
-                        "Lent",
-                        "Advent",
-                        "Ordinary Time",
-                        "Thanksgiving",
-                      ].map((season) => (
-                        <label
-                          key={season}
-                          className="flex items-center space-x-2 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={mediaTagFilters.includes(season)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setMediaTagFilters([
-                                  ...mediaTagFilters,
-                                  season,
-                                ]);
-                              } else {
-                                setMediaTagFilters(
-                                  mediaTagFilters.filter((f) => f !== season),
-                                );
-                              }
-                            }}
-                            className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
-                          />
-                          <span className="text-gray-300 text-sm">
-                            {season}
-                          </span>
-                        </label>
-                      ))}
+                    {/* Media Tags & Collections */}
+                    <div>
+                      <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                        Media Tags & Collections
+                      </h3>
+                      <div className="space-y-2">
+                        {(() => {
+                          // Show user-specific tags when on MY MEDIA tab, static tags for CLOUD MEDIA
+                          const tagsToShow =
+                            activeMediaTab === "my"
+                              ? getUserMediaTags()
+                              : [
+                                  "Waves",
+                                  "Science Visuals",
+                                  "Trees",
+                                  "Flowers",
+                                  "Backgrounds",
+                                  "Nature",
+                                  "Abstract",
+                                ];
+
+                          if (
+                            activeMediaTab === "my" &&
+                            tagsToShow.length === 0
+                          ) {
+                            return (
+                              <div className="text-gray-400 text-sm italic">
+                                No tags found in your media
+                              </div>
+                            );
+                          }
+
+                          return tagsToShow.map((tag) => (
+                            <label
+                              key={tag}
+                              className="flex items-center space-x-2 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={mediaTagFilters.includes(tag)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setMediaTagFilters([
+                                      ...mediaTagFilters,
+                                      tag,
+                                    ]);
+                                  } else {
+                                    setMediaTagFilters(
+                                      mediaTagFilters.filter((f) => f !== tag),
+                                    );
+                                  }
+                                }}
+                                className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
+                              />
+                              <span className="text-gray-300 text-sm">
+                                {tag}
+                              </span>
+                            </label>
+                          ));
+                        })()}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Service Items */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Service Items
-                    </h3>
-                    <div className="space-y-2">
-                      {[
-                        "Hands-free Bible",
-                        "Song",
-                        "Announcement",
-                        "On-screen Bible",
-                        "Slide Canvas",
-                        "Content",
-                      ].map((item) => (
-                        <label
-                          key={item}
-                          className="flex items-center space-x-2 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={mediaTagFilters.includes(item)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setMediaTagFilters([...mediaTagFilters, item]);
-                              } else {
-                                setMediaTagFilters(
-                                  mediaTagFilters.filter((f) => f !== item),
-                                );
-                              }
-                            }}
-                            className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
-                          />
-                          <span className="text-gray-300 text-sm">{item}</span>
-                        </label>
-                      ))}
+                    {/* Seasons */}
+                    <div>
+                      <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                        Seasons
+                      </h3>
+                      <div className="space-y-2">
+                        {[
+                          "Easter",
+                          "Christmas",
+                          "Lent",
+                          "Advent",
+                          "Ordinary Time",
+                          "Thanksgiving",
+                        ].map((season) => (
+                          <label
+                            key={season}
+                            className="flex items-center space-x-2 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={mediaTagFilters.includes(season)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setMediaTagFilters([
+                                    ...mediaTagFilters,
+                                    season,
+                                  ]);
+                                } else {
+                                  setMediaTagFilters(
+                                    mediaTagFilters.filter((f) => f !== season),
+                                  );
+                                }
+                              }}
+                              className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
+                            />
+                            <span className="text-gray-300 text-sm">
+                              {season}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Live Screen Items */}
-                  <div>
-                    <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
-                      Live Screen Items
-                    </h3>
-                    <div className="space-y-2">
-                      {["Logo", "Images", "Videos", "Content"].map((item) => (
-                        <label
-                          key={item}
-                          className="flex items-center space-x-2 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={mediaTagFilters.includes(item)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setMediaTagFilters([...mediaTagFilters, item]);
-                              } else {
-                                setMediaTagFilters(
-                                  mediaTagFilters.filter((f) => f !== item),
-                                );
-                              }
-                            }}
-                            className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
-                          />
-                          <span className="text-gray-300 text-sm">{item}</span>
-                        </label>
-                      ))}
+                    {/* Service Items */}
+                    <div>
+                      <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                        Service Items
+                      </h3>
+                      <div className="space-y-2">
+                        {[
+                          "Hands-free Bible",
+                          "Song",
+                          "Announcement",
+                          "On-screen Bible",
+                          "Slide Canvas",
+                          "Content",
+                        ].map((item) => (
+                          <label
+                            key={item}
+                            className="flex items-center space-x-2 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={mediaTagFilters.includes(item)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setMediaTagFilters([
+                                    ...mediaTagFilters,
+                                    item,
+                                  ]);
+                                } else {
+                                  setMediaTagFilters(
+                                    mediaTagFilters.filter((f) => f !== item),
+                                  );
+                                }
+                              }}
+                              className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
+                            />
+                            <span className="text-gray-300 text-sm">
+                              {item}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Clear Filters */}
-                  <div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setMediaSearchQuery("");
-                        setMediaTypeFilters([]);
-                        setMediaCategoryFilters([]);
-                        setMediaTagFilters([]);
-                      }}
-                      className="w-full border-gray-600 text-white hover:bg-gray-700 hover:text-white bg-[#0f0920]"
-                    >
-                      Clear All Filters
-                    </Button>
+                    {/* Live Screen Items */}
+                    <div>
+                      <h3 className="text-[#cea2fd] text-sm font-medium mb-3">
+                        Live Screen Items
+                      </h3>
+                      <div className="space-y-2">
+                        {["Logo", "Images", "Videos", "Content"].map((item) => (
+                          <label
+                            key={item}
+                            className="flex items-center space-x-2 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={mediaTagFilters.includes(item)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setMediaTagFilters([
+                                    ...mediaTagFilters,
+                                    item,
+                                  ]);
+                                } else {
+                                  setMediaTagFilters(
+                                    mediaTagFilters.filter((f) => f !== item),
+                                  );
+                                }
+                              }}
+                              className="rounded border-gray-600 bg-gray-700 text-[#8356F3]"
+                            />
+                            <span className="text-gray-300 text-sm">
+                              {item}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Clear Filters */}
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setMediaSearchQuery("");
+                          setMediaTypeFilters([]);
+                          setMediaCategoryFilters([]);
+                          setMediaTagFilters([]);
+                        }}
+                        className="w-full border-gray-600 text-white hover:bg-gray-700 hover:text-white bg-[#0f0920]"
+                      >
+                        Clear All Filters
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Right - Media Content */}
-              <div className="flex-1 overflow-hidden">
-                <div className="h-full flex flex-col">
-                  {/* Tab Navigation */}
-                  <div className="flex border-b border-gray-600 bg-[#1a0f2e]">
-                    <button
-                      onClick={() => setActiveMediaTab("cloud")}
-                      className={`px-6 py-3 transition-colors ${
-                        activeMediaTab === "cloud"
-                          ? "text-[#8356F3] border-b-2 border-[#8356F3] bg-[#8356F3]/10"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      CLOUD MEDIA
-                    </button>
-                    <button
-                      onClick={() => setActiveMediaTab("my")}
-                      className={`px-6 py-3 transition-colors ${
-                        activeMediaTab === "my"
-                          ? "text-[#8356F3] border-b-2 border-[#8356F3] bg-[#8356F3]/10"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      MY MEDIA
-                    </button>
-                  </div>
+                {/* Right - Media Content */}
+                <div className="flex-1 overflow-hidden">
+                  <div className="h-full flex flex-col">
+                    {/* Tab Navigation */}
+                    <div className="flex border-b border-gray-600 bg-[#1a0f2e]">
+                      <button
+                        onClick={() => setActiveMediaTab("cloud")}
+                        className={`px-6 py-3 transition-colors ${
+                          activeMediaTab === "cloud"
+                            ? "text-[#8356F3] border-b-2 border-[#8356F3] bg-[#8356F3]/10"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        CLOUD MEDIA
+                      </button>
+                      <button
+                        onClick={() => setActiveMediaTab("my")}
+                        className={`px-6 py-3 transition-colors ${
+                          activeMediaTab === "my"
+                            ? "text-[#8356F3] border-b-2 border-[#8356F3] bg-[#8356F3]/10"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        MY MEDIA
+                      </button>
+                    </div>
 
-                  {/* Content based on active tab - now with filter support */}
-                  <div className="flex-1 overflow-hidden custom-scrollbar">
-                    {activeMediaTab === "cloud" ? (
-                      <CloudMediaTab
-                        searchQuery={mediaSearchQuery}
-                        typeFilters={mediaTypeFilters}
-                        categoryFilters={mediaCategoryFilters}
-                        onSelectMedia={(mediaAsset) => {
-                          console.log("🌩️ CLOUD MEDIA SELECTED:", mediaAsset);
-                          const fileUrl =
-                            mediaAsset.fileUrl ||
-                            `${window.location.origin}/api/cloud-media/${mediaAsset.id}/file`;
-                          console.log(
-                            "⚡ APPLYING CLOUD MEDIA BACKGROUND:",
-                            fileUrl,
-                          );
-                          console.log(
-                            "🎭 Background type:",
-                            mediaAsset.fileType?.startsWith("video")
-                              ? "video"
-                              : "image",
-                          );
-                          const currentItemId = getCurrentItemId();
-                          console.log(
-                            "🎯 Current item ID before apply:",
-                            currentItemId,
-                          );
+                    {/* Content based on active tab - now with filter support */}
+                    <div className="flex-1 overflow-hidden custom-scrollbar">
+                      {activeMediaTab === "cloud" ? (
+                        <CloudMediaTab
+                          searchQuery={mediaSearchQuery}
+                          typeFilters={mediaTypeFilters}
+                          categoryFilters={mediaCategoryFilters}
+                          onSelectMedia={(mediaAsset) => {
+                            console.log("🌩️ CLOUD MEDIA SELECTED:", mediaAsset);
+                            const fileUrl =
+                              mediaAsset.fileUrl ||
+                              `${window.location.origin}/api/cloud-media/${mediaAsset.id}/file`;
+                            console.log(
+                              "⚡ APPLYING CLOUD MEDIA BACKGROUND:",
+                              fileUrl,
+                            );
+                            console.log(
+                              "🎭 Background type:",
+                              mediaAsset.fileType?.startsWith("video")
+                                ? "video"
+                                : "image",
+                            );
+                            const currentItemId = getCurrentItemId();
+                            console.log(
+                              "🎯 Current item ID before apply:",
+                              currentItemId,
+                            );
 
-                          const backgroundData = {
-                            type: (mediaAsset.fileType?.startsWith("video")
-                              ? "video"
-                              : "image") as "video" | "image",
-                            value: fileUrl,
-                            name: mediaAsset.title,
-                          };
-                          console.log(
-                            "📦 Final cloud background data:",
-                            backgroundData,
-                          );
-                          console.log(
-                            "🚀 About to call applyBackgroundToCurrentItem...",
-                          );
+                            const backgroundData = {
+                              type: (mediaAsset.fileType?.startsWith("video")
+                                ? "video"
+                                : "image") as "video" | "image",
+                              value: fileUrl,
+                              name: mediaAsset.title,
+                            };
+                            console.log(
+                              "📦 Final cloud background data:",
+                              backgroundData,
+                            );
+                            console.log(
+                              "🚀 About to call applyBackgroundToCurrentItem...",
+                            );
 
-                          applyBackgroundToCurrentItem(backgroundData);
-                          console.log(
-                            "✅ applyBackgroundToCurrentItem completed!",
-                          );
-                          setIsMediaBrowserOpen(false);
-                        }}
-                      />
-                    ) : (
-                      <MyMediaTab
-                        currentUser={currentUserResponse?.user || null}
-                        searchQuery={mediaSearchQuery}
-                        typeFilters={mediaTypeFilters}
-                        tagFilters={mediaTagFilters}
-                        recentlyUploadedId={recentlyUploadedMediaId}
-                        onSelectMedia={(mediaAsset) => {
-                          console.log("🎯 MY MEDIA SELECTED:", mediaAsset);
-                          const fileUrl = `${window.location.origin}/api/user-media-assets/${mediaAsset.id}/file`;
-                          console.log(
-                            "🚀 APPLYING USER MEDIA BACKGROUND:",
-                            fileUrl,
-                          );
-                          console.log(
-                            "🎨 Background type:",
-                            mediaAsset.fileType?.startsWith("video")
-                              ? "video"
-                              : "image",
-                          );
-                          const currentItemId = getCurrentItemId();
-                          console.log(
-                            "🆔 Current item ID before apply:",
-                            currentItemId,
-                          );
+                            applyBackgroundToCurrentItem(backgroundData);
+                            console.log(
+                              "✅ applyBackgroundToCurrentItem completed!",
+                            );
+                            setIsMediaBrowserOpen(false);
+                          }}
+                        />
+                      ) : (
+                        <MyMediaTab
+                          currentUser={currentUserResponse?.user || null}
+                          searchQuery={mediaSearchQuery}
+                          typeFilters={mediaTypeFilters}
+                          tagFilters={mediaTagFilters}
+                          recentlyUploadedId={recentlyUploadedMediaId}
+                          onSelectMedia={(mediaAsset) => {
+                            console.log("🎯 MY MEDIA SELECTED:", mediaAsset);
+                            const fileUrl = `${window.location.origin}/api/user-media-assets/${mediaAsset.id}/file`;
+                            console.log(
+                              "🚀 APPLYING USER MEDIA BACKGROUND:",
+                              fileUrl,
+                            );
+                            console.log(
+                              "🎨 Background type:",
+                              mediaAsset.fileType?.startsWith("video")
+                                ? "video"
+                                : "image",
+                            );
+                            const currentItemId = getCurrentItemId();
+                            console.log(
+                              "🆔 Current item ID before apply:",
+                              currentItemId,
+                            );
 
-                          const backgroundData = {
-                            type: (mediaAsset.fileType?.startsWith("video")
-                              ? "video"
-                              : "image") as "video" | "image",
-                            value: fileUrl,
-                            name: mediaAsset.title,
-                          };
-                          console.log(
-                            "🏷️ Final background data:",
-                            backgroundData,
-                          );
-                          console.log(
-                            "🚀 About to call applyBackgroundToCurrentItem...",
-                          );
+                            const backgroundData = {
+                              type: (mediaAsset.fileType?.startsWith("video")
+                                ? "video"
+                                : "image") as "video" | "image",
+                              value: fileUrl,
+                              name: mediaAsset.title,
+                            };
+                            console.log(
+                              "🏷️ Final background data:",
+                              backgroundData,
+                            );
+                            console.log(
+                              "🚀 About to call applyBackgroundToCurrentItem...",
+                            );
 
-                          applyBackgroundToCurrentItem(backgroundData);
-                          console.log(
-                            "✅ applyBackgroundToCurrentItem completed!",
-                          );
-                          setIsMediaBrowserOpen(false);
-                          // Clear the recently uploaded state after selection
-                          setRecentlyUploadedMediaId(null);
-                        }}
-                      />
-                    )}
+                            applyBackgroundToCurrentItem(backgroundData);
+                            console.log(
+                              "✅ applyBackgroundToCurrentItem completed!",
+                            );
+                            setIsMediaBrowserOpen(false);
+                            // Clear the recently uploaded state after selection
+                            setRecentlyUploadedMediaId(null);
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-      {/* Background Import Media Modal */}
-      <ImportFilesModal
-        open={isImportImageOpen}
-        onOpenChange={(open) => {
-          setIsImportImageOpen(open);
-        }}
-        onMediaUploaded={(mediaAsset) => {
-          // Store the uploaded media ID for preselection
-          setRecentlyUploadedMediaId(mediaAsset.id);
+        )}
+        {/* Background Import Media Modal */}
+        <ImportFilesModal
+          open={isImportImageOpen}
+          onOpenChange={(open) => {
+            setIsImportImageOpen(open);
+          }}
+          onMediaUploaded={(mediaAsset) => {
+            // Store the uploaded media ID for preselection
+            setRecentlyUploadedMediaId(mediaAsset.id);
 
-          // Open the full Assets page with the newly uploaded media pre-selected.
-          // Triggered here (with the fresh id available directly as a
-          // parameter) rather than from onOpenChange, which used to read
-          // recentlyUploadedMediaId through a stale closure - it still saw
-          // the previous render's value (null, on the very first upload)
-          // since React batches this state update with the modal's own
-          // close, so the thumbnail never appeared until a full reload.
-          setTimeout(() => {
-            setIsBackgroundAssetsModalOpen(true);
-            setBackgroundModalMode("browse"); // Set to browse mode to show selection interface
-          }, 300);
+            // Open the full Assets page with the newly uploaded media pre-selected.
+            // Triggered here (with the fresh id available directly as a
+            // parameter) rather than from onOpenChange, which used to read
+            // recentlyUploadedMediaId through a stale closure - it still saw
+            // the previous render's value (null, on the very first upload)
+            // since React batches this state update with the modal's own
+            // close, so the thumbnail never appeared until a full reload.
+            setTimeout(() => {
+              setIsBackgroundAssetsModalOpen(true);
+              setBackgroundModalMode("browse"); // Set to browse mode to show selection interface
+            }, 300);
 
-          toast({
-            title: "Media Uploaded Successfully!",
-            description: "Your media is now available in MY MEDIA section",
-            className: "bg-[#8356f3] text-white",
-          });
-        }}
-      />
-      {/* Background Assets Modal */}
-      <BackgroundAssetsModal
-        isOpen={isBackgroundAssetsModalOpen}
-        onClose={() => setIsBackgroundAssetsModalOpen(false)}
-        backgroundModalMode={backgroundModalMode}
-        recentlyUploadedMediaId={recentlyUploadedMediaId}
-        getCurrentItemId={getCurrentItemId}
-        applyBackgroundToCurrentItem={(bg: any) =>
-          applyBackgroundToCurrentItem(bg)
-        }
-      />
+            toast({
+              title: "Media Uploaded Successfully!",
+              description: "Your media is now available in MY MEDIA section",
+              className: "bg-[#8356f3] text-white",
+            });
+          }}
+        />
+        {/* Background Assets Modal */}
+        <BackgroundAssetsModal
+          isOpen={isBackgroundAssetsModalOpen}
+          onClose={() => setIsBackgroundAssetsModalOpen(false)}
+          backgroundModalMode={backgroundModalMode}
+          recentlyUploadedMediaId={recentlyUploadedMediaId}
+          getCurrentItemId={getCurrentItemId}
+          applyBackgroundToCurrentItem={(bg: any) =>
+            applyBackgroundToCurrentItem(bg)
+          }
+        />
 
-      {/* New Presentation Modal */}
-      <NewPresentationModal
-        isOpen={isNewPresentationModalOpen}
-        onClose={() => setIsNewPresentationModalOpen(false)}
-        newPresentationName={newPresentationName}
-        setNewPresentationName={setNewPresentationName}
-        isModalCalendarOpen={isModalCalendarOpen}
-        setIsModalCalendarOpen={setIsModalCalendarOpen}
-        modalSelectedDate={modalSelectedDate}
-        formatModalDate={formatModalDate}
-        renderModalCalendar={renderModalCalendar}
-        handleCreateNewPresentation={handleCreateNewPresentation}
-      />
+        {/* New Presentation Modal */}
+        <NewPresentationModal
+          isOpen={isNewPresentationModalOpen}
+          onClose={() => setIsNewPresentationModalOpen(false)}
+          newPresentationName={newPresentationName}
+          setNewPresentationName={setNewPresentationName}
+          isModalCalendarOpen={isModalCalendarOpen}
+          setIsModalCalendarOpen={setIsModalCalendarOpen}
+          modalSelectedDate={modalSelectedDate}
+          formatModalDate={formatModalDate}
+          renderModalCalendar={renderModalCalendar}
+          handleCreateNewPresentation={handleCreateNewPresentation}
+        />
 
-      <ModalsContainer
-        isOpenModalOpen={isOpenModalOpen}
-        setIsOpenModalOpen={setIsOpenModalOpen}
-        projectSearchQuery={projectSearchQuery}
-        setProjectSearchQuery={setProjectSearchQuery}
-        projectSortBy={projectSortBy}
-        setProjectSortBy={setProjectSortBy}
-        projectSortOrder={projectSortOrder}
-        setProjectSortOrder={setProjectSortOrder}
-        projectViewMode={projectViewMode}
-        setProjectViewMode={setProjectViewMode}
-        getFilteredAndSortedProjects={getFilteredAndSortedProjects}
-        savedProjects={savedProjects}
-        setIsNewPresentationModalOpen={setIsNewPresentationModalOpen}
-        handleOpenProject={handleOpenProject}
-        handleDeleteProject={handleDeleteProject}
-        editingModalProjectId={editingModalProjectId}
-        modalProjectNameInputRef={modalProjectNameInputRef}
-        editingModalProjectName={editingModalProjectName}
-        setEditingModalProjectName={setEditingModalProjectName}
-        handleModalProjectNameKeyDown={handleModalProjectNameKeyDown}
-        saveModalProjectName={saveModalProjectName}
-        startEditingModalProjectName={startEditingModalProjectName}
-        formatProjectDate={formatProjectDate}
-        calculateSlideCount={calculateSlideCount}
-        isImportModalOpen={isImportModalOpen}
-        setIsImportModalOpen={setIsImportModalOpen}
-        handleFileImport={handleFileImport}
-        importPresentationMutation={importPresentationMutation}
-        deleteConfirmation={deleteConfirmation}
-        cancelDelete={cancelDelete}
-        confirmDelete={confirmDelete}
-        isDeleteModalOpen={isDeleteModalOpen}
-        projectToDelete={projectToDelete}
-        cancelDeleteProject={cancelDeleteProject}
-        confirmDeleteProject={confirmDeleteProject}
-        deletePresentationMutation={deletePresentationMutation}
-        isIntegrationsModalOpen={isIntegrationsModalOpen}
-        setIsIntegrationsModalOpen={setIsIntegrationsModalOpen}
-        isPreferencesModalOpen={isPreferencesModalOpen}
-        setIsPreferencesModalOpen={setIsPreferencesModalOpen}
-        isDisplaySettingsModalOpen={isDisplaySettingsModalOpen}
-        setIsDisplaySettingsModalOpen={setIsDisplaySettingsModalOpen}
-        isAccountSettingsModalOpen={isAccountSettingsModalOpen}
-        setIsAccountSettingsModalOpen={setIsAccountSettingsModalOpen}
-        isAudioSettingsModalOpen={isAudioSettingsModalOpen}
-        setIsAudioSettingsModalOpen={setIsAudioSettingsModalOpen}
-        audioDevices={audioDevices}
-        selectedAudioDeviceId={selectedAudioDeviceId}
-        hasAudioPermission={hasAudioPermission}
-        audioDevicesLoading={audioDevicesLoading}
-        audioDevicesError={audioDevicesError}
-        selectAudioDevice={selectAudioDevice}
-        getSelectedDevice={getSelectedDevice}
-        requestAudioPermission={requestAudioPermission}
-        refreshAudioDevices={refreshAudioDevices}
-        isLiveConsoleOpen={isLiveConsoleOpen}
-        setIsLiveConsoleOpen={setIsLiveConsoleOpen}
-        setCurrentSlide={setCurrentSlide}
-        liveWindow={liveWindow}
-        slides={slides}
-        itemBackgrounds={itemBackgrounds}
-        currentSlide={currentSlide}
-        totalSlides={totalSlides}
-        serviceItems={serviceItems}
-        clearZustandProjection={clearZustandProjection}
-        setActiveTab={setActiveTab}
-        toggleHandsfreeBible={toggleHandsfreeBible}
-        setIsSongbookOpen={setIsSongbookOpen}
-        setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
-      />
-    </div>
+        <ModalsContainer
+          isOpenModalOpen={isOpenModalOpen}
+          setIsOpenModalOpen={setIsOpenModalOpen}
+          projectSearchQuery={projectSearchQuery}
+          setProjectSearchQuery={setProjectSearchQuery}
+          projectSortBy={projectSortBy}
+          setProjectSortBy={setProjectSortBy}
+          projectSortOrder={projectSortOrder}
+          setProjectSortOrder={setProjectSortOrder}
+          projectViewMode={projectViewMode}
+          setProjectViewMode={setProjectViewMode}
+          getFilteredAndSortedProjects={getFilteredAndSortedProjects}
+          savedProjects={savedProjects}
+          setIsNewPresentationModalOpen={setIsNewPresentationModalOpen}
+          handleOpenProject={handleOpenProject}
+          handleDeleteProject={handleDeleteProject}
+          editingModalProjectId={editingModalProjectId}
+          modalProjectNameInputRef={modalProjectNameInputRef}
+          editingModalProjectName={editingModalProjectName}
+          setEditingModalProjectName={setEditingModalProjectName}
+          handleModalProjectNameKeyDown={handleModalProjectNameKeyDown}
+          saveModalProjectName={saveModalProjectName}
+          startEditingModalProjectName={startEditingModalProjectName}
+          formatProjectDate={formatProjectDate}
+          calculateSlideCount={calculateSlideCount}
+          isImportModalOpen={isImportModalOpen}
+          setIsImportModalOpen={setIsImportModalOpen}
+          handleFileImport={handleFileImport}
+          importPresentationMutation={importPresentationMutation}
+          deleteConfirmation={deleteConfirmation}
+          cancelDelete={cancelDelete}
+          confirmDelete={confirmDelete}
+          isDeleteModalOpen={isDeleteModalOpen}
+          projectToDelete={projectToDelete}
+          cancelDeleteProject={cancelDeleteProject}
+          confirmDeleteProject={confirmDeleteProject}
+          deletePresentationMutation={deletePresentationMutation}
+          isIntegrationsModalOpen={isIntegrationsModalOpen}
+          setIsIntegrationsModalOpen={setIsIntegrationsModalOpen}
+          isPreferencesModalOpen={isPreferencesModalOpen}
+          setIsPreferencesModalOpen={setIsPreferencesModalOpen}
+          isDisplaySettingsModalOpen={isDisplaySettingsModalOpen}
+          setIsDisplaySettingsModalOpen={setIsDisplaySettingsModalOpen}
+          isAccountSettingsModalOpen={isAccountSettingsModalOpen}
+          setIsAccountSettingsModalOpen={setIsAccountSettingsModalOpen}
+          isAudioSettingsModalOpen={isAudioSettingsModalOpen}
+          setIsAudioSettingsModalOpen={setIsAudioSettingsModalOpen}
+          audioDevices={audioDevices}
+          selectedAudioDeviceId={selectedAudioDeviceId}
+          hasAudioPermission={hasAudioPermission}
+          audioDevicesLoading={audioDevicesLoading}
+          audioDevicesError={audioDevicesError}
+          selectAudioDevice={selectAudioDevice}
+          getSelectedDevice={getSelectedDevice}
+          requestAudioPermission={requestAudioPermission}
+          refreshAudioDevices={refreshAudioDevices}
+          isLiveConsoleOpen={isLiveConsoleOpen}
+          setIsLiveConsoleOpen={setIsLiveConsoleOpen}
+          setCurrentSlide={setCurrentSlide}
+          liveWindow={liveWindow}
+          slides={slides}
+          itemBackgrounds={itemBackgrounds}
+          currentSlide={currentSlide}
+          totalSlides={totalSlides}
+          serviceItems={serviceItems}
+          clearZustandProjection={clearZustandProjection}
+          setActiveTab={setActiveTab}
+          toggleHandsfreeBible={toggleHandsfreeBible}
+          setIsSongbookOpen={setIsSongbookOpen}
+          setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
+        />
+      </div>
+    </HandsfreeBibleProvider>
   );
 };
 
