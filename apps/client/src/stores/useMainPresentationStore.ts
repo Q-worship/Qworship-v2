@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { LowerThirdBindingData as MainPresentationBindingData } from "@/features/lowerThird/types";
+import type { BibleReferencePosition } from "@/features/dashboard/hooks/useWysiwygEditor";
 
 export interface MainPresentationSettings {
   backgroundType: "solid" | "gradient" | "media";
@@ -14,6 +15,15 @@ export interface MainPresentationSettings {
   fontSizeMax: number;
   textAlign: "left" | "center" | "right";
   justifyContent: "flex-start" | "center" | "flex-end";
+  /** Independent from the content fields above - the reference (citation) line
+   *  gets its own font/color/weight/size and position, matching the split
+   *  already built for Live Presentation Settings (WEB). */
+  referenceFontFamily: string;
+  referenceFontColor: string;
+  referenceFontWeight: string;
+  referenceFontSizeMin: number;
+  referenceFontSizeMax: number;
+  referencePosition: BibleReferencePosition;
 }
 
 export const DEFAULT_SETTINGS: MainPresentationSettings = {
@@ -29,6 +39,15 @@ export const DEFAULT_SETTINGS: MainPresentationSettings = {
   fontSizeMax: 140,
   textAlign: "center",
   justifyContent: "center",
+  // Chosen to closely reproduce today's hardcoded reference look (which was
+  // opacity:0.8, font-size:0.5em, font-weight:500, always below the content)
+  // so existing users see no visual jump until they customize it.
+  referenceFontFamily: "Inter, sans-serif",
+  referenceFontColor: "#ffffff",
+  referenceFontWeight: "500",
+  referenceFontSizeMin: 20,
+  referenceFontSizeMax: 70,
+  referencePosition: "bottom-center",
 };
 
 const STORAGE_KEY = "qworship-main-presentation";
@@ -174,7 +193,10 @@ export const useMainPresentationStore = create<MainPresentationState>((set, get)
   return {
     enabled: persisted.enabled ?? true,
     userId: persisted.userId ?? null,
-    settings: persisted.settings || DEFAULT_SETTINGS,
+    // Merged (not just || DEFAULT_SETTINGS) so a settings object saved before
+    // a new field was added (e.g. the reference fields above) still gets a
+    // sensible default for it instead of undefined.
+    settings: { ...DEFAULT_SETTINGS, ...(persisted.settings || {}) },
     activeData: null,
     isVisible: false,
     renderPageEnabled: persisted.renderPageEnabled ?? true,

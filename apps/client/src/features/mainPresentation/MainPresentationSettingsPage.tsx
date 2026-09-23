@@ -7,6 +7,8 @@ import {
 } from "@/stores/useMainPresentationStore";
 import { BackgroundMediaPicker } from "./BackgroundMediaPicker";
 import { useAuthStore } from "@/features/auth/auth.store";
+import { PositionPicker } from "@/features/dashboard/components/PositionPicker";
+import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
 import {
   Select,
   SelectContent,
@@ -28,6 +30,27 @@ import {
   Trash2,
   GripVertical,
 } from "lucide-react";
+
+// Reference's placement is *relative to the content block*, not the screen -
+// top/bottom picks DOM order (before/after content), left/center/right is
+// pure alignment within that row. Duplicated locally rather than imported
+// from the live-window hook, matching the same convention already used by
+// LivePresentationSettingsPage.tsx for its own standalone preview.
+function getReferencePositionClass(position: string): string {
+  switch (position) {
+    case "top-left":
+    case "bottom-left":
+      return "self-start text-left";
+    case "top-right":
+    case "bottom-right":
+      return "self-end text-right";
+    default:
+      return "self-center text-center";
+  }
+}
+function isReferenceBottomPosition(position: string): boolean {
+  return position.startsWith("bottom");
+}
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -296,6 +319,7 @@ export function MainPresentationSettingsPage({
 
   const [ltBase, setLtBase] = useState("http://localhost:3400");
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [typographyTab, setTypographyTab] = useState<"content" | "reference">("content");
 
   useEffect(() => {
     fetch("/api/lower-third/config", { credentials: "include" })
@@ -555,103 +579,208 @@ export function MainPresentationSettingsPage({
                 <h2 className="text-lg font-semibold text-white">Typography</h2>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-300">Font Family</Label>
-                  <Select
-                    value={settings.fontFamily}
-                    onValueChange={(val) => handleUpdate({ fontFamily: val })}
-                  >
-                    <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-                      <SelectItem value="'Inter', sans-serif">Inter</SelectItem>
-                      <SelectItem value="'Roboto', sans-serif">
-                        Roboto
-                      </SelectItem>
-                      <SelectItem value="'Playfair Display', serif">
-                        Playfair Display
-                      </SelectItem>
-                      <SelectItem value="'Montserrat', sans-serif">
-                        Montserrat
-                      </SelectItem>
-                      <SelectItem value="'Open Sans', sans-serif">
-                        Open Sans
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-300">Font Weight</Label>
-                  <Select
-                    value={settings.fontWeight}
-                    onValueChange={(val) => handleUpdate({ fontWeight: val })}
-                  >
-                    <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
-                      <SelectItem value="400">Regular (400)</SelectItem>
-                      <SelectItem value="500">Medium (500)</SelectItem>
-                      <SelectItem value="600">SemiBold (600)</SelectItem>
-                      <SelectItem value="700">Bold (700)</SelectItem>
-                      <SelectItem value="800">ExtraBold (800)</SelectItem>
-                      <SelectItem value="900">Black (900)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Content / Reference tabs - independent styling for each,
+                  matching the split already built for Live Presentation
+                  Settings (WEB). */}
+              <div className="inline-flex rounded-xl bg-[#0a0614] border border-gray-700/60 p-1">
+                <button
+                  type="button"
+                  onClick={() => setTypographyTab("content")}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    typographyTab === "content" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  Content
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTypographyTab("reference")}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    typographyTab === "reference" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  Reference
+                </button>
               </div>
 
-              {/* Font colour picker */}
-              <ColorPickerField
-                label="Text Colour"
-                value={settings.fontColor}
-                onChange={(v) => handleUpdate({ fontColor: v })}
-              />
+              {typographyTab === "content" ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Family</Label>
+                      <Select
+                        value={settings.fontFamily}
+                        onValueChange={(val) => handleUpdate({ fontFamily: val })}
+                      >
+                        <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white max-h-72">
+                          {FONT_OPTIONS.map((font) => (
+                            <SelectItem key={font} value={font}>
+                              {font}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-              {/* Font size range */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label className="text-sm text-gray-300">
-                    Font Size Range (px)
-                  </Label>
-                  <span className="text-xs text-gray-500 font-mono">
-                    {settings.fontSizeMin} – {settings.fontSizeMax} px
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-gray-500">Minimum</p>
-                    <input
-                      type="range"
-                      min={12}
-                      max={200}
-                      value={settings.fontSizeMin}
-                      onChange={(e) =>
-                        handleUpdate({ fontSizeMin: Number(e.target.value) })
-                      }
-                      className="w-full h-2 rounded appearance-none bg-gray-700 accent-purple-500 cursor-pointer"
-                    />
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Weight</Label>
+                      <Select
+                        value={settings.fontWeight}
+                        onValueChange={(val) => handleUpdate({ fontWeight: val })}
+                      >
+                        <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
+                          <SelectItem value="400">Regular (400)</SelectItem>
+                          <SelectItem value="500">Medium (500)</SelectItem>
+                          <SelectItem value="600">SemiBold (600)</SelectItem>
+                          <SelectItem value="700">Bold (700)</SelectItem>
+                          <SelectItem value="800">ExtraBold (800)</SelectItem>
+                          <SelectItem value="900">Black (900)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-gray-500">Maximum</p>
-                    <input
-                      type="range"
-                      min={24}
-                      max={300}
-                      value={settings.fontSizeMax}
-                      onChange={(e) =>
-                        handleUpdate({ fontSizeMax: Number(e.target.value) })
-                      }
-                      className="w-full h-2 rounded appearance-none bg-gray-700 accent-purple-500 cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
 
-              {/* Alignment */}
+                  <ColorPickerField
+                    label="Text Colour"
+                    value={settings.fontColor}
+                    onChange={(v) => handleUpdate({ fontColor: v })}
+                  />
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm text-gray-300">Font Size Range (px)</Label>
+                      <span className="text-xs text-gray-500 font-mono">
+                        {settings.fontSizeMin} – {settings.fontSizeMax} px
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-gray-500">Minimum</p>
+                        <input
+                          type="range"
+                          min={12}
+                          max={200}
+                          value={settings.fontSizeMin}
+                          onChange={(e) => handleUpdate({ fontSizeMin: Number(e.target.value) })}
+                          className="w-full h-2 rounded appearance-none bg-gray-700 accent-purple-500 cursor-pointer"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-gray-500">Maximum</p>
+                        <input
+                          type="range"
+                          min={24}
+                          max={300}
+                          value={settings.fontSizeMax}
+                          onChange={(e) => handleUpdate({ fontSizeMax: Number(e.target.value) })}
+                          className="w-full h-2 rounded appearance-none bg-gray-700 accent-purple-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Family</Label>
+                      <Select
+                        value={settings.referenceFontFamily}
+                        onValueChange={(val) => handleUpdate({ referenceFontFamily: val })}
+                      >
+                        <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white max-h-72">
+                          {FONT_OPTIONS.map((font) => (
+                            <SelectItem key={font} value={font}>
+                              {font}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm text-gray-300">Font Weight</Label>
+                      <Select
+                        value={settings.referenceFontWeight}
+                        onValueChange={(val) => handleUpdate({ referenceFontWeight: val })}
+                      >
+                        <SelectTrigger className="bg-[#0a0614] border-gray-700 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#1a0f2e] border-gray-700 text-white">
+                          <SelectItem value="400">Regular (400)</SelectItem>
+                          <SelectItem value="500">Medium (500)</SelectItem>
+                          <SelectItem value="600">SemiBold (600)</SelectItem>
+                          <SelectItem value="700">Bold (700)</SelectItem>
+                          <SelectItem value="800">ExtraBold (800)</SelectItem>
+                          <SelectItem value="900">Black (900)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <ColorPickerField
+                    label="Text Colour"
+                    value={settings.referenceFontColor}
+                    onChange={(v) => handleUpdate({ referenceFontColor: v })}
+                  />
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm text-gray-300">Font Size Range (px)</Label>
+                      <span className="text-xs text-gray-500 font-mono">
+                        {settings.referenceFontSizeMin} – {settings.referenceFontSizeMax} px
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-gray-500">Minimum</p>
+                        <input
+                          type="range"
+                          min={8}
+                          max={150}
+                          value={settings.referenceFontSizeMin}
+                          onChange={(e) => handleUpdate({ referenceFontSizeMin: Number(e.target.value) })}
+                          className="w-full h-2 rounded appearance-none bg-gray-700 accent-purple-500 cursor-pointer"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-gray-500">Maximum</p>
+                        <input
+                          type="range"
+                          min={16}
+                          max={200}
+                          value={settings.referenceFontSizeMax}
+                          onChange={(e) => handleUpdate({ referenceFontSizeMax: Number(e.target.value) })}
+                          className="w-full h-2 rounded appearance-none bg-gray-700 accent-purple-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-300">Reference Position</Label>
+                    <div className="bg-[#0a0614] border border-gray-700/60 rounded-lg p-4">
+                      <PositionPicker
+                        value={settings.referencePosition}
+                        onChange={(val) => handleUpdate({ referencePosition: val })}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Alignment - applies to the whole content block's placement in
+                  the frame, shared by both Content and Reference tabs. */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm text-gray-300">
@@ -739,32 +868,51 @@ export function MainPresentationSettingsPage({
                   />
                 ))}
 
-              <div
-                className="w-full relative z-10"
-                style={{
-                  color: settings.fontColor,
-                  fontFamily: settings.fontFamily,
-                  fontWeight: settings.fontWeight,
-                  textAlign: settings.textAlign,
-                  fontSize: `clamp(${settings.fontSizeMin * 0.35}px, 3.5vw, ${settings.fontSizeMax * 0.35}px)`,
-                  lineHeight: "1.4",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                For God so loved the world that he gave his one and only Son,
-                that whoever believes in him shall not perish but have eternal
-                life.
+              <div className="w-full relative z-10 flex flex-col" style={{ textAlign: settings.textAlign }}>
+                {isReferenceBottomPosition(settings.referencePosition) ? null : (
+                  <div
+                    className={`mb-2 ${getReferencePositionClass(settings.referencePosition)}`}
+                    style={{
+                      color: settings.referenceFontColor,
+                      fontFamily: settings.referenceFontFamily,
+                      fontWeight: settings.referenceFontWeight,
+                      fontSize: `clamp(${settings.referenceFontSizeMin * 0.35}px, 1.8vw, ${settings.referenceFontSizeMax * 0.35}px)`,
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    John 3:16 — KJV
+                  </div>
+                )}
+
                 <div
                   style={{
-                    fontSize: "0.5em",
-                    opacity: 0.8,
-                    marginTop: "0.5em",
-                    fontWeight: "500",
-                    letterSpacing: "0.05em",
+                    color: settings.fontColor,
+                    fontFamily: settings.fontFamily,
+                    fontWeight: settings.fontWeight,
+                    fontSize: `clamp(${settings.fontSizeMin * 0.35}px, 3.5vw, ${settings.fontSizeMax * 0.35}px)`,
+                    lineHeight: "1.4",
+                    whiteSpace: "pre-wrap",
                   }}
                 >
-                  John 3:16 — KJV
+                  For God so loved the world that he gave his one and only Son,
+                  that whoever believes in him shall not perish but have eternal
+                  life.
                 </div>
+
+                {isReferenceBottomPosition(settings.referencePosition) ? (
+                  <div
+                    className={`mt-2 ${getReferencePositionClass(settings.referencePosition)}`}
+                    style={{
+                      color: settings.referenceFontColor,
+                      fontFamily: settings.referenceFontFamily,
+                      fontWeight: settings.referenceFontWeight,
+                      fontSize: `clamp(${settings.referenceFontSizeMin * 0.35}px, 1.8vw, ${settings.referenceFontSizeMax * 0.35}px)`,
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    John 3:16 — KJV
+                  </div>
+                ) : null}
               </div>
             </div>
 
