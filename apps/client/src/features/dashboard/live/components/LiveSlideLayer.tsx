@@ -186,12 +186,23 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     fontStyle: (safeReferenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" as const : "normal" as const,
   };
   const songBibleReferenceEl = (
-    <h2
-      ref={songBibleReferenceRef}
-      className={`${referenceIsBottom ? "mt-2" : "mb-2"} ${referenceAlignClass}`}
-      style={referenceStyleProps}>
+    <h2 ref={songBibleReferenceRef} style={referenceStyleProps}>
       {currentSongProjection?.title}
     </h2>
+  );
+  // The version label (e.g. "KJV") belongs with the reference, not pinned to
+  // the bottom of the block on its own - it used to be a separate, always-
+  // last element that never moved when the reference was repositioned.
+  const songBibleVersionEl = currentSongProjection?.sectionTitle ? (
+    <span ref={songBibleVersionRef} className="text-blue-300 font-medium mt-1">
+      {currentSongProjection.sectionTitle}
+    </span>
+  ) : null;
+  const songBibleReferenceGroupEl = (
+    <div className={`flex flex-col ${referenceIsBottom ? "mt-2" : "mb-2"} ${referenceAlignClass}`}>
+      {songBibleReferenceEl}
+      {songBibleVersionEl}
+    </div>
   );
   const deckBibleReferenceEl = (
     <h1
@@ -226,7 +237,7 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               <div ref={songBibleMeasureRef} className="flex flex-col items-center">
                 {/* Title and section - for songs, show section below title; for Bible, show only the reference */}
                 {projectionType === "bible" ? (
-                  !referenceIsBottom && songBibleReferenceEl
+                  !referenceIsBottom && songBibleReferenceGroupEl
                 ) : (
                   <div className="mb-6" style={{ textAlign: slideAlignment }}>
                     <h2 ref={songBibleReferenceRef} className="text-white mb-2 font-bold">
@@ -281,16 +292,12 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     currentSongProjection.lyrics
                   )}
                 </div>
-                {projectionType === "bible" && referenceIsBottom && songBibleReferenceEl}
-                {/* For Bible projections, show version below the scripture text */}
-                {projectionType === "bible" &&
-                  currentSongProjection.sectionTitle && (
-                    <div className="mt-6" style={{ textAlign: slideAlignment }}>
-                      <span ref={songBibleVersionRef} className="text-blue-300 font-medium">
-                        {currentSongProjection.sectionTitle}
-                      </span>
-                    </div>
-                  )}
+                {/* Reference + version travel together as one group, on
+                    whichever side the reference is positioned - previously
+                    the version rendered separately and always last, so it
+                    stayed stuck at the bottom even when the reference moved
+                    to the top. */}
+                {projectionType === "bible" && referenceIsBottom && songBibleReferenceGroupEl}
               </div>
             </div>
           ) : liveProjection &&
