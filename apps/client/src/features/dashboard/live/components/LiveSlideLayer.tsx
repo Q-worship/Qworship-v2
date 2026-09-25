@@ -171,30 +171,35 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     isItalic: false,
     position: null,
   };
-  // Falls through to the Live Presentation Settings page's own position
-  // (BroadcastChannel-synced into liveConsoleReferencePosition) the same way
-  // font/color/bold/italic already do below - previously hardcoded to
-  // "top-center" here, so Settings-page position changes only ever affected
-  // that page's own preview and never reached the real live output.
-  const referencePosition = safeReferenceStyle.position || liveConsoleReferencePosition || "top-center";
+  // position/isBold/isItalic on editorState.referenceStyle are permanently
+  // stale: useWysiwygEditor.ts hardcodes them non-null ("top-center"/true/
+  // false) and the only UI that ever called their setters was reverted to
+  // decorative earlier this session, so they can never actually change. That
+  // hardcoded truthy "top-center" was winning this `||` every time, which is
+  // why the Live Presentation Settings position picker had no visible effect
+  // on the real broadcast. color/fontFamily are unaffected - those two
+  // correctly default to null and already fall through as intended - only
+  // position/bold/italic now come exclusively from the real, live-editable
+  // Settings-page values.
+  const referencePosition = liveConsoleReferencePosition || "top-center";
   const referenceIsBottom = isReferenceBottomPosition(referencePosition);
   const referenceAlignClass = getReferencePositionClass(referencePosition);
   const referenceStyleProps = {
     fontFamily: safeReferenceStyle.fontFamily || liveConsoleReferenceFontFamily,
     color: safeReferenceStyle.color || liveConsoleReferenceFontColor,
-    fontWeight: (safeReferenceStyle.isBold ?? liveConsoleReferenceBold) ? "bold" as const : "normal" as const,
-    fontStyle: (safeReferenceStyle.isItalic ?? liveConsoleReferenceItalic) ? "italic" as const : "normal" as const,
+    fontWeight: liveConsoleReferenceBold ? "bold" as const : "normal" as const,
+    fontStyle: liveConsoleReferenceItalic ? "italic" as const : "normal" as const,
   };
   const songBibleReferenceEl = (
     <h2 ref={songBibleReferenceRef} style={referenceStyleProps}>
       {currentSongProjection?.title}
     </h2>
   );
-  // The version label (e.g. "KJV") belongs with the reference, not pinned to
-  // the bottom of the block on its own - it used to be a separate, always-
-  // last element that never moved when the reference was repositioned.
+  // The version label (e.g. "KJV") follows the reference's full styling too,
+  // not just its position - it used to be hardcoded blue/medium-weight,
+  // completely disconnected from whatever color/font the reference used.
   const songBibleVersionEl = currentSongProjection?.sectionTitle ? (
-    <span ref={songBibleVersionRef} className="text-blue-300 font-medium mt-1">
+    <span ref={songBibleVersionRef} className="mt-1" style={referenceStyleProps}>
       {currentSongProjection.sectionTitle}
     </span>
   ) : null;
