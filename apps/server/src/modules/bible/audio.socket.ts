@@ -5,6 +5,10 @@ import { BibleService } from "./bible.service.js";
 import { FastBibleParser } from "./fast-bible-parser.js";
 import { isBibleVersionCode } from "./bible-translations.js";
 import { kjvQuoteIndex, normalizeQuoteText } from "./handsfreeBible/kjvQuoteIndex.js";
+import jwt from "jsonwebtoken";
+import type { IncomingMessage } from "http";
+import { getJwtSecret } from "../auth/auth.middleware.js";
+import { SermonRecorder } from "../sermons/sermon.recorder.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -138,13 +142,36 @@ function isDeterministicNavigation(cmd: any): boolean {
   return direction !== 'goto';
 }
 
+/** Reads the JWT passed as `?token=` on the socket URL. Returns the user id or null. */
+function authenticateSocket(req: IncomingMessage): string | null {
+  try {
+    const token = new URL(req.url ?? "", "http://localhost").searchParams.get("token");
+    if (!token) return null;
+    const decoded = jwt.verify(token, getJwtSecret()) as { id?: string };
+    return decoded?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
-  wss.on("connection", (ws: WebSocket) => {
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     const sessionStart = Date.now();
     const T = () => `+${Date.now() - sessionStart}ms`;
     console.log(`[AudioSocket] Client connected to live audio stream`);
+
+    // Sermon capture: an authenticated socket also saves its final transcript
+    // so a manuscript can be made after the service. Unauthenticated sockets
+    // keep working exactly as before, just without capture.
+    // SERMON_CAPTURE=off disables it entirely (latency A/B testing).
+    const captureEnabled = process.env.SERMON_CAPTURE !== "off";
+    const userId = captureEnabled ? authenticateSocket(req) : null;
+    const sermonRecorder = userId ? new SermonRecorder(userId) : null;
+    console.log(
+      `[AudioSocket] Sermon capture ${!captureEnabled ? "OFF (SERMON_CAPTURE=off)" : sermonRecorder ? "on" : "off (no valid token)"}`
+    );
 
     // ── Session state ──────────────────────────────────────────────────────
     const recentlyExecuted = new Map<string, number>();
@@ -258,6 +285,9 @@ export function setupAudioSocket(server: Server) {
     );
 
     transcriptionService.connect();
+    if (sermonRecorder) {
+      transcriptionService.on("utterance_final", (text: string) => sermonRecorder.addUtterance(text));
+    }
     transcriptionService.on("speech_started", () => {
       // A new VAD turn gets a fresh occurrence namespace. Final/EOT callbacks
       // from the previous turn remain harmless because they retain their seen
@@ -878,11 +908,13 @@ export function setupAudioSocket(server: Server) {
     ws.on("close", () => {
       console.log("[AudioSocket] Client disconnected");
       transcriptionService.stop();
+      void sermonRecorder?.end();
     });
 
     ws.on("error", (error) => {
       console.error("[AudioSocket] WebSocket error:", error);
       transcriptionService.stop();
+      void sermonRecorder?.end();
     });
   });
 

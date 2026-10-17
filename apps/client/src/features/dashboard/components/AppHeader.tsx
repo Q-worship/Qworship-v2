@@ -268,6 +268,9 @@ export function AppHeader({
                   } else if (item.name === "Help") {
                     setLocation("/dashboard-help");
                     setActiveDropdown(null);
+                  } else if (item.name === "Sermons") {
+                    setLocation("/sermons");
+                    setActiveDropdown(null);
                   } else if (item.name === "Guide") {
                     setLocation("/dashboard-guide");
                     setActiveDropdown(null);

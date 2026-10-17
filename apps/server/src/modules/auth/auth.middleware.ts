@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from './auth.model.js';
 
-function getJwtSecret() {
+export function getJwtSecret() {
   const secret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
   if (!secret) throw new Error('JWT_SECRET or SESSION_SECRET is required');
   return secret;

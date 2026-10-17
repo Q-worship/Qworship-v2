@@ -48,6 +48,7 @@ import { AuthApiError, getCurrentUser, setAuthToken } from "@/lib/authApi";
 const BibleWorkspace = lazy(() => import("@/features/bible-reader/components/BibleWorkspace").then(m => ({ default: m.BibleWorkspace })));
 const AssetsPage = lazy(() => import("@/features/dashboard/pages/AssetsPage").then(m => ({ default: m.AssetsPage })));
 const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSupportPage"));
+const SermonsPage = lazy(() => import("@/features/sermons/SermonsPage"));
 const SuperAdminSidebar = lazy(() => import("@/features/super-admin/components/SuperAdminSidebar"));
 import { LowerThirdEditorPage, LowerThirdSettingsPage } from "@/features/lowerThird";
 import { MainPresentationSettingsPage } from "@/features/mainPresentation";
@@ -272,6 +273,7 @@ export const AppRouter = () => {
                   <Route path="/presentations" component={PresentationsMock} />
                   <Route path="/dashboard-assets"><AssetsPage /></Route>
                   <Route path="/dashboard-help" component={HelpSupportPage} />
+                  <Route path="/sermons" component={SermonsPage} />
                   <Route path="/lower-third-settings" component={LowerThirdSettingsRoute} />
                   <Route path="/lower-third-editor/:templateId" component={LowerThirdEditorPage} />
                   <Route path="/main-presentation-settings" component={MainPresentationSettingsRoute} />

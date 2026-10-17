@@ -123,11 +123,15 @@ export const useRealtimeSocket = ({
 
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
     const wsUrl = `${baseUrl}/api/bible/audio-stream`;
+    // The token lets the server save this session's transcript for sermon
+    // manuscripts. Without it the socket still works, just without capture.
+    const token = localStorage.getItem("token");
 
     console.info("[HFB Socket] Connecting", { wsUrl });
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl);
 
     ws.onopen = () => {
+      if (socketRef.current !== ws) return; // released by disconnect() while connecting
       console.info("[HFB Socket][4/5] Browser WebSocket open", {
         wsUrl,
         queuedChunks: pendingAudioRef.current.length,
@@ -213,11 +217,17 @@ export const useRealtimeSocket = ({
 
     ws.onclose = () => {
       console.log("[RealtimeSocket] Disconnected from server");
+      // A socket released by disconnect() closes up to 500ms later; by then a
+      // newer socket may be current and must not be cleared.
+      if (socketRef.current !== ws) return;
       setIsConnected(false);
       socketRef.current = null;
     };
 
     ws.onerror = (err) => {
+      // Closing a released socket that was still connecting fires "error" in
+      // the browser. That's expected teardown, not a failure to report.
+      if (socketRef.current !== ws) return;
       console.error("[RealtimeSocket] WebSocket Error:", err);
       callbacks.current.onError?.("Unable to connect to voice service");
     };
@@ -227,14 +237,14 @@ export const useRealtimeSocket = ({
 
   const disconnect = useCallback(() => {
     const socketToClose = socketRef.current;
+    // Release it now so an immediate connect() (remount, page change) opens a
+    // fresh socket instead of seeing this one as open and doing nothing.
+    socketRef.current = null;
     if (socketToClose) {
       // Small delay to let final bits transmit
       setTimeout(() => {
         if (socketToClose.readyState === WebSocket.OPEN || socketToClose.readyState === WebSocket.CONNECTING) {
           socketToClose.close();
-        }
-        if (socketRef.current === socketToClose) {
-          socketRef.current = null;
         }
       }, 500);
     }

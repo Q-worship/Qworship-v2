@@ -44,6 +44,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
   private shouldReconnect = true;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private finalizedTranscriptParts: string[] = [];
+  private utteranceParts: string[] = [];
   private sentAudioChunks = 0;
   private sentAudioBytes = 0;
   private deepgramMessageCount = 0;
@@ -248,7 +249,11 @@ export class DeepgramTranscriptionService extends EventEmitter {
               // necessarily mean the speaker has finished. Accumulate finalized
               // segments and wait for speech_final before declaring the complete
               // utterance, otherwise references split across segments lose words.
-              if (isFinal) this.finalizedTranscriptParts.push(transcript.trim());
+              if (isFinal) {
+                this.finalizedTranscriptParts.push(transcript.trim());
+                // Only track full utterances when sermon capture is listening.
+                if (this.listenerCount("utterance_final") > 0) this.utteranceParts.push(transcript.trim());
+              }
               const accumulated = [
                 ...this.finalizedTranscriptParts,
                 ...(isFinal ? [] : [transcript.trim()]),
@@ -294,10 +299,17 @@ export class DeepgramTranscriptionService extends EventEmitter {
             }
           }
 
+          // speech_final can arrive on an empty result after the words were
+          // already finalized, so close the utterance whatever the transcript.
+          if (response.type === "Results" && response.speech_final === true) {
+            this.flushUtterance();
+          }
+
           // UtteranceEnd — safety net: fires after utterance_end_ms of silence
           // if speech_final was missed (e.g. very short utterance, noisy audio)
           if (response.type === "UtteranceEnd") {
             console.log("[Deepgram] UtteranceEnd received (safety net)");
+            this.flushUtterance();
             this.emit("utterance_end");
             this.finalizedTranscriptParts = [];
           }
@@ -360,6 +372,8 @@ export class DeepgramTranscriptionService extends EventEmitter {
     } catch (err) {
       this.isConnecting = false;
       this._stopKeepAlive();
+      // stop() during the handshake is expected, not a failure to report.
+      if (!this.shouldReconnect) return;
       console.error("[Deepgram] Connection failed:", err);
       this.emit("error", err);
       // Do NOT re-throw — an unhandled promise rejection from connect() crashes the
@@ -451,7 +465,21 @@ export class DeepgramTranscriptionService extends EventEmitter {
   }
 
   resetTranscriptContext() {
+    this.flushUtterance();
     this.finalizedTranscriptParts = [];
+  }
+
+  /**
+   * Emits the complete utterance for sermon capture: the same unit the live
+   * console shows as one line, but untruncated ("final" carries only the last
+   * TRANSCRIPT_WINDOW_WORDS for display) and never dropped when speech_final
+   * comes on an empty result or the stream stops mid-utterance.
+   */
+  private flushUtterance() {
+    if (this.utteranceParts.length === 0) return;
+    const text = this.utteranceParts.join(" ");
+    this.utteranceParts = [];
+    this.emit("utterance_final", text);
   }
 
   stop() {
@@ -461,24 +489,31 @@ export class DeepgramTranscriptionService extends EventEmitter {
       this.reconnectTimer = null;
     }
     this._stopKeepAlive();
-    if (this.socket) {
+    // cleanup() detaches and nulls this.socket, so hold our own reference.
+    const socket = this.socket;
+    this.cleanup();
+    if (socket) {
       console.log("[Deepgram] Closing connection...");
-      if (this.socket.readyState === WebSocket.OPEN) {
-        this.socket.send(JSON.stringify({ type: "CloseStream" }));
-        setTimeout(() => {
-          this.socket?.close();
-        }, 100);
-      } else {
-        this.socket.close();
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "CloseStream" }));
+        setTimeout(() => socket.close(), 100);
+      } else if (socket.readyState === WebSocket.CONNECTING) {
+        // Aborting a handshake makes ws emit "error" asynchronously; cleanup()
+        // left a no-op handler so that can't crash the process.
+        socket.terminate();
       }
     }
-    this.cleanup();
   }
 
   private cleanup() {
+    this.flushUtterance();
     this._stopKeepAlive();
     if (this.socket) {
       this.socket.removeAllListeners();
+      // A detached socket can still emit "error" (e.g. an aborted handshake or
+      // a late network failure). With no listener, EventEmitter throws and
+      // takes down the whole server, including every other live console.
+      this.socket.on("error", () => {});
       this.socket = null;
     }
     this.isConnecting = false;

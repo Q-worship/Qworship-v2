@@ -73,6 +73,7 @@ import { notificationRouter } from "./modules/notifications/notification.routes.
 import { lowerThirdRouter } from "./modules/lower-third/lower-third.routes.js";
 import { chatRouter, webhookRouter } from "./modules/chat/chat.routes.js";
 import { referralRouter } from "./modules/referral/referral.routes.js";
+import { sermonsRouter } from "./modules/sermons/sermons.routes.js";
 
 // Main Routes
 app.use("/api/auth", authRouter);
@@ -91,6 +92,7 @@ app.use("/api", notificationRouter);
 app.use("/api/lower-third", lowerThirdRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/referrals", referralRouter);
+app.use("/api/sermons", sermonsRouter);
 app.use("/webhooks", webhookRouter);
 
 // Database & Server Initialization
