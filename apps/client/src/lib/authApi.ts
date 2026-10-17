@@ -39,7 +39,7 @@ export function resetOnboardingForUser(email: string): void {
 const NETWORK_ERROR_MESSAGE = 'Unable to reach the server. Please try again.'
 
 export class AuthApiError extends Error {
-  constructor(message: string, public errorType?: string, public email?: string) {
+  constructor(message: string, public errorType?: string, public email?: string, public status?: number) {
     super(message)
     this.name = 'AuthApiError'
   }
@@ -195,7 +195,7 @@ async function authFetch<T>(
     }
 
     if (!response.ok) {
-      throw new AuthApiError(data.message ?? `Request failed (${response.status})`, data.errorType, data.email)
+      throw new AuthApiError(data.message ?? `Request failed (${response.status})`, data.errorType, data.email, response.status)
     }
 
     return data

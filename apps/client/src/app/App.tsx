@@ -44,7 +44,7 @@ const QworshipHomeV2Wrapper = lazy(() => import("@/features/dashboard/DashboardL
 
 import { AppLayout } from "./Layout";
 import { useAuthStore } from "@/features/auth/auth.store";
-import { getCurrentUser, setAuthToken } from "@/lib/authApi";
+import { AuthApiError, getCurrentUser, setAuthToken } from "@/lib/authApi";
 const BibleWorkspace = lazy(() => import("@/features/bible-reader/components/BibleWorkspace").then(m => ({ default: m.BibleWorkspace })));
 const AssetsPage = lazy(() => import("@/features/dashboard/pages/AssetsPage").then(m => ({ default: m.AssetsPage })));
 const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSupportPage"));
@@ -88,9 +88,19 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     }
     getCurrentUser()
       .then((response) => setAuth(response.user))
-      .catch(() => {
-        setAuthToken(null);
-        logout();
+      .catch((err) => {
+        // Only a real rejection of the token ends the session. A network
+        // error, timeout or 5xx (server restarting, deploy, flaky venue
+        // Wi-Fi) keeps the cached user: logout() clears the token shared by
+        // every tab, so treating those as "logged out" would also sign the
+        // operator out of the console that just opened the live window.
+        const status = err instanceof AuthApiError ? err.status : undefined;
+        if (status === 401 || status === 403) {
+          setAuthToken(null);
+          logout();
+        } else {
+          console.warn("[AuthGuard] Could not verify session; continuing with cached user", err);
+        }
       })
       .finally(() => setIsVerifyingSession(false));
   }, []);
