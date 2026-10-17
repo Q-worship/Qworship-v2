@@ -3,6 +3,7 @@ import { ChevronRight, Music, Timer, Mic } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useHFBStore } from "../../hooks/useHFBStore";
 import { HFBTranslationControls } from "./HFBTranslationControls";
+import { HFBReferenceSearch } from "./HFBReferenceSearch";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 
 interface CenterStageProps {
@@ -24,6 +25,38 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
       bibleActiveVerseRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [bibleProps.bibleVerseIndex]);
+
+  // Project a verse of the chapter loaded on the HFB stage. Reads the store
+  // fresh so it also works right after a search loads a new chapter.
+  const projectHfbVerse = (verseNumber: number, text: string) => {
+    const hfb = useHFBStore.getState();
+    const ref = `${hfb.hfbBookName} ${hfb.hfbChapter}:${verseNumber}`;
+    hfb.setHfbActiveVerseNum(verseNumber);
+    hfb.setHfbCurrentProjected({ reference: ref, text, version: hfb.hfbVersion });
+    useBibleProjectionStore.getState().setVerse({
+      book: hfb.hfbBookName,
+      chapter: hfb.hfbChapter,
+      verse: verseNumber,
+      text,
+      version: hfb.hfbVersion,
+      [hfb.hfbVersion.toLowerCase()]: text,
+    }, ref, hfb.hfbVersion);
+    hfb.setHfbDetectedVerses(prev => prev.map(d => ({ ...d, isActive: false })));
+
+    if (liveWindow) {
+      liveWindow.postMessage({
+        type: "BIBLE_VERSE_DISPLAY",
+        data: {
+          book: hfb.hfbBookName,
+          chapter: hfb.hfbChapter,
+          verse: verseNumber,
+          text,
+          version: hfb.hfbVersion,
+          reference: ref,
+        }
+      }, window.location.origin);
+    }
+  };
 
   const handleClearBibleProjection = () => {
     onClearProjection();
@@ -310,6 +343,13 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                 </button>
               )}
             </div>
+            <HFBReferenceSearch
+              onProject={(verseNumber, text) => {
+                projectHfbVerse(verseNumber, text);
+                // Searched verses can be deep in the chapter; bring it into view once rendered.
+                requestAnimationFrame(() => hfbActiveVerseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+              }}
+            />
             <HFBTranslationControls liveWindow={liveWindow} />
           </div>
 
@@ -343,34 +383,7 @@ export function LiveConsoleCenterStage({ bibleProps, songProps, pacingProps, onC
                     <div
                       key={verseNumber}
                       ref={isActive ? hfbActiveVerseRef : null}
-                      onClick={() => {
-                        const ref = `${hfbStore.hfbBookName} ${hfbStore.hfbChapter}:${verseNumber}`;
-                        hfbStore.setHfbActiveVerseNum(verseNumber);
-                        hfbStore.setHfbCurrentProjected({ reference: ref, text: verse.text, version: hfbStore.hfbVersion });
-                        useBibleProjectionStore.getState().setVerse({
-                          book: hfbStore.hfbBookName,
-                          chapter: hfbStore.hfbChapter,
-                          verse: verseNumber,
-                          text: verse.text,
-                          version: hfbStore.hfbVersion,
-                          [hfbStore.hfbVersion.toLowerCase()]: verse.text,
-                        }, ref, hfbStore.hfbVersion);
-                        hfbStore.setHfbDetectedVerses(prev => prev.map(d => ({ ...d, isActive: false })));
-                        
-                        if (liveWindow) {
-                           liveWindow.postMessage({
-                             type: "BIBLE_VERSE_DISPLAY",
-                             data: { 
-                                book: hfbStore.hfbBookName, 
-                                chapter: hfbStore.hfbChapter, 
-                                verse: verseNumber, 
-                                text: verse.text, 
-                                version: hfbStore.hfbVersion, 
-                                reference: ref 
-                             }
-                           }, window.location.origin);
-                        }
-                      }}
+                      onClick={() => projectHfbVerse(verseNumber, verse.text)}
                       className={`flex gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors group ${
                         isActive ? 'bg-[#082830] ring-1 ring-cyan-800/50' : 'hover:bg-[#0f0f1e]'
                       }`}

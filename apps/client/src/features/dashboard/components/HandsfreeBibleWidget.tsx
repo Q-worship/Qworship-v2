@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useMicVolume } from "@/hooks/useRawAudioStream";
 import {
   Mic,
   SettingsIcon,
@@ -81,10 +82,13 @@ export const HandsfreeBibleWidget: React.FC<HandsfreeBibleWidgetProps> = ({
   onClearProjection,
   verseData,
   formattedReference,
-  volume = 0,
+  volume: volumeOverride,
   onNavigate,
   onVoiceCommand,
 }) => {
+  // Callers without a mic (e.g. the Bible workspace demo) pass a simulated level.
+  const liveVolume = useMicVolume();
+  const volume = volumeOverride ?? liveVolume;
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showAllVersions, setShowAllVersions] = useState(false);
 

@@ -1,8 +1,27 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useSyncExternalStore } from "react";
+
+// Mic level lives outside React state: it changes many times a second, and as
+// hook state it re-rendered every component using the hook (the whole
+// dashboard) while listening, starving the main thread that forwards audio.
+// Only the components that draw the meter subscribe, via useMicVolume().
+const VOLUME_INTERVAL_MS = 50;
+let micVolume = 0;
+const volumeListeners = new Set<() => void>();
+const setMicVolume = (value: number) => {
+  if (value === micVolume) return;
+  micVolume = value;
+  volumeListeners.forEach((listener) => listener());
+};
+const subscribeMicVolume = (listener: () => void) => {
+  volumeListeners.add(listener);
+  return () => volumeListeners.delete(listener);
+};
+
+/** Live microphone level (0-100) while recording. */
+export const useMicVolume = () => useSyncExternalStore(subscribeMicVolume, () => micVolume);
 
 export const useRawAudioStream = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [volume, setVolume] = useState<number>(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -66,8 +85,12 @@ export const useRawAudioStream = () => {
         analyserRef.current = analyser;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const updateVolume = () => {
+        let lastVolumeAt = 0;
+        const updateVolume = (now = 0) => {
           if (!analyserRef.current || !recordingActiveRef.current) return;
+          animationFrameRef.current = requestAnimationFrame(updateVolume);
+          if (now - lastVolumeAt < VOLUME_INTERVAL_MS) return;
+          lastVolumeAt = now;
           analyserRef.current.getByteFrequencyData(dataArray);
 
           let sum = 0;
@@ -78,9 +101,7 @@ export const useRawAudioStream = () => {
 
           // Map average (0-255) to a smoother 0-100 percentage for the UI
           const percentage = Math.min(100, Math.max(0, (average / 128) * 100));
-          setVolume(percentage);
-
-          animationFrameRef.current = requestAnimationFrame(updateVolume);
+          setMicVolume(Math.round(percentage));
         };
         // --- Raw Audio Processor Setup ---
         await audioContext.audioWorklet.addModule("/raw-audio-processor.js");
@@ -137,7 +158,7 @@ export const useRawAudioStream = () => {
     console.info("[HFB Audio] Stopping microphone stream");
     recordingActiveRef.current = false;
     setIsRecording(false);
-    setVolume(0);
+    setMicVolume(0);
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -177,6 +198,6 @@ export const useRawAudioStream = () => {
   }, []);
 
   return {
-    isRecording, volume, startRecording, stopRecording,
+    isRecording, startRecording, stopRecording,
   };
 };

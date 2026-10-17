@@ -662,7 +662,7 @@ export const useHandsfreeBible = ({
       );
   }, []);
 
-  const { isRecording, volume, startRecording, stopRecording } =
+  const { isRecording, startRecording, stopRecording } =
     useRawAudioStream();
 
   // Inactivity Timer
@@ -1653,7 +1653,6 @@ export const useHandsfreeBible = ({
     selectedBibleVersion,
     widgetVerseData,
     widgetFormattedReference,
-    volume,
     toggleHandsfreeBible,
     closeHandsfreeBible,
     toggleMicrophone,

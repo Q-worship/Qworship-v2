@@ -58,7 +58,13 @@ export const parseBibleVersionCommand = (value: string): BibleVersionCode | null
       if (!hasStrictBibleContext && normalized !== alias) continue;
     } else {
       const isExact = normalized === alias;
-      const hasCue = hasExplicitVersionCue || /\b(?:version|translation|bible)\b/i.test(alias);
+      // Navigation phrasing ("turn to NIV", "show me the ESV") only counts
+      // directly before the version, so "turn to John 3, NIV says..." doesn't switch.
+      const hasLeadIn = new RegExp(
+        `\\b(?:turn(?:\\s+over)?\\s+to|go\\s+to|move\\s+to|show\\s+me|give\\s+me|let'?s\\s+(?:see|read|go\\s+to|use)|open(?:\\s+(?:to|in))?|read\\s+(?:it\\s+)?(?:in|from))\\s+(?:the\\s+)?${escapeRegex(alias)}(?:$|\\b)`,
+        "i",
+      ).test(normalized);
+      const hasCue = hasExplicitVersionCue || hasLeadIn || /\b(?:version|translation|bible)\b/i.test(alias);
       if (!isExact && !hasCue) continue;
     }
 

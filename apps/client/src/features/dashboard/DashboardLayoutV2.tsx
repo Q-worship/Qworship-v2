@@ -1198,7 +1198,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     handleDragStart,
     setIsListeningMode,
     setDetectedCommands,
-    volume,
     executeNavigation,
   } = hfb;
 
@@ -1829,6 +1828,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     { name: "Assets", active: false },
     { name: "Songbook", active: false, notification: true },
     { name: "Settings", active: false },
+    { name: "Sermons", active: false },
     { name: "Guide", active: false },
     { name: "Help", active: false },
   ];
@@ -5296,7 +5296,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
                   setDetectedCommands={setDetectedCommands}
                   verseData={widgetVerseData}
                   formattedReference={widgetFormattedReference}
-                  volume={volume}
                   onNavigate={(dir) => executeNavigation("verse_change", dir)}
                 />
               </div>
