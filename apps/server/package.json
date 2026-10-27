@@ -8,6 +8,8 @@
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "migrate:auth-onboarding": "tsx src/scripts/migrate-auth-onboarding.ts",
     "migrate:memberships": "tsx src/scripts/migrate-memberships.ts",
+    "test:e2e": "tsx tests/membership-usage.e2e.ts",
+    "test:gate": "tsx tests/silence-gate.e2e.ts",
     "import:bible-export": "tsx src/scripts/import-wide-bible-export.ts",
     "audit:bible": "tsx src/scripts/audit-bible-database.ts",
     "check:brevo": "tsx src/scripts/check-brevo-smtp.ts",

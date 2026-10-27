@@ -1012,6 +1012,10 @@ export function setupAudioSocket(server: Server) {
           for (const held of preroll) {
             transcriptionService.sendAudio(held);
             meterForwarded(held.length);
+            // These frames were counted as withheld when they were held back.
+            // Replaying them makes them billable, so take them off that total
+            // or the two figures add up to more audio than the client sent.
+            meterSuspended(-(held.length / BYTES_PER_SECOND) * 1000);
           }
         }
         preroll.length = 0;
