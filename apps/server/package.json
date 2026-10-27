@@ -10,6 +10,7 @@
     "migrate:memberships": "tsx src/scripts/migrate-memberships.ts",
     "test:e2e": "tsx tests/membership-usage.e2e.ts",
     "test:gate": "tsx tests/silence-gate.e2e.ts",
+    "seed:demo": "tsx tests/seed-demo-network.ts",
     "import:bible-export": "tsx src/scripts/import-wide-bible-export.ts",
     "audit:bible": "tsx src/scripts/audit-bible-database.ts",
     "check:brevo": "tsx src/scripts/check-brevo-smtp.ts",

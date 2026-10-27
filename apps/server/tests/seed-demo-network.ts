@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { connectDB } from '../src/core/db.js';
 import { getJwtSecret } from '../src/modules/auth/auth.middleware.js';
 import { User } from '../src/modules/auth/auth.model.js';
@@ -11,7 +12,17 @@ import { BranchInvite, INVITE_TTL_DAYS, generateInviteCode } from '../src/module
 import { UsageCounter, usagePeriod } from '../src/modules/usage/usage.model.js';
 dotenv.config();
 
-/** Seeds a demo network on the LOCAL test database so the UI can be looked at. */
+/**
+ * Seeds a demo network on the LOCAL test database so the account screens can be
+ * looked at with realistic data.
+ *
+ * Sign in with DEMO_EMAIL / DEMO_PASSWORD below. These are throwaway test
+ * credentials for a local database and are deliberately committed, so anyone
+ * can reproduce the demo; they are refused against any non-local MONGODB_URI.
+ */
+export const DEMO_EMAIL = 'pastor@demo.qworship.test';
+export const DEMO_PASSWORD = 'DemoPass123!';
+
 async function main() {
   await connectDB();
   if (!/127\.0\.0\.1|localhost/.test(process.env.MONGODB_URI || '')) {
@@ -22,9 +33,20 @@ async function main() {
     Organization.deleteMany({ name: /^Demo / }),
   ]);
 
+  const now = new Date();
   const user = await User.create({
-    email: `pastor@demo.qworship.test`, firstName: 'Ade', lastName: 'Okafor',
-    emailVerified: true, isActive: true, onboardingStatus: 'completed',
+    email: DEMO_EMAIL,
+    password: await bcrypt.hash(DEMO_PASSWORD, 10),
+    firstName: 'Ade', lastName: 'Okafor',
+    emailVerified: true, isActive: true,
+    // The guards send a user with no trial to onboarding, so this account is
+    // seeded as already converted rather than freshly signed up.
+    onboardingStatus: 'completed', onboardingCompletedAt: now,
+    selectedFeatures: ['presentations', 'bible'],
+    trialStatus: 'converted', subscriptionStatus: 'active',
+    accountType: 'premium', planType: 'cloud_pro',
+    trialActivatedAt: now, trialStartDate: now,
+    trialEndDate: new Date(now.getTime() + 365 * 86400000),
   });
   const account = await Account.create({
     ownerId: user._id, planId: 'standard', packs: 1,
@@ -64,7 +86,13 @@ async function main() {
   });
 
   const token = jwt.sign({ id: String(user._id) }, getJwtSecret(), { expiresIn: '12h' });
-  console.log('TOKEN=' + token);
+  console.log('');
+  console.log('Demo network seeded. Sign in at /login with:');
+  console.log(`  email:    ${DEMO_EMAIL}`);
+  console.log(`  password: ${DEMO_PASSWORD}`);
+  console.log('');
+  console.log('Then open /dashboard-organization or /dashboard-subscription.');
+  console.log(`Bearer token (12h), for curl: ${token}`);
   await mongoose.connection.close();
 }
 main().catch(async e => { console.error(e); try { await mongoose.connection.close(); } catch {} process.exit(1); });
