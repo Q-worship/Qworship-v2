@@ -2,7 +2,7 @@ import React from "react";
 import { Church, Clock, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type { SlotUsage, HourUsage } from "../api";
+import type { SlotUsage, HourUsage } from "@/lib/accountApi";
 
 /**
  * The two limits a network actually runs into: churches, and pooled

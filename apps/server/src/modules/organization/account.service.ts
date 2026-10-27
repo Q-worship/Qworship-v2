@@ -104,11 +104,18 @@ export async function setPlan(
   const usage = await slotUsage(account);
   const nextTotal = next.slots + (account.bonusSlots || 0);
   if (nextTotal < usage.used) {
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    const inUse = [
+      plural(usage.churches, "church", "churches"),
+      usage.pendingInvites > 0
+        ? plural(usage.pendingInvites, "pending invitation", "pending invitations")
+        : null,
+    ].filter(Boolean).join(" and ");
     return {
       ok: false,
       reason:
-        `This plan holds ${nextTotal} churches, but ${usage.used} are in use ` +
-        `(${usage.churches} churches, ${usage.pendingInvites} pending invitations). ` +
+        `That plan holds ${plural(nextTotal, "church", "churches")}, but you are using ` +
+        `${plural(usage.used, "slot", "slots")} (${inUse}). ` +
         `Release ${usage.used - nextTotal} before changing plan.`,
       usage,
     };

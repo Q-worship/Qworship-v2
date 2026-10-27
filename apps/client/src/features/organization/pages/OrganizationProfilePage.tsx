@@ -6,14 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { CapacityMeters } from "../components/CapacityMeters";
+import { CapacityMeters } from "@/components/account/CapacityMeters";
 import { BranchList } from "../components/BranchList";
 import { InviteBranchDialog } from "../components/InviteBranchDialog";
 import { JoinNetworkCard } from "../components/JoinNetworkCard";
 import {
   fetchBranches, fetchSubscription, removeBranch, revokeInvite,
   type Branch, type PendingInvite,
-} from "../api";
+} from "@/lib/accountApi";
 
 /**
  * The network at a glance: what the account holds, which churches are on it,

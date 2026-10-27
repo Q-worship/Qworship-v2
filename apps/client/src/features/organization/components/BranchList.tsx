@@ -7,7 +7,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { Branch, PendingInvite } from "../api";
+import type { Branch, PendingInvite } from "@/lib/accountApi";
 
 /**
  * The churches on this account, and any invitation still waiting.

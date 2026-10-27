@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { createInvite, type PendingInvite } from "../api";
+import { createInvite, type PendingInvite } from "@/lib/accountApi";
 
 /**
  * Two ways to add a church, one dialog: a code the church redeems, or an
