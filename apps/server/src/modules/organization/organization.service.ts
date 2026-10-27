@@ -86,9 +86,29 @@ export async function resolveActiveOrganization(
 ): Promise<ResolvedOrganization | null> {
   const userId = req?.user?._id ?? req?.user?.id;
   if (!userId) return null;
+  return resolveOrganizationForUser(
+    userId,
+    readRequestedOrgId(req),
+    req.user?.activeOrganizationId ?? null,
+  );
+}
 
-  // 1. Named explicitly by the request.
-  const requestedId = readRequestedOrgId(req);
+/**
+ * The same resolution without an Express request, for callers that hold only a
+ * user id — the audio WebSocket, which authenticates from a query-string token
+ * and never builds a request object.
+ *
+ * `activeOrganizationId` is optional: pass it when the caller already has the
+ * user document loaded, otherwise it is read here.
+ */
+export async function resolveOrganizationForUser(
+  userId: mongoose.Types.ObjectId | string,
+  requestedId: string | null = null,
+  activeOrganizationId?: mongoose.Types.ObjectId | string | null,
+): Promise<ResolvedOrganization | null> {
+  if (!userId) return null;
+
+  // 1. Named explicitly by the caller.
   if (requestedId) {
     const role = await getMembership(userId, requestedId);
     if (!role) return null;
@@ -97,7 +117,11 @@ export async function resolveActiveOrganization(
   }
 
   // 2. The user's stored active church.
-  const activeId = req.user?.activeOrganizationId;
+  let activeId = activeOrganizationId;
+  if (activeId === undefined) {
+    const user = await mongoose.model('User').findById(userId).select('activeOrganizationId').lean();
+    activeId = (user as any)?.activeOrganizationId ?? null;
+  }
   if (activeId) {
     const role = await getMembership(userId, activeId);
     if (role) {

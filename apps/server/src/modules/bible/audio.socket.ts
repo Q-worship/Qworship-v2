@@ -10,6 +10,8 @@ import type { IncomingMessage } from "http";
 import { getJwtSecret } from "../auth/auth.middleware.js";
 import { SermonRecorder } from "../sermons/sermon.recorder.js";
 import { getAllowedOrigins } from "../../config/origins.js";
+import { resolveOrganizationForUser } from "../organization/organization.service.js";
+import { BYTES_PER_SECOND, UsageRecorder } from "../usage/usage.recorder.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -232,8 +234,55 @@ export function setupAudioSocket(server: Server) {
       `[AudioSocket] Authenticated user ${userId}; sermon capture ${sermonRecorder ? "on" : "OFF (SERMON_CAPTURE=off)"}`
     );
 
+    // Shadow metering: record what this session consumes, against the church it
+    // belongs to. Nothing is enforced yet — the point is to learn what a church
+    // actually uses, which is the number the allowance has to be set from.
+    // Attribution is best-effort: a session whose church cannot be resolved is
+    // still recorded against the user, because losing the measurement would be
+    // worse than an unattributed row.
+    //
+    // Resolving the church is a database round trip, so audio can arrive before
+    // the recorder exists. Those bytes are held and handed over on start rather
+    // than dropped, since the opening seconds of a service are real usage.
+    let usageRecorder: UsageRecorder | null = null;
+    let pendingForwardedBytes = 0;
+    let pendingSuspendedMs = 0;
+    const meterForwarded = (byteLength: number) => {
+      if (usageRecorder) usageRecorder.recordForwarded(byteLength);
+      else pendingForwardedBytes += byteLength;
+    };
+    const meterSuspended = (ms: number) => {
+      if (usageRecorder) usageRecorder.recordSuspended(ms);
+      else pendingSuspendedMs += ms;
+    };
+    // A user on several churches has no implicit active one, so the client may
+    // name which church is streaming via ?organizationId=. Membership is still
+    // checked, so naming one is not a way to charge another church.
+    const requestedOrgId = new URL(req.url ?? "", "http://localhost").searchParams.get(
+      "organizationId",
+    );
+    void (async () => {
+      try {
+        const resolved = await resolveOrganizationForUser(userId, requestedOrgId);
+        const recorder = new UsageRecorder(
+          String(userId),
+          (resolved?.organization?._id as any) ?? null,
+        );
+        await recorder.start();
+        if (pendingForwardedBytes > 0) recorder.recordForwarded(pendingForwardedBytes);
+        if (pendingSuspendedMs > 0) recorder.recordSuspended(pendingSuspendedMs);
+        pendingForwardedBytes = 0;
+        pendingSuspendedMs = 0;
+        usageRecorder = recorder;
+      } catch (error) {
+        console.error("[Usage] Could not start metering for this session:", error);
+      }
+    })();
+
     // A session nobody ends bills until the machine sleeps.
+    let ceilingReached = false;
     const sessionCeiling = setTimeout(() => {
+      ceilingReached = true;
       console.warn(`[AudioSocket] Session ceiling of ${MAX_SESSION_MS}ms reached — closing`);
       try {
         ws.send(JSON.stringify({ type: "session_ended", reason: "max_duration" }));
@@ -960,7 +1009,10 @@ export function setupAudioSocket(server: Server) {
           upstreamSuspended = false;
           console.log(`[AudioSocket] Voice detected (rms ${Math.round(rms)}) — resuming Deepgram`);
           ws.send(JSON.stringify({ type: "audio_status", status: "receiving" }));
-          for (const held of preroll) transcriptionService.sendAudio(held);
+          for (const held of preroll) {
+            transcriptionService.sendAudio(held);
+            meterForwarded(held.length);
+          }
         }
         preroll.length = 0;
       } else {
@@ -968,6 +1020,7 @@ export function setupAudioSocket(server: Server) {
           // Hold recent silence so the resume carries the word's leading edge.
           preroll.push(data);
           if (preroll.length > PREROLL_CHUNKS) preroll.shift();
+          meterSuspended((data.length / BYTES_PER_SECOND) * 1000);
           return;
         }
         if (now - lastVoiceAt >= IDLE_SUSPEND_MS) {
@@ -997,6 +1050,7 @@ export function setupAudioSocket(server: Server) {
         });
       }
       transcriptionService.sendAudio(data);
+      meterForwarded(data.length);
     });
 
     ws.on("close", () => {
@@ -1004,6 +1058,7 @@ export function setupAudioSocket(server: Server) {
       clearTimeout(sessionCeiling);
       transcriptionService.stop();
       void sermonRecorder?.end();
+      void usageRecorder?.end(ceilingReached ? "max_duration" : "client_closed");
     });
 
     ws.on("error", (error) => {
@@ -1011,6 +1066,7 @@ export function setupAudioSocket(server: Server) {
       clearTimeout(sessionCeiling);
       transcriptionService.stop();
       void sermonRecorder?.end();
+      void usageRecorder?.end("error");
     });
   });
 
