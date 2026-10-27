@@ -27,6 +27,13 @@ import WebSocket from "ws";
 
 // KeepAlive interval — must be less than Deepgram's 10-second timeout
 const KEEPALIVE_INTERVAL_MS = 8000;
+// Reconnect backoff. A fixed 500ms retry with no ceiling turns a persistent
+// rejection (the HTTP 400s noted above, a revoked key, an outage) into a tight
+// loop against the Deepgram API, so each attempt waits twice as long as the
+// last up to RECONNECT_MAX_MS, and the run gives up after RECONNECT_MAX_ATTEMPTS.
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 30000;
+const RECONNECT_MAX_ATTEMPTS = 8;
 const RECOGNITION_WINDOW_WORDS = 24;
 const TRANSCRIPT_WINDOW_WORDS = 40;
 
@@ -48,6 +55,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
   private sentAudioChunks = 0;
   private sentAudioBytes = 0;
   private deepgramMessageCount = 0;
+  private reconnectAttempts = 0;
 
   constructor() {
     super();
@@ -106,8 +114,9 @@ export class DeepgramTranscriptionService extends EventEmitter {
     // Tier 1: All 66 canonical Bible book names + spoken variants + common mispronunciations
     // Tier 2: Navigation and command phrases used in Qworship HFB
     //
-    // Benefits both the Qworship V2 web app AND the Live Console desktop app
-    // (both connect to this same server endpoint).
+    // Benefits every client of this endpoint. Today that is the web app alone,
+    // Live Console included — it is a panel in the web client, not a separate
+    // desktop app. No Electron or Tauri build of Qworship exists yet.
     const BIBLE_KEYTERMS: string[] = [
       // ── Old Testament ──────────────────────────────────────────────────────
       // Torah / Pentateuch
@@ -210,6 +219,7 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
       this.socket.on("open", () => {
         this.isConnecting = false;
+        this.reconnectAttempts = 0;
         this.emit("connected");
         console.log("[Deepgram] Connection established (Nova-3, QC61, Stage 4 low-latency mode)");
         // Fix 4: Start KeepAlive pings to prevent 10-second timeout during silence
@@ -360,11 +370,27 @@ export class DeepgramTranscriptionService extends EventEmitter {
         this.emit("disconnected");
         this.cleanup();
         if (this.shouldReconnect) {
+          if (this.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+            console.error(
+              `[Deepgram] Giving up after ${this.reconnectAttempts} reconnect attempts`
+            );
+            this.shouldReconnect = false;
+            this.emit("error", new Error("Deepgram reconnect attempts exhausted"));
+            return;
+          }
+          const delay = Math.min(
+            RECONNECT_BASE_MS * 2 ** this.reconnectAttempts,
+            RECONNECT_MAX_MS
+          );
+          this.reconnectAttempts += 1;
+          console.log(
+            `[Deepgram] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS})`
+          );
           this.emit("connecting");
           this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             void this.connect();
-          }, 500);
+          }, delay);
         }
       });
 
@@ -484,6 +510,9 @@ export class DeepgramTranscriptionService extends EventEmitter {
 
   stop() {
     this.shouldReconnect = false;
+    // A deliberate stop ends this run, so a later resume (the socket's silence
+    // gate reconnects through sendAudio) starts its backoff from scratch.
+    this.reconnectAttempts = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

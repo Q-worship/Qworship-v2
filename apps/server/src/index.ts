@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { getAllowedOrigins } from "./config/origins.js";
 import dotenv from "dotenv";
 import { connectDB } from "./core/db.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
@@ -15,20 +16,11 @@ dotenv.config();
 const app = express();
 
 // Middleware
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "https://app.qworship.com",
-  "https://www.app.qworship.com",
-  "https://qworship.com",
-  "https://www.qworship.com",
-  process.env.FRONTEND_URL,
-].filter(Boolean);
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || getAllowedOrigins().includes(origin)) {
         callback(null, origin || true);
       } else {
         callback(null, false);

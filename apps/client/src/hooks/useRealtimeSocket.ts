@@ -1,5 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
+/** RMS of a 16-bit PCM frame below which audio counts as silence. Speech sits well above 1000. */
+const SPEECH_RMS_THRESHOLD = 400;
+/** Unbroken silence after which the browser stops uploading. Longer than the server's own grace. */
+const CLIENT_SILENCE_MS = 30000;
+/** Frames of silence held back so resuming carries the word's leading edge. */
+const CLIENT_PREROLL_CHUNKS = 10;
+
 interface RealtimeSocketProps {
   onSocketOpen?: () => void;
   onBibleMatch: (result: any) => void;
@@ -27,7 +34,7 @@ interface RealtimeSocketProps {
     serverDetectedAt?: number;
   }) => void;
   onError?: (message: string) => void;
-  onAudioStatus?: (status: "receiving") => void;
+  onAudioStatus?: (status: "receiving" | "idle") => void;
   /** QUOTE MODE (trial) */
   onVerseSuggestion?: (data: {
     seq: number;
@@ -74,6 +81,11 @@ export const useRealtimeSocket = ({
   const pendingAudioRef = useRef<Int16Array[]>([]);
   const pendingControlRef = useRef<string[]>([]);
   const sentAudioChunksRef = useRef(0);
+  // Voice-gate state: when the last speech was heard, whether upload is paused,
+  // and the frames held back so a resume does not clip the opening word.
+  const lastVoiceAtRef = useRef(Date.now());
+  const gatedRef = useRef(false);
+  const prerollRef = useRef<Int16Array[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
   // Store callbacks in refs to avoid causing re-renders/re-creation of connect()
@@ -123,12 +135,17 @@ export const useRealtimeSocket = ({
 
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
     const wsUrl = `${baseUrl}/api/bible/audio-stream`;
-    // The token lets the server save this session's transcript for sermon
-    // manuscripts. Without it the socket still works, just without capture.
+    // The server now requires this token: streaming costs money per second, so
+    // an unauthenticated socket is refused with code 4401.
     const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("[HFB Socket] No auth token — cannot open the voice service");
+      callbacks.current.onError?.("Please sign in again to use hands-free Bible");
+      return;
+    }
 
     console.info("[HFB Socket] Connecting", { wsUrl });
-    const ws = new WebSocket(token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl);
+    const ws = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
 
     ws.onopen = () => {
       if (socketRef.current !== ws) return; // released by disconnect() while connecting
@@ -215,11 +232,20 @@ export const useRealtimeSocket = ({
       }
     };
 
-    ws.onclose = () => {
-      console.log("[RealtimeSocket] Disconnected from server");
+    ws.onclose = (event) => {
+      console.log("[RealtimeSocket] Disconnected from server", { code: event.code });
       // A socket released by disconnect() closes up to 500ms later; by then a
       // newer socket may be current and must not be cleared.
       if (socketRef.current !== ws) return;
+      // The server refuses a stream it cannot bill or cannot trust, and ends one
+      // that has run past the session ceiling. Each needs its own message.
+      if (event.code === 4401) {
+        callbacks.current.onError?.("Your session expired. Please sign in again.");
+      } else if (event.code === 4403) {
+        callbacks.current.onError?.("This app is not allowed to use the voice service.");
+      } else if (event.code === 4408) {
+        callbacks.current.onError?.("Voice session ended after reaching its time limit. Start it again to continue.");
+      }
       setIsConnected(false);
       socketRef.current = null;
     };
@@ -251,10 +277,46 @@ export const useRealtimeSocket = ({
     pendingAudioRef.current = [];
     pendingControlRef.current = [];
     sentAudioChunksRef.current = 0;
+    prerollRef.current = [];
+    gatedRef.current = false;
+    lastVoiceAtRef.current = Date.now();
     setIsConnected(false);
   }, []);
 
   const sendPCMData = useCallback((pcmBuffer: Int16Array) => {
+    // ── Voice gate ────────────────────────────────────────────────────────
+    // Every frame sent is a frame Deepgram bills, and an open microphone in a
+    // quiet room produces them continuously. The server gates as well, so this
+    // is deliberately conservative: it only stops after a long unbroken stretch
+    // of quiet, and it holds a pre-roll so resuming never clips the first word.
+    let sumSquares = 0;
+    for (let i = 0; i < pcmBuffer.length; i += 1) {
+      sumSquares += pcmBuffer[i] * pcmBuffer[i];
+    }
+    const rms = pcmBuffer.length ? Math.sqrt(sumSquares / pcmBuffer.length) : 0;
+    const now = Date.now();
+
+    if (rms >= SPEECH_RMS_THRESHOLD) {
+      lastVoiceAtRef.current = now;
+      if (gatedRef.current) {
+        gatedRef.current = false;
+        console.info("[HFB Socket] Voice resumed — streaming again");
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          for (const held of prerollRef.current) socketRef.current.send(held);
+        }
+      }
+      prerollRef.current = [];
+    } else if (gatedRef.current) {
+      prerollRef.current.push(pcmBuffer.slice());
+      if (prerollRef.current.length > CLIENT_PREROLL_CHUNKS) prerollRef.current.shift();
+      return;
+    } else if (now - lastVoiceAtRef.current >= CLIENT_SILENCE_MS) {
+      gatedRef.current = true;
+      prerollRef.current = [];
+      console.info(`[HFB Socket] ${Math.round((now - lastVoiceAtRef.current) / 1000)}s of silence — pausing upload`);
+      return;
+    }
+
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(pcmBuffer);
       sentAudioChunksRef.current += 1;

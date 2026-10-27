@@ -26,8 +26,15 @@ export const useScriptureSocket = ({
     // Connect to same host, but ws:// or wss:// depending on protocol
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
     const wsUrl = `${baseUrl}/api/bible/audio-stream`;
+    // The server requires this token: streaming is billed per second, so an
+    // unauthenticated socket is refused with code 4401.
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("[ScriptureSocket] No auth token — cannot open the voice service");
+      return;
+    }
 
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
 
     ws.onopen = () => {
       console.log("[ScriptureSocket] Connected to server");

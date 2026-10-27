@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 import type { IncomingMessage } from "http";
 import { getJwtSecret } from "../auth/auth.middleware.js";
 import { SermonRecorder } from "../sermons/sermon.recorder.js";
+import { getAllowedOrigins } from "../../config/origins.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -154,6 +155,51 @@ function authenticateSocket(req: IncomingMessage): string | null {
   }
 }
 
+/**
+ * Browsers always send Origin, so a hostile page cannot stream on our Deepgram
+ * bill even if it gets hold of a token. A request without an Origin header is
+ * not from a browser, and is allowed through on its JWT alone: that is the only
+ * way a future native client could connect, and such a client must already hold
+ * a valid token to get this far. Every client today is the web app.
+ */
+function isAllowedOrigin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  return getAllowedOrigins().includes(origin);
+}
+
+// ── Cost controls ────────────────────────────────────────────────────────────
+// Deepgram bills the wall-clock duration of the audio streamed to it, not the
+// speech inside it. A microphone left open in an empty room after a service
+// therefore bills until the machine sleeps. These limits stop that:
+//
+//   - the silence gate suspends the upstream connection after a stretch of
+//     sub-threshold audio, and resumes it the moment someone speaks again;
+//   - the session ceiling closes a socket nobody ever ended.
+//
+// The thresholds are env-tunable so they can be adjusted without a deploy.
+
+/** RMS of a 16-bit PCM frame below which audio counts as silence. Speech sits well above 1000. */
+const SPEECH_RMS_THRESHOLD = Number(process.env.HFB_SPEECH_RMS ?? 400);
+/** Continuous silence after which the Deepgram connection is suspended. */
+const IDLE_SUSPEND_MS = Number(process.env.HFB_IDLE_SUSPEND_MS ?? 90_000);
+/** Hard ceiling on a single streaming session. */
+const MAX_SESSION_MS = Number(process.env.HFB_MAX_SESSION_MS ?? 4 * 60 * 60 * 1000);
+/** Frames of sub-threshold audio kept back so a resume does not clip the first word. */
+const PREROLL_CHUNKS = 10;
+
+/** RMS of a little-endian 16-bit PCM buffer. */
+function frameRms(data: Buffer): number {
+  const sampleCount = Math.floor(data.length / 2);
+  if (sampleCount === 0) return 0;
+  let sumSquares = 0;
+  for (let offset = 0; offset + 1 < data.length; offset += 2) {
+    const sample = data.readInt16LE(offset);
+    sumSquares += sample * sample;
+  }
+  return Math.sqrt(sumSquares / sampleCount);
+}
+
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
@@ -162,16 +208,38 @@ export function setupAudioSocket(server: Server) {
     const T = () => `+${Date.now() - sessionStart}ms`;
     console.log(`[AudioSocket] Client connected to live audio stream`);
 
-    // Sermon capture: an authenticated socket also saves its final transcript
-    // so a manuscript can be made after the service. Unauthenticated sockets
-    // keep working exactly as before, just without capture.
-    // SERMON_CAPTURE=off disables it entirely (latency A/B testing).
+    // Every stream costs money, so a socket must prove who it belongs to before
+    // a single frame reaches Deepgram. This was previously advisory: the token
+    // was read only to decide whether to record the sermon, and a socket with no
+    // token transcribed normally.
+    if (!isAllowedOrigin(req)) {
+      console.warn(`[AudioSocket] Rejected: origin not allowed (${req.headers.origin})`);
+      ws.close(4403, "Origin not allowed");
+      return;
+    }
+    const userId = authenticateSocket(req);
+    if (!userId) {
+      console.warn("[AudioSocket] Rejected: missing or invalid token");
+      ws.close(4401, "Authentication required");
+      return;
+    }
+
+    // Sermon capture saves the final transcript so a manuscript can be made
+    // after the service. SERMON_CAPTURE=off disables it (latency A/B testing).
     const captureEnabled = process.env.SERMON_CAPTURE !== "off";
-    const userId = captureEnabled ? authenticateSocket(req) : null;
-    const sermonRecorder = userId ? new SermonRecorder(userId) : null;
+    const sermonRecorder = captureEnabled ? new SermonRecorder(userId) : null;
     console.log(
-      `[AudioSocket] Sermon capture ${!captureEnabled ? "OFF (SERMON_CAPTURE=off)" : sermonRecorder ? "on" : "off (no valid token)"}`
+      `[AudioSocket] Authenticated user ${userId}; sermon capture ${sermonRecorder ? "on" : "OFF (SERMON_CAPTURE=off)"}`
     );
+
+    // A session nobody ends bills until the machine sleeps.
+    const sessionCeiling = setTimeout(() => {
+      console.warn(`[AudioSocket] Session ceiling of ${MAX_SESSION_MS}ms reached — closing`);
+      try {
+        ws.send(JSON.stringify({ type: "session_ended", reason: "max_duration" }));
+      } catch {}
+      ws.close(4408, "Session length limit reached");
+    }, MAX_SESSION_MS);
 
     // ── Session state ──────────────────────────────────────────────────────
     const recentlyExecuted = new Map<string, number>();
@@ -790,10 +858,15 @@ export function setupAudioSocket(server: Server) {
       ws.send(JSON.stringify({ type: "error", message: "Transcription Service Error" }));
     });
 
-    // ── Incoming messages from desktop client ─────────────────────────────
+    // ── Incoming messages from the client ─────────────────────────────────
     let firstAudioAt = 0;
     let audioChunkCount = 0;
     let audioByteCount = 0;
+    // Silence-gate state. lastVoiceAt starts at connection time so a socket that
+    // never carries speech still suspends after IDLE_SUSPEND_MS.
+    let lastVoiceAt = Date.now();
+    let upstreamSuspended = false;
+    const preroll: Buffer[] = [];
     ws.on("message", async (data: Buffer, isBinary: boolean) => {
       if (!isBinary) {
         try {
@@ -855,21 +928,6 @@ export function setupAudioSocket(server: Server) {
             });
           }
 
-          // ── vad_commit: Silero VAD on the desktop detected end-of-speech ──
-          // The desktop's Silero VAD fires ~192ms after silence — much faster
-          // than Deepgram's endpointing signal (~100–300ms after silence).
-          // When vad_commit arrives, immediately flush the partial accumulator
-          // so the verse is projected without waiting for Deepgram's final.
-          //
-          // This is the most impactful single fix for conversational references:
-          // the pastor says "John 3:16" mid-sentence, keeps talking, and Silero
-          // detects the brief pause after the reference — triggering projection
-          // ~200ms earlier than Deepgram's endpointing would.
-          if (msg.type === "vad_commit") {
-            console.log(`[AudioSocket] vad_commit received — flushing partial accumulator immediately`);
-            await handleEOT("VadCommit");
-          }
-
         } catch (_) {}
         return;
       }
@@ -885,21 +943,57 @@ export function setupAudioSocket(server: Server) {
       }
       audioChunkCount += 1;
       audioByteCount += data.length;
+
+      // ── Silence gate ────────────────────────────────────────────────────
+      // Deepgram bills the audio it receives, so forwarding an empty room is
+      // paying for nothing. After IDLE_SUSPEND_MS of continuous sub-threshold
+      // audio the upstream connection is dropped and frames stop being
+      // forwarded; the first frame above the threshold resumes it, preceded by
+      // a short pre-roll so the opening word is not clipped.
+      const rms = frameRms(data);
+      const isSpeech = rms >= SPEECH_RMS_THRESHOLD;
+      const now = Date.now();
+
+      if (isSpeech) {
+        lastVoiceAt = now;
+        if (upstreamSuspended) {
+          upstreamSuspended = false;
+          console.log(`[AudioSocket] Voice detected (rms ${Math.round(rms)}) — resuming Deepgram`);
+          ws.send(JSON.stringify({ type: "audio_status", status: "receiving" }));
+          for (const held of preroll) transcriptionService.sendAudio(held);
+        }
+        preroll.length = 0;
+      } else {
+        if (upstreamSuspended) {
+          // Hold recent silence so the resume carries the word's leading edge.
+          preroll.push(data);
+          if (preroll.length > PREROLL_CHUNKS) preroll.shift();
+          return;
+        }
+        if (now - lastVoiceAt >= IDLE_SUSPEND_MS) {
+          upstreamSuspended = true;
+          preroll.length = 0;
+          console.log(
+            `[AudioSocket] ${Math.round((now - lastVoiceAt) / 1000)}s of silence — suspending Deepgram to stop billing`
+          );
+          transcriptionService.stop();
+          ws.send(JSON.stringify({ type: "audio_status", status: "idle" }));
+          return;
+        }
+      }
+
       if (audioChunkCount === 1 || audioChunkCount % 25 === 0) {
-        let sumSquares = 0;
         let peak = 0;
-        const sampleCount = Math.floor(data.length / 2);
         for (let offset = 0; offset + 1 < data.length; offset += 2) {
-          const sample = data.readInt16LE(offset);
-          sumSquares += sample * sample;
-          peak = Math.max(peak, Math.abs(sample));
+          peak = Math.max(peak, Math.abs(data.readInt16LE(offset)));
         }
         console.log("[AudioSocket] PCM diagnostics", {
           chunk: audioChunkCount,
           chunkBytes: data.length,
           totalBytes: audioByteCount,
-          rms: Math.round(Math.sqrt(sumSquares / Math.max(1, sampleCount))),
+          rms: Math.round(rms),
           peak,
+          suspended: upstreamSuspended,
         });
       }
       transcriptionService.sendAudio(data);
@@ -907,12 +1001,14 @@ export function setupAudioSocket(server: Server) {
 
     ws.on("close", () => {
       console.log("[AudioSocket] Client disconnected");
+      clearTimeout(sessionCeiling);
       transcriptionService.stop();
       void sermonRecorder?.end();
     });
 
     ws.on("error", (error) => {
       console.error("[AudioSocket] WebSocket error:", error);
+      clearTimeout(sessionCeiling);
       transcriptionService.stop();
       void sermonRecorder?.end();
     });
