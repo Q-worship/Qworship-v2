@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { Building2, MapPin, Clock, MoreHorizontal, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -37,33 +35,33 @@ export const BranchList: React.FC<Props> = ({
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            Churches
-            <span className="ml-2 text-sm font-normal text-muted-foreground">
-              {branches.length}
-              {pendingInvites.length > 0 && ` · ${pendingInvites.length} pending`}
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <div className="rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
+        <h2 className="mb-3 text-base font-semibold text-white">
+          Churches
+          <span className="ml-2 text-sm font-normal text-gray-400">
+            {branches.length}
+            {pendingInvites.length > 0 && ` · ${pendingInvites.length} pending`}
+          </span>
+        </h2>
+        <div className="space-y-2">
           {ordered.map((branch) => (
             <div
               key={branch.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border p-3"
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-3"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#8356F3]/20">
+                <Building2 className="h-4 w-4 text-[#b89bff]" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{branch.name}</span>
+                  <span className="truncate font-medium text-white">{branch.name}</span>
                   {branch.isParent && (
-                    <Badge variant="secondary" className="shrink-0">Main church</Badge>
+                    <span className="shrink-0 rounded-full bg-[#8356F3]/20 px-2 py-0.5 text-[11px] text-[#b89bff]">
+                      Main church
+                    </span>
                   )}
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-400">
                   {(branch.city || branch.country) && (
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
@@ -82,7 +80,7 @@ export const BranchList: React.FC<Props> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-gray-400 hover:bg-red-500/10 hover:text-red-300"
                   disabled={busyId === branch.id}
                   onClick={() => setConfirming(branch)}
                 >
@@ -95,19 +93,21 @@ export const BranchList: React.FC<Props> = ({
           {pendingInvites.map((invite) => (
             <div
               key={invite.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3"
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-white/15 p-3"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/50">
-                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/5">
+                <MoreHorizontal className="h-4 w-4 text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium text-muted-foreground">
+                  <span className="truncate font-medium text-gray-300">
                     {invite.method === "email" ? invite.email : invite.code}
                   </span>
-                  <Badge variant="outline" className="shrink-0">Invited</Badge>
+                  <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-gray-400">
+                    Invited
+                  </span>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs text-gray-500">
                   Holding a slot · expires {new Date(invite.expiresAt).toLocaleDateString()}
                 </p>
               </div>
@@ -115,7 +115,7 @@ export const BranchList: React.FC<Props> = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-gray-400 hover:bg-red-500/10 hover:text-red-300"
                   disabled={busyId === invite.id}
                   onClick={() => onRevokeInvite(invite)}
                 >
@@ -125,22 +125,23 @@ export const BranchList: React.FC<Props> = ({
               )}
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <AlertDialog open={!!confirming} onOpenChange={(open) => !open && setConfirming(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="border-white/10 bg-[#1f1438] text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {confirming?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-gray-400">
               It leaves this account and goes back to its own free plan. Its songs,
               presentations and services stay with it — nothing is deleted — and the
               slot it held becomes available. You can invite it again later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-white/10 bg-transparent text-white hover:bg-white/5">Cancel</AlertDialogCancel>
             <AlertDialogAction
+              className="bg-[#8356F3] text-white hover:bg-[#7245e2]"
               onClick={() => { if (confirming) onRemoveBranch(confirming); setConfirming(null); }}
             >
               Remove church

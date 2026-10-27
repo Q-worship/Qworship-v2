@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { acceptInvite } from "@/lib/accountApi";
 
@@ -35,28 +34,26 @@ export const JoinNetworkCard: React.FC<Props> = ({ onJoined }) => {
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Have an invitation code?</CardTitle>
-        <CardDescription>
-          Join another church's network as a branch. Your songs, presentations and
-          services stay yours.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
+      <h2 className="text-base font-semibold text-white">Have an invitation code?</h2>
+      <p className="mt-1 text-sm text-gray-400">
+        Join another church's network as a branch. Your songs, presentations and
+        services stay yours.
+      </p>
+      <div className="mt-4">
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             placeholder="XXXX-XXXX"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            className="font-mono tracking-widest sm:max-w-[200px]"
+            className="border-white/10 bg-[#120a22] font-mono tracking-widest text-white placeholder:text-gray-500 sm:max-w-[200px]"
             aria-label="Invitation code"
           />
-          <Button onClick={join} disabled={busy || code.trim().length < 4}>
+          <Button className="bg-[#8356F3] text-white hover:bg-[#7245e2]" onClick={join} disabled={busy || code.trim().length < 4}>
             {busy ? "Joining…" : "Join network"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };

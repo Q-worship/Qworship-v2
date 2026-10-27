@@ -2,8 +2,6 @@ import React, { useEffect, useState } from "react";
 import { CreditCard, AlertCircle, Receipt, Info } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { CapacityMeters } from "@/components/account/CapacityMeters";
@@ -69,10 +67,12 @@ export const SubscriptionPage: React.FC = () => {
 
   if (plansQuery.isLoading || subQuery.isLoading || draftPacks === null) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
-        <Skeleton className="h-9 w-48" />
-        <div className="grid gap-4 sm:grid-cols-2"><Skeleton className="h-36" /><Skeleton className="h-36" /></div>
-        <div className="grid gap-4 sm:grid-cols-2"><Skeleton className="h-72" /><Skeleton className="h-72" /></div>
+      <div className="min-h-full bg-[#1a0f2e] text-white">
+        <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
+          <Skeleton className="h-9 w-48 bg-white/5" />
+          <div className="grid gap-4 sm:grid-cols-2"><Skeleton className="h-36 bg-white/5" /><Skeleton className="h-36 bg-white/5" /></div>
+          <div className="grid gap-4 sm:grid-cols-2"><Skeleton className="h-72 bg-white/5" /><Skeleton className="h-72 bg-white/5" /></div>
+        </div>
       </div>
     );
   }
@@ -80,19 +80,19 @@ export const SubscriptionPage: React.FC = () => {
   const error = plansQuery.error || subQuery.error;
   if (error || !subscription || !plansQuery.data) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
-        <Card>
-          <CardContent className="flex items-start gap-3 pt-6">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+      <div className="min-h-full bg-[#1a0f2e] text-white">
+        <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
+          <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             <div>
-              <p className="font-medium">Could not load your plan</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="font-medium text-white">Could not load your plan</p>
+              <p className="mt-1 text-sm text-gray-400">
                 {(error as Error)?.message || "Something went wrong."}
               </p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={refresh}>Try again</Button>
+              <Button variant="outline" size="sm" className="mt-3 border-white/10 bg-transparent text-white hover:bg-white/5" onClick={refresh}>Try again</Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -103,23 +103,23 @@ export const SubscriptionPage: React.FC = () => {
   const payments = paymentsQuery.data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
+    <div className="min-h-full bg-[#1a0f2e] text-white"><div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <CreditCard className="h-5 w-5 text-muted-foreground" />
+            <CreditCard className="h-5 w-5 text-[#b89bff]" />
             Plan and billing
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-gray-400">
             {subscription.planId === "free"
               ? "Free plan"
               : `Standard · ${subscription.packs} ${subscription.packs === 1 ? "pack" : "packs"} · $${subscription.monthlyPrice.toFixed(2)} a month`}
           </p>
         </div>
         {subscription.status !== "active" && (
-          <Badge variant="destructive" className="capitalize">
+          <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] capitalize text-red-300">
             {subscription.status.replace("_", " ")}
-          </Badge>
+          </span>
         )}
       </div>
 
@@ -143,7 +143,7 @@ export const SubscriptionPage: React.FC = () => {
                     />
                   )}
                   <Button
-                    className="w-full"
+                    className="w-full bg-[#8356F3] text-white hover:bg-[#7245e2] disabled:opacity-40"
                     disabled={busy || !canManage || (isCurrent && draftPacks === subscription.packs)}
                     onClick={() => apply("standard", draftPacks)}
                   >
@@ -160,7 +160,8 @@ export const SubscriptionPage: React.FC = () => {
                 </div>
               ) : (
                 <Button
-                  variant="outline" className="w-full"
+                  variant="outline"
+                  className="w-full border-white/10 bg-transparent text-white hover:bg-white/5 disabled:opacity-40"
                   disabled={busy || !canManage || isCurrent}
                   onClick={() => apply("free", 0)}
                 >
@@ -173,46 +174,44 @@ export const SubscriptionPage: React.FC = () => {
       </div>
 
       {!canManage && (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <p className="flex items-center gap-2 text-sm text-gray-400">
           <Info className="h-4 w-4" />
           Only an owner or admin of this church can change the plan.
         </p>
       )}
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-            Billing history
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-white">
+          <Receipt className="h-4 w-4 text-gray-400" />
+          Billing history
+        </h2>
+        <div>
           {payments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No payments yet.</p>
+            <p className="text-sm text-gray-400">No payments yet.</p>
           ) : (
             <div className="space-y-2">
               {payments.map((p) => (
-                <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm">
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
                   <div>
-                    <p className="font-medium">${p.amount.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{p.date} · {p.method}</p>
+                    <p className="font-medium text-white">${p.amount.toFixed(2)}</p>
+                    <p className="text-xs text-gray-400">{p.date} · {p.method}</p>
                   </div>
-                  <Badge variant={p.status === "completed" ? "secondary" : "outline"} className="capitalize">
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] capitalize text-emerald-300">
                     {p.status}
-                  </Badge>
+                  </span>
                 </div>
               ))}
             </div>
           )}
           {/* Said plainly rather than implied: no payment provider is wired yet. */}
-          <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-gray-500">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" />
             Card payments are not connected yet. Plan changes here adjust your
             capacity but do not charge anything.
           </p>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </div></div>
   );
 };
 

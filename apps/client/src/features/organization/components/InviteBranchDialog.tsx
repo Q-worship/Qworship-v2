@@ -67,37 +67,37 @@ export const InviteBranchDialog: React.FC<Props> = ({ open, onOpenChange, onInvi
 
   return (
     <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="border-white/10 bg-[#1f1438] text-white sm:max-w-md">
         {created ? (
           <>
             <DialogHeader>
               <DialogTitle>Invitation code ready</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-gray-400">
                 Share this with the church you are adding. They enter it in their own
                 Qworship account to join as a branch.
               </DialogDescription>
             </DialogHeader>
             <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-md border bg-muted px-3 py-2.5 text-center text-lg font-mono tracking-widest">
+              <code className="flex-1 rounded-md border border-white/10 bg-[#120a22] px-3 py-2.5 text-center font-mono text-lg tracking-widest text-white">
                 {created.code}
               </code>
-              <Button type="button" variant="outline" size="icon" onClick={copy} aria-label="Copy code">
+              <Button type="button" variant="outline" size="icon" className="border-white/10 bg-transparent text-white hover:bg-white/5" onClick={copy} aria-label="Copy code">
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-gray-500">
               Expires {new Date(created.expiresAt).toLocaleDateString()}. It holds one slot
               until it is used or withdrawn, and works only once.
             </p>
             <DialogFooter>
-              <Button onClick={() => { onOpenChange(false); reset(); }}>Done</Button>
+              <Button className="bg-[#8356F3] text-white hover:bg-[#7245e2]" onClick={() => { onOpenChange(false); reset(); }}>Done</Button>
             </DialogFooter>
           </>
         ) : (
           <>
             <DialogHeader>
               <DialogTitle>Add a church</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-gray-400">
                 {noSlots
                   ? "Every slot is in use. Add a pack or remove a branch first."
                   : `${slotsAvailable} ${slotsAvailable === 1 ? "slot is" : "slots are"} available.`}
@@ -105,7 +105,7 @@ export const InviteBranchDialog: React.FC<Props> = ({ open, onOpenChange, onInvi
             </DialogHeader>
 
             <Tabs defaultValue="code">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-2 bg-white/5">
                 <TabsTrigger value="code" className="gap-1.5">
                   <Link2 className="h-3.5 w-3.5" /> Share a code
                 </TabsTrigger>
@@ -115,18 +115,18 @@ export const InviteBranchDialog: React.FC<Props> = ({ open, onOpenChange, onInvi
               </TabsList>
 
               <TabsContent value="code" className="space-y-3 pt-4">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-gray-400">
                   Generates a one-time code for a church that has not joined yet, or
                   whose email you do not have.
                 </p>
-                <Button className="w-full" disabled={busy || noSlots} onClick={() => submit("code")}>
+                <Button className="w-full bg-[#8356F3] text-white hover:bg-[#7245e2]" disabled={busy || noSlots} onClick={() => submit("code")}>
                   {busy ? "Creating…" : "Generate code"}
                 </Button>
               </TabsContent>
 
               <TabsContent value="email" className="space-y-3 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="branch-email">Church email address</Label>
+                  <Label htmlFor="branch-email" className="text-gray-300">Church email address</Label>
                   <Input
                     id="branch-email"
                     type="email"
@@ -134,14 +134,15 @@ export const InviteBranchDialog: React.FC<Props> = ({ open, onOpenChange, onInvi
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={busy || noSlots}
+                    className="border-white/10 bg-[#120a22] text-white placeholder:text-gray-500"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-500">
                   They choose whether to join. Joining puts their church under this
                   account's administration, so it is never done for them.
                 </p>
                 <Button
-                  className="w-full"
+                  className="w-full bg-[#8356F3] text-white hover:bg-[#7245e2]"
                   disabled={busy || noSlots || !email.trim()}
                   onClick={() => submit("email")}
                 >
