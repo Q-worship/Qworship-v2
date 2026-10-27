@@ -2,13 +2,14 @@ import { Request, Response } from 'express';
 import { Organization } from '../organization/organization.model.js';
 import { User } from '../auth/auth.model.js';
 import { Campaign } from '../referral/campaign.model.js';
+import { grantMembership, resolveActiveOrganization } from '../organization/organization.service.js';
 import { notifyReferralNewOrganization } from '../notifications/notification.service.js';
 
 const TRIAL_DAYS = 30;
 
 export async function getOnboarding(req: Request, res: Response) {
   const user = (req as any).user;
-  const organization = await Organization.findOne({ ownerId: user._id });
+  const organization = (await resolveActiveOrganization(req))?.organization ?? null;
   return res.json({
     success: true,
     onboarding: {
@@ -30,11 +31,33 @@ export async function saveOrganization(req: Request, res: Response) {
     if (![churchName, denomination, country, city].every(value => typeof value === 'string' && value.trim())) {
       return res.status(400).json({ success: false, message: 'Church name, denomination, country, and city are required' });
     }
-    const organization = await Organization.findOneAndUpdate(
-      { ownerId: user._id },
-      { name: churchName.trim(), denomination: denomination.trim(), country: country.trim(), city: city.trim(), zipCode: typeof zip === 'string' ? zip.trim() : '', ownerId: user._id },
-      { new: true, upsert: true, runValidators: true },
-    );
+    const details = {
+      name: churchName.trim(),
+      denomination: denomination.trim(),
+      country: country.trim(),
+      city: city.trim(),
+      zipCode: typeof zip === 'string' ? zip.trim() : '',
+    };
+
+    // Onboarding either fills in the church this user already has, or creates
+    // their first one. The upsert this replaced keyed on ownerId, which cannot
+    // express a user who belongs to several churches.
+    const existing = await resolveActiveOrganization(req);
+    let organization;
+    if (existing) {
+      organization = await Organization.findByIdAndUpdate(
+        existing.organization._id,
+        details,
+        { new: true, runValidators: true },
+      );
+    } else {
+      organization = await Organization.create({ ...details, ownerId: user._id });
+      await grantMembership(user._id, organization._id as any, 'owner');
+      user.activeOrganizationId = organization._id;
+    }
+    if (!organization) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
     user.organizationName = organization.name;
     if (user.onboardingStatus === 'pending') user.onboardingStatus = 'organization';
     await user.save();
@@ -68,7 +91,7 @@ export async function savePreferences(req: Request, res: Response) {
     }
   }
 
-  const organization = await Organization.findOne({ ownerId: user._id });
+  const organization = (await resolveActiveOrganization(req))?.organization ?? null;
   if (organization) {
     const isNewReferral = !!referee && String(organization.referredBy || '') !== String(referee._id);
     if (referee) {
@@ -104,7 +127,7 @@ export async function savePreferences(req: Request, res: Response) {
 export async function completeOnboarding(req: Request, res: Response) {
   try {
     const user = (req as any).user;
-    const organization = await Organization.findOne({ ownerId: user._id });
+    const organization = (await resolveActiveOrganization(req))?.organization ?? null;
     if (!organization) return res.status(400).json({ success: false, message: 'Complete organization setup first' });
     if (user.onboardingStatus !== 'preferences') return res.status(400).json({ success: false, message: 'Complete onboarding preferences first' });
     if (user.trialActivatedAt || user.trialStatus !== 'not_started') {

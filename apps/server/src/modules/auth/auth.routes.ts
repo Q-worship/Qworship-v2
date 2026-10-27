@@ -24,13 +24,15 @@ import { protect } from './auth.middleware.js';
 
 const currentUserHandler = [protect, async (req: any, res: any) => {
   try {
-    const { Organization } = await import('../organization/organization.model.js');
+    const { listUserOrganizations } = await import('../organization/organization.service.js');
     if (req.user.trialStatus === 'active' && req.user.trialEndDate && req.user.trialEndDate <= new Date()) {
       req.user.trialStatus = 'expired';
       req.user.subscriptionStatus = 'inactive';
       await req.user.save();
     }
-    const organizations = await Organization.find({ ownerId: req.user._id });
+    // Every church this user belongs to, not only the ones they created.
+    const memberships = await listUserOrganizations(req.user._id);
+    const organizations = memberships.map((m) => m.organization);
 
     res.status(200).json({
       success: true,

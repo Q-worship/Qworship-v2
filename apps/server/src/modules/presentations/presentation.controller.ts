@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Presentation } from './presentation.model.js';
 import { Organization } from '../organization/organization.model.js';
+import { resolveActiveOrganization } from '../organization/organization.service.js';
 
 export const getPresentations = async (req: Request, res: Response) => {
   try {
@@ -37,9 +38,10 @@ export const createPresentation = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'A project name of 1–120 characters is required' });
     }
 
-    // Try to find user's organization to link it
-    let org = await Organization.findOne({ ownerId: userId });
-    
+    // Which church this project belongs to. A user on several churches must
+    // name one; a user on a single church still resolves to it automatically.
+    const org = (await resolveActiveOrganization(req))?.organization ?? null;
+
     if (!org) return res.status(400).json({ success: false, error: 'Complete organization onboarding before creating a project' });
 
     const newPresentation = await Presentation.create({
@@ -79,8 +81,8 @@ export const bulkCreatePresentations = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'presentations array is required and must not be empty' });
     }
 
-    // Find user's org once (reuse across all inserts)
-    const org = await Organization.findOne({ ownerId: userId });
+    // Resolve the church once and reuse it across every insert.
+    const org = (await resolveActiveOrganization(req))?.organization ?? null;
     const orgId = org ? org._id : userId;
 
     const created: any[] = [];

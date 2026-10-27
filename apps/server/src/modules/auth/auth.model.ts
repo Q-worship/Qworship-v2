@@ -17,6 +17,8 @@ export interface IUser extends Document {
   profilePicture?: string;
   role: 'user' | 'admin' | 'superadmin' | 'pastor' | 'worship_leader' | 'member' | 'referee';
   roleId?: mongoose.Types.ObjectId | null;
+  /** The church this user is currently acting on, when they belong to several. */
+  activeOrganizationId?: mongoose.Types.ObjectId | null;
   referralCode?: string;
   mustChangePassword?: boolean;
   lastLoginAt?: Date;
@@ -55,6 +57,7 @@ const UserSchema = new Schema<IUser>(
     profilePicture: { type: String },
     role: { type: String, enum: ['user', 'admin', 'superadmin', 'pastor', 'worship_leader', 'member', 'referee'], default: 'user' },
     roleId: { type: Schema.Types.ObjectId, ref: 'Role', default: null },
+    activeOrganizationId: { type: Schema.Types.ObjectId, ref: 'Organization', default: null },
     referralCode: { type: String, unique: true, sparse: true, uppercase: true, trim: true },
     mustChangePassword: { type: Boolean, default: false },
     lastLoginAt: { type: Date },

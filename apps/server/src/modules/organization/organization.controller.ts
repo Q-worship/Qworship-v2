@@ -1,11 +1,17 @@
 import { Request, Response } from 'express';
 import { Organization } from './organization.model.js';
 import { User } from '../auth/auth.model.js';
+import { canWrite, getMembership, grantMembership } from './organization.service.js';
 import { notifyReferralOrgActivated } from '../notifications/notification.service.js';
 
 export const getOrganization = async (req: Request, res: Response) => {
   try {
-    const organization = await Organization.findOne({ _id: req.params.id, ownerId: (req as any).user._id });
+    // Belonging to the church is what grants the read, not having created it.
+    const role = await getMembership((req as any).user._id, req.params.id);
+    if (!role) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+    const organization = await Organization.findById(req.params.id);
     if (!organization) {
       return res.status(404).json({ success: false, message: 'Organization not found' });
     }
@@ -22,8 +28,18 @@ export const updateOrganization = async (req: Request, res: Response) => {
     const allowed = ['name', 'address', 'city', 'state', 'zipCode', 'country', 'phone', 'website', 'denomination', 'size'];
     const updateData = Object.fromEntries(allowed.filter(key => req.body[key] !== undefined).map(key => [key, req.body[key]]));
     
-    const organization = await Organization.findOneAndUpdate({ _id: id, ownerId: (req as any).user._id }, updateData, { new: true, runValidators: true });
-    
+    // Changing a church's settings needs owner or admin there; a plain member
+    // can read it but not rename it.
+    const role = await getMembership((req as any).user._id, id);
+    if (!role) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+    if (!canWrite(role)) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to update this organization' });
+    }
+
+    const organization = await Organization.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+
     if (!organization) {
       return res.status(404).json({ success: false, message: 'Organization not found' });
     }
@@ -47,16 +63,21 @@ export const createOrganization = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Name is required' });
     }
 
-    // 1. Create Organization
+    // 1. Create Organization. ownerId records who created it; the membership
+    // below is what actually grants access.
     const organization = await Organization.create({
       name, address, city, state, zipCode, country,
       phone, website, denomination, size,
-      ownerId: userId // Binding the caller
+      ownerId: userId
     });
 
-    // 2. Link the organization back to the user
+    // 2. The creator becomes its owner.
+    await grantMembership(userId, organization._id as any, 'owner');
+
+    // 3. Link the organization back to the user
     await User.findByIdAndUpdate(userId, {
-      organizationName: name
+      organizationName: name,
+      activeOrganizationId: organization._id
     });
 
     return res.status(201).json({
