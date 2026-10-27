@@ -15,6 +15,10 @@ export interface IOrganization extends Document {
   subscriptionStatus: "active" | "inactive" | "trial" | "cancelled";
   activatedAt?: Date;
   ownerId: mongoose.Types.ObjectId;
+  /** The Account whose slots this church consumes. */
+  accountId?: mongoose.Types.ObjectId | null;
+  /** The church this is a branch of. Null for a standalone or parent church. */
+  parentOrganizationId?: mongoose.Types.ObjectId | null;
   referredBy?: mongoose.Types.ObjectId;
   referralCodeUsed?: string;
   campaignId?: mongoose.Types.ObjectId;
@@ -47,6 +51,8 @@ const OrganizationSchema = new Schema<IOrganization>(
     },
     activatedAt: { type: Date },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    accountId: { type: Schema.Types.ObjectId, ref: "Account", default: null, index: true },
+    parentOrganizationId: { type: Schema.Types.ObjectId, ref: "Organization", default: null, index: true },
     referredBy: { type: Schema.Types.ObjectId, ref: "User" },
     referralCodeUsed: { type: String },
     campaignId: { type: Schema.Types.ObjectId, ref: "Campaign" },
