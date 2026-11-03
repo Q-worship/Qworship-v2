@@ -120,22 +120,27 @@ export const useHistoryManager = ({
               type: lastAction.item.type,
               title: lastAction.item.title,
               content: lastAction.item.content || {},
-              slides: [
-                {
-                  id: `slide-${lastAction.item.id}-${Date.now()}`,
-                  type:
-                    lastAction.item.type === "song"
-                      ? ("song" as const)
-                      : ("custom" as const),
-                  title: lastAction.item.title,
-                  content:
-                    lastAction.item.type === "song"
-                      ? "Please select a song"
-                      : "Ready for content",
-                  sectionLabel:
-                    lastAction.item.type === "song" ? "Song" : "Content",
-                },
-              ],
+              // Items that carry their own slides (e.g. imported presentations) keep them
+              slides:
+                Array.isArray(lastAction.item.slides) &&
+                lastAction.item.slides.length > 0
+                  ? lastAction.item.slides
+                  : [
+                      {
+                        id: `slide-${lastAction.item.id}-${Date.now()}`,
+                        type:
+                          lastAction.item.type === "song"
+                            ? ("song" as const)
+                            : ("custom" as const),
+                        title: lastAction.item.title,
+                        content:
+                          lastAction.item.type === "song"
+                            ? "Please select a song"
+                            : "Ready for content",
+                        sectionLabel:
+                          lastAction.item.type === "song" ? "Song" : "Content",
+                      },
+                    ],
             };
 
             setServiceItems((prev) => [...prev, restoredServiceItem]);
@@ -171,22 +176,27 @@ export const useHistoryManager = ({
               type: nextAction.item.type,
               title: nextAction.item.title,
               content: nextAction.item.content || {},
-              slides: [
-                {
-                  id: `slide-${nextAction.item.id}-${Date.now()}`,
-                  type:
-                    nextAction.item.type === "song"
-                      ? ("song" as const)
-                      : ("custom" as const),
-                  title: nextAction.item.title,
-                  content:
-                    nextAction.item.type === "song"
-                      ? "Please select a song"
-                      : "Ready for content",
-                  sectionLabel:
-                    nextAction.item.type === "song" ? "Song" : "Content",
-                },
-              ],
+              // Items that carry their own slides (e.g. imported presentations) keep them
+              slides:
+                Array.isArray(nextAction.item.slides) &&
+                nextAction.item.slides.length > 0
+                  ? nextAction.item.slides
+                  : [
+                      {
+                        id: `slide-${nextAction.item.id}-${Date.now()}`,
+                        type:
+                          nextAction.item.type === "song"
+                            ? ("song" as const)
+                            : ("custom" as const),
+                        title: nextAction.item.title,
+                        content:
+                          nextAction.item.type === "song"
+                            ? "Please select a song"
+                            : "Ready for content",
+                        sectionLabel:
+                          nextAction.item.type === "song" ? "Song" : "Content",
+                      },
+                    ],
             };
 
             setServiceItems((prev) => [...prev, serviceItem]);

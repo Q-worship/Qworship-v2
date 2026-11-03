@@ -48,6 +48,8 @@ import { SongSearchModal } from "@/features/dashboard/components/SongSearchModal
 import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
+import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
+import type { ParsedPresentation } from "@/lib/pptxParser";
 import { StylesDropdown } from "@/features/dashboard/components/StylesDropdown";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore } from "@/stores/useDisplayModeStore";
@@ -3520,8 +3522,105 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     setIsImportModalOpen(true);
   };
 
-  const handleFileImport = (file: File) => {
-    importPresentationMutation.mutate(file);
+  // Adds the slides picked in the Import Presentation modal to their chosen
+  // service sections, one item per slide, in presentation order.
+  const handleImportSlides = async (
+    presentation: ParsedPresentation,
+    allocations: SlideAllocation[],
+  ) => {
+    const stamp = Date.now();
+    const newEntries: { item: any; section: string }[] = [];
+
+    for (const { slide, section } of allocations) {
+      // Zero-padded so one item id is never a substring of another
+      // (rebuildSlidesFromServiceItems matches slides to items by id substring)
+      const id = `imported-${stamp}-${String(slide.number).padStart(4, "0")}`;
+      const heading = slide.title.length > 40 ? `${slide.title.slice(0, 40)}…` : slide.title;
+      const title = heading ? `Slide ${slide.number} – ${heading}` : `Slide ${slide.number}`;
+      const text = [slide.title, ...slide.lines].filter(Boolean).join("\n");
+
+      const imageUrl =
+        !text && slide.hasImage
+          ? await presentation.loadSlideImage(slide.number)
+          : null;
+
+      const item = imageUrl
+        ? {
+            id,
+            type: "media",
+            subtype: "image",
+            title,
+            content: {},
+            slides: [
+              {
+                id: `slide-${id}`,
+                itemId: id,
+                type: "media" as const,
+                subtype: "image" as const,
+                title,
+                content: imageUrl,
+              },
+            ],
+          }
+        : {
+            id,
+            type: "custom",
+            title,
+            content: text || title,
+            slides: [
+              {
+                id: `slide-${id}`,
+                itemId: id,
+                type: "custom" as const,
+                title,
+                content: text || title,
+                sectionLabel: "Imported",
+              },
+            ],
+          };
+
+      newEntries.push({ item, section });
+    }
+
+    if (newEntries.length === 0) return;
+
+    newEntries.forEach(({ item, section }) => {
+      recordAction({
+        type: "ADD_ITEM",
+        itemId: item.id,
+        sectionName: section,
+        item,
+        description: `Import ${item.title} into ${section}`,
+      });
+    });
+
+    const nextSectionItems = { ...sectionItems };
+    newEntries.forEach(({ item, section }) => {
+      nextSectionItems[section] = [...(nextSectionItems[section] || []), item];
+    });
+    const nextServiceItems = [
+      ...serviceItems,
+      ...newEntries.map(({ item, section }) => ({
+        ...item,
+        section: getServiceSectionKey(section),
+      })),
+    ];
+
+    setSectionItems(nextSectionItems);
+    setExpandedSections((prev) => {
+      const next = { ...prev };
+      newEntries.forEach(({ section }) => {
+        next[section as keyof typeof next] = true;
+      });
+      return next;
+    });
+    setServiceItems(nextServiceItems);
+    rebuildSlidesFromServiceItems(nextServiceItems, nextSectionItems);
+
+    toast({
+      title: "Import Complete",
+      description: `${newEntries.length} ${newEntries.length === 1 ? "slide" : "slides"} from "${presentation.fileName}" added to your service.`,
+    });
   };
 
   const handleExitApplication = () => {
@@ -5957,8 +6056,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           calculateSlideCount={calculateSlideCount}
           isImportModalOpen={isImportModalOpen}
           setIsImportModalOpen={setIsImportModalOpen}
-          handleFileImport={handleFileImport}
-          importPresentationMutation={importPresentationMutation}
+          handleImportSlides={handleImportSlides}
           deleteConfirmation={deleteConfirmation}
           cancelDelete={cancelDelete}
           confirmDelete={confirmDelete}
