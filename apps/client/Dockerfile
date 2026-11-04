@@ -21,6 +21,10 @@ ARG VITE_WS_URL
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 
+# Build shared first: the client imports @qworship/shared too, and resolves it
+# through the package's main field rather than a Vite alias.
+RUN pnpm --filter @qworship/shared build
+
 # Build client
 RUN pnpm --filter @qworship/client build
 

@@ -90,6 +90,15 @@ that does not exist; status is derived from real data instead.
   owner and changes nothing else, for the same reason as `past_due`: disputes
   are often opened in error and take weeks to close. If one is lost, Stripe
   cancels for non-payment and `customer.subscription.deleted` revokes properly.
+- **Storage is refused before anything is stored.** `usage/storage.guard.ts`
+  judges the whole batch at the START of an upload, after compression (the
+  bytes that will actually occupy the allowance) and before a byte reaches S3,
+  so a multi-file upload cannot half-land and leave a church over its limit.
+  Refusal is `402 STORAGE_LIMIT_REACHED`. Crossing 80% warns *once* — on the
+  crossing, not on every upload thereafter. An unresolvable church means do
+  not enforce, the same trade hours make: an attribution gap is a reporting
+  problem, not a reason to refuse somebody's media. Admin `isCloud` media is
+  exempt throughout; it belongs to no church's allowance.
 - **Enforcement reads `usedSeconds`, never `usedHours`.** The latter is rounded
   to 2dp for display; comparing against it cut a church off ~3.6 seconds early.
 
@@ -110,8 +119,16 @@ it once the legacy readers are gone.
 - Stripe webhooks need `stripe listen --api-key $STRIPE_SECRET_KEY --forward-to
   localhost:5000/webhooks/stripe`. Without a live listener the endpoint answers
   503 by design, so Stripe retries once configured.
+- **`packages/shared` is consumed as COMPILED JS, not source.** Its `main` is
+  `dist/index.js`, because production runs the server as plain `node
+  apps/server/dist/index.js` and node cannot load a `.ts` file — pointing
+  `main` at `src/index.ts` is what caused `ERR_UNKNOWN_FILE_EXTENSION` on boot.
+  So `dist` must exist before either app builds: both Dockerfiles and the root
+  `build` script build shared first, and `pnpm dev` runs `tsc --watch` for it.
+  A fresh clone needs `pnpm --filter @qworship/shared build` once.
 - **Editing `packages/shared` does not hot-reload the server** — nodemon watches
-  only `apps/server/src`. Touch a server file after a catalog change.
+  only `apps/server/src`. The watcher recompiles shared, but touch a server
+  file after a catalog change.
 - **Editing `tailwind.config.ts` does not hot-reload Vite.** Restart it, or new
   colour tokens render as transparent.
 
@@ -122,32 +139,25 @@ it once the legacy readers are gone.
 Roughly in the order worth doing. None is release-blocking; the two that were
 (entitlement reconciliation, and having any scheduler at all) are done.
 
-### 1. Storage is measured but not enforced
-
-`modules/usage/storage.service.ts` reports real bytes and the Plans tile shows
-them, but `media.controller.ts` does not check the limit on upload. A Free
-church can put 50 GB against its 1 GB. Needs a pre-upload check mirroring the
-hours guard — and the same "warn before you block" treatment.
-
-### 2. Gift stacking
+### 1. Gift stacking
 
 `redeemGift` refuses an account with a live Stripe subscription but not one with
 an already-redeemed gift, so a second code silently overwrites the first's
 `expiresAt`. Either refuse, or extend the existing expiry.
 
-### 3. Billing visibility
+### 2. Billing visibility
 
 Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 4. No trial on Standard
+### 3. No trial on Standard
 
 The design shows "30 Days Free Trial / 19 days left". Stripe supports
 `trial_period_days` on the subscription; nothing uses it, and there is no
 trial-days figure anywhere in the account model.
 
-### 5. Dashboard configuration (not code)
+### 4. Dashboard configuration (not code)
 
 - **Adaptive Pricing** must be switched on in the Stripe Dashboard — it is a
   setting, not an API call, and the whole currency approach depends on it. Note
@@ -156,7 +166,7 @@ trial-days figure anywhere in the account model.
 - **Production webhook endpoint** with the nine handled events, and its own
   signing secret. The CLI secret is local-only.
 
-### 6. Deferred features
+### 5. Deferred features
 
 - **Auto-refill / "Emergency Sunday Buffer"** from the design: buy hours
   automatically instead of stopping. Deliberately not built — it charges a card
@@ -170,8 +180,10 @@ trial-days figure anywhere in the account model.
 - **Email.** `notificationPreferences` now gates in-app notices only; no billing
   email is sent at all. `modules/auth/email.service.ts` has the transport.
 
-### 7. Known gaps in testing
+### 6. Known gaps in testing
 
+- `pnpm test:storage` covers the storage policy and needs no database or
+  server — `verdictFor` is pure so the refusal rules run anywhere.
 - Refunds and disputes **have** been exercised against live test-mode Stripe
   (full refund reverses the row, replay is a no-op, partial refund declines to
   act, a dispute notifies without touching `status`). Done against a throwaway

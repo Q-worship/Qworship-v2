@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --parallel --filter \"./apps/*\" run dev",
+    "dev": "pnpm --parallel --filter \"./packages/*\" --filter \"./apps/*\" run dev",
     "dev:marketing": "pnpm --filter @qworship/marketing dev",
     "dev:auth-api": "pnpm --filter @qworship/server dev:auth",
-    "build": "pnpm --filter \"./apps/*\" run build",
+    "build": "pnpm --filter \"./packages/*\" run build && pnpm --filter \"./apps/*\" run build",
     "build:marketing": "pnpm --filter @qworship/marketing build",
     "lint": "pnpm --filter \"*\" run lint",
     "deploy:chat-api": "wrangler deploy --config workers/whatsapp-chat/wrangler.toml",

@@ -12,8 +12,12 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps ./apps
 COPY packages ./packages
 
-# Install all dependencies and build the server package
+# Install all dependencies, then build shared BEFORE the server.
+# The server runs as plain compiled JS (see CMD below), so @qworship/shared has
+# to exist as JS too — node cannot load the .ts sources, and resolving them is
+# what produced ERR_UNKNOWN_FILE_EXTENSION on boot.
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @qworship/shared build
 RUN pnpm --filter @qworship/server build
 
 # Set production context
