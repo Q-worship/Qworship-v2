@@ -180,3 +180,33 @@ export async function notifyPaymentDisputed(
     console.error("[Billing] Could not notify payment dispute:", error);
   }
 }
+
+/**
+ * A church is close to filling its cloud storage.
+ *
+ * The warning half of storage enforcement: sent while the church can still
+ * act, rather than leaving it to find out when an upload is refused.
+ */
+export async function notifyStorageLow(
+  account: IAccount,
+  churchName: string,
+  usedGb: number,
+  limitGb: number,
+): Promise<void> {
+  try {
+    const owner = await recipient(account, "trial");
+    if (!owner) return;
+    await createNotification({
+      userId: owner._id as any,
+      type: "storage_low",
+      category: "subscription",
+      title: `${churchName} is nearly out of storage`,
+      message: `${usedGb} GB of ${limitGb} GB used. Delete some media or upgrade the plan before an upload is refused.`,
+      icon: "AlertTriangle",
+      actionUrl: "/dashboard-subscription/branches",
+      metadata: { churchName, usedGb, limitGb },
+    });
+  } catch (error) {
+    console.error("[Billing] Could not notify low storage:", error);
+  }
+}

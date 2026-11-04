@@ -40,6 +40,7 @@ const NotificationSchema = new Schema<INotification>(
         'hours_low',
         'payment_disputed',
         'topup_refunded',
+        'storage_low',
         // Admin-triggered
         'admin_feature',
         'admin_bible',

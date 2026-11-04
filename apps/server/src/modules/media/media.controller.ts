@@ -5,6 +5,11 @@ import fs from 'fs';
 import { objectStorage } from './s3.service.js';
 import { resolveActiveOrganization } from '../organization/organization.service.js';
 import sharp from 'sharp';
+import {
+  storageAllowanceFor,
+  verdictFor,
+  denialMessage,
+} from '../usage/storage.guard.js';
 
 /**
  * The church an upload belongs to, for storage accounting.
@@ -22,6 +27,60 @@ async function uploadingOrganizationId(req: Request): Promise<any | null> {
   }
 }
 
+/**
+ * Compresses one upload in memory and reports what it will actually cost.
+ *
+ * Separated from storing it so the whole batch can be measured BEFORE a byte
+ * reaches S3 — the storage guard judges the post-compression size, which is
+ * what will occupy the allowance.
+ */
+async function prepareUpload(file: Express.Multer.File, index: number, req: Request) {
+  const { originalname, mimetype, size, buffer } = file;
+
+  // Extract metadata from frontend mapping
+  let metadata: any = {};
+  try {
+    if (req.body[`metadata_${index}`]) {
+      metadata = JSON.parse(req.body[`metadata_${index}`]);
+    }
+  } catch (e) {
+    console.warn(`Could not parse metadata for file ${index}`);
+  }
+
+  const type = mimetype.startsWith('video') ? 'video' : 'image';
+  let finalFileSize = size;
+  let processedBuffer = buffer;
+
+  // Compress Images
+  if (type === 'image') {
+    try {
+      processedBuffer = await sharp(buffer)
+        .resize({ width: 1920, withoutEnlargement: true })
+        .jpeg({ quality: 80, force: false })
+        .webp({ quality: 80, force: false })
+        .png({ quality: 80, force: false })
+        .withMetadata()
+        .toBuffer();
+      finalFileSize = processedBuffer.length;
+    } catch (err) {
+      console.error(`Error compressing image ${originalname}:`, err);
+      // If compression fails, we still have the original file, we just proceed.
+    }
+  }
+
+  return {
+    originalname,
+    mimetype,
+    type,
+    title: metadata.title || originalname,
+    description: metadata.description || '',
+    tags: metadata.tags || [],
+    categories: metadata.categories || [],
+    processedBuffer,
+    finalFileSize,
+  };
+}
+
 export const uploadMedia = async (req: Request, res: Response) => {
   console.log('[UPLOAD] Starting User Media Upload route check...');
   
@@ -34,61 +93,65 @@ export const uploadMedia = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
+    // Resolved once for the whole batch rather than per file: it is the same
+    // church for every file in one request, and it is needed before the first
+    // upload to know whether the batch fits at all.
+    const organizationId = await uploadingOrganizationId(req);
+
+    // Everything is compressed first so the guard sees the bytes that will
+    // actually be stored, then the batch is judged as a whole.
+    const prepared = await Promise.all(
+      files.map((file, index) => prepareUpload(file, index, req)),
+    );
+    const incomingBytes = prepared.reduce((sum, p) => sum + p.finalFileSize, 0);
+
+    const allowance = await storageAllowanceFor(organizationId);
+    // A null allowance means the church could not be resolved. Storing an
+    // unattributed asset is the lesser failure, exactly as it is for hours.
+    const verdict = allowance ? verdictFor(allowance, incomingBytes) : { state: 'ok' as const };
+
+    if (allowance && verdict.state === 'deny') {
+      console.warn(
+        `[UPLOAD] Refused: ${allowance.churchName} at ${verdict.usedGb}/${verdict.limitGb} GB, upload needs ${verdict.incomingGb} GB`,
+      );
+      // 402 with an errorType, matching how an exhausted entitlement is
+      // reported elsewhere. Nothing has been written at this point.
+      return res.status(402).json({
+        success: false,
+        message: denialMessage(allowance, verdict),
+        errorType: 'STORAGE_LIMIT_REACHED',
+        storage: {
+          usedGb: verdict.usedGb,
+          limitGb: verdict.limitGb,
+          remainingGb: verdict.remainingGb,
+          incomingGb: verdict.incomingGb,
+        },
+      });
+    }
+
     const uploadedRecords = [];
 
-    for (let index = 0; index < files.length; index++) {
-      const file = files[index];
-      const { originalname, mimetype, size, buffer } = file;
-
-      // Extract metadata from frontend mapping
-      let metadata: any = {};
-      try {
-        if (req.body[`metadata_${index}`]) {
-          metadata = JSON.parse(req.body[`metadata_${index}`]);
-        }
-      } catch (e) {
-        console.warn(`Could not parse metadata for file ${index}`);
-      }
-
-      const type = mimetype.startsWith('video') ? 'video' : 'image';
-      const title = metadata.title || originalname;
-      
-      let finalFileSize = size;
-      let processedBuffer = buffer;
-
-      // Compress Images
-      if (type === 'image') {
-        try {
-          processedBuffer = await sharp(buffer)
-            .resize({ width: 1920, withoutEnlargement: true })
-            .jpeg({ quality: 80, force: false })
-            .webp({ quality: 80, force: false })
-            .png({ quality: 80, force: false })
-            .withMetadata()
-            .toBuffer();
-          finalFileSize = processedBuffer.length;
-        } catch (err) {
-          console.error(`Error compressing image ${originalname}:`, err);
-          // If compression fails, we still have the original file, we just proceed.
-        }
-      }
-
+    for (const item of prepared) {
       // Push buffer to S3 directly
-      const { key, fileUrl } = await objectStorage.uploadCloudMedia(originalname, processedBuffer, mimetype);
+      const { key, fileUrl } = await objectStorage.uploadCloudMedia(
+        item.originalname,
+        item.processedBuffer,
+        item.mimetype,
+      );
 
       const newMedia = new Media({
-        title,
-        description: metadata.description || '',
-        tags: metadata.tags || [],
-        categories: metadata.categories || [],
-        type,
-        fileType: mimetype,
-        fileName: originalname,
+        title: item.title,
+        description: item.description,
+        tags: item.tags,
+        categories: item.categories,
+        type: item.type,
+        fileType: item.mimetype,
+        fileName: item.originalname,
         cloudKey: key,
         fileUrl: fileUrl,
-        fileSize: finalFileSize,
+        fileSize: item.finalFileSize,
         uploadedBy: (req as any).user._id,
-        organizationId: await uploadingOrganizationId(req),
+        organizationId,
         usageCount: 0,
       });
 
@@ -99,11 +162,35 @@ export const uploadMedia = async (req: Request, res: Response) => {
     console.log('[UPLOAD] Successfully uploaded all elements:', uploadedRecords.length);
     res.status(201).json({ assets: uploadedRecords });
 
+    // Told after the upload succeeded, and only on crossing the threshold, so
+    // a church is warned once while it can still act. Fire-and-forget: an
+    // upload must never fail because a notification did.
+    if (allowance && verdict.state === 'warn') {
+      void notifyStorageNearlyFull(allowance, verdict.usedGb, verdict.limitGb);
+    }
+
   } catch (error) {
     console.error('[UPLOAD] Fatal Error aborting upload media stream:', error);
     res.status(500).json({ message: 'Failed to upload media' });
   }
 };
+
+/** Records a nearly-full notice against the account that owns this church. */
+async function notifyStorageNearlyFull(
+  allowance: { accountId: string; churchName: string },
+  usedGb: number,
+  limitGb: number,
+): Promise<void> {
+  try {
+    const { Account } = await import('../organization/account.model.js');
+    const { notifyStorageLow } = await import('../billing/billing.notify.js');
+    const account = await Account.findById(allowance.accountId);
+    if (!account) return;
+    await notifyStorageLow(account, allowance.churchName, usedGb, limitGb);
+  } catch (error) {
+    console.error('[UPLOAD] Could not record a low-storage notice:', error);
+  }
+}
 
 export const getUserMediaStats = async (req: Request, res: Response) => {
   try {
