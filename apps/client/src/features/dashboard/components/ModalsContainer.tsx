@@ -8,7 +8,11 @@ import { LiveControlCentre } from "@/features/dashboard/components/LiveControlCe
 import { OpenProjectsModal } from "./modals/OpenProjectsModal";
 import { DeleteConfirmationModal } from "./modals/DeleteConfirmationModal";
 import { ProjectDeleteConfirmationModal } from "./modals/ProjectDeleteConfirmationModal";
-import { ImportPresentationModal } from "./modals/ImportPresentationModal";
+import {
+  ImportPresentationModal,
+  type SlideAllocation,
+} from "./modals/ImportPresentationModal";
+import type { ParsedPresentation } from "@/lib/pptxParser";
 
 interface ModalsContainerProps {
   // Open Projects Modal
@@ -40,8 +44,10 @@ interface ModalsContainerProps {
   // Import Presentation Modal
   isImportModalOpen: boolean;
   setIsImportModalOpen: (open: boolean) => void;
-  handleFileImport: (file: File) => void;
-  importPresentationMutation: any;
+  handleImportSlides: (
+    presentation: ParsedPresentation,
+    allocations: SlideAllocation[],
+  ) => Promise<void>;
 
   // Delete Confirmation Modal
   deleteConfirmation: { isOpen: boolean; item: any; sectionName: string };
@@ -134,8 +140,7 @@ export const ModalsContainer: React.FC<ModalsContainerProps> = (props) => {
       <ImportPresentationModal
         isImportModalOpen={props.isImportModalOpen}
         setIsImportModalOpen={props.setIsImportModalOpen}
-        handleFileImport={props.handleFileImport}
-        importPresentationMutation={props.importPresentationMutation}
+        handleImportSlides={props.handleImportSlides}
       />
 
       <DeleteConfirmationModal
