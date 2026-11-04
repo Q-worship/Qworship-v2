@@ -74,9 +74,7 @@ export function PricingCompareSection({
               <tr>
                 <th scope="col">Feature</th>
                 <th scope="col">{columnLabels.free}</th>
-                <th scope="col">{columnLabels.starter}</th>
-                <th scope="col" className="pricing-compare-col-premium">{columnLabels.premium}</th>
-                <th scope="col">{columnLabels.enterprise}</th>
+                <th scope="col" className="pricing-compare-col-premium">{columnLabels.standard}</th>
               </tr>
             </thead>
             <tbody>
@@ -84,9 +82,7 @@ export function PricingCompareSection({
                 <tr key={row.id}>
                   <th scope="row">{row.label}</th>
                   <td><CompareCell value={row.free} /></td>
-                  <td><CompareCell value={row.starter} /></td>
-                  <td className="pricing-compare-col-premium"><CompareCell value={row.premium} /></td>
-                  <td><CompareCell value={row.enterprise} /></td>
+                  <td className="pricing-compare-col-premium"><CompareCell value={row.standard} /></td>
                 </tr>
               ))}
             </tbody>

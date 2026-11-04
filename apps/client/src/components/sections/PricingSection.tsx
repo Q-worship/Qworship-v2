@@ -1,6 +1,4 @@
-import { useState } from 'react'
 import { pricingFeatures, pricingPlans } from '@/lib/theme'
-import type { BillingPeriod } from '@/types/content'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 
 interface PricingSectionProps {
@@ -8,7 +6,6 @@ interface PricingSectionProps {
 }
 
 export function PricingSection({ showHeading = true }: PricingSectionProps) {
-  const [billing, setBilling] = useState<BillingPeriod>('monthly')
 
   return (
     <div className="pricing-section-grid">
@@ -36,27 +33,8 @@ export function PricingSection({ showHeading = true }: PricingSectionProps) {
           ))}
         </div>
 
-        <div className="pricing-section-billing-row">
-          <div className="pricing-section-billing-toggle">
-            <button
-              type="button"
-              onClick={() => setBilling('monthly')}
-              className={`pricing-section-billing-option ${billing === 'monthly' ? 'is-active' : ''}`}
-            >
-              Monthly
-            </button>
-            <button
-              type="button"
-              onClick={() => setBilling('yearly')}
-              className={`pricing-section-billing-option ${billing === 'yearly' ? 'is-active' : ''}`}
-            >
-              Yearly
-            </button>
-          </div>
-          {billing === 'yearly' && (
-            <span className="pricing-section-billing-discount">25% Discount</span>
-          )}
-        </div>
+        {/* No billing toggle: there is no yearly plan, and the "25% Discount"
+            it advertised was never a product. */}
       </div>
 
       <div className="pricing-section-cards">
@@ -71,7 +49,7 @@ export function PricingSection({ showHeading = true }: PricingSectionProps) {
               </span>
               <div className="pricing-section-card-price-row">
                 <span className="pricing-section-card-price">
-                  {billing === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice}
+                  {plan.monthlyPrice}
                 </span>
                 <span
                   className={`pricing-section-card-badge ${

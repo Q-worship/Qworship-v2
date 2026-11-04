@@ -45,7 +45,6 @@ export interface TeamCard {
 export interface PricingPlan {
   name: string
   monthlyPrice: string
-  yearlyPrice: string
   badge: string
   badgeVariant?: 'primary' | 'muted'
   highlighted?: boolean
@@ -75,9 +74,7 @@ export interface PricingCompareRow {
   label: string
   category: Exclude<PricingCompareCategoryId, 'all'>
   free: PlanCell
-  starter: PlanCell
-  premium: PlanCell
-  enterprise: PlanCell
+  standard: PlanCell
 }
 
 export interface PricingCompareCategory {
@@ -129,9 +126,7 @@ export interface PricingProductContent {
   compareCategories: PricingCompareCategory[]
   compareColumnLabels: {
     free: string
-    starter: string
-    premium: string
-    enterprise: string
+    standard: string
   }
 }
 

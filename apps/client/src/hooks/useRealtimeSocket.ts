@@ -35,6 +35,21 @@ interface RealtimeSocketProps {
   }) => void;
   onError?: (message: string) => void;
   onAudioStatus?: (status: "receiving" | "idle") => void;
+  /**
+   * The church is near, at, or past its monthly hours.
+   *
+   * "stopped" means the stream has already ended — the server closes the
+   * socket after sending it, so this is a notification, not a chance to
+   * intervene.
+   */
+  onAllowance?: (notice: {
+    level: "warning" | "grace" | "stopped";
+    message: string;
+    remainingHours?: number;
+    graceMinutes?: number;
+    allowanceHours?: number;
+    usedHours?: number;
+  }) => void;
   /** QUOTE MODE (trial) */
   onVerseSuggestion?: (data: {
     seq: number;
@@ -74,6 +89,7 @@ export const useRealtimeSocket = ({
   onSocketOpen,
   onError,
   onAudioStatus,
+  onAllowance,
   onNavigation,
   onVerseSuggestion,
 }: RealtimeSocketProps) => {
@@ -101,6 +117,7 @@ export const useRealtimeSocket = ({
     onReferenceStage,
     onError,
     onAudioStatus,
+  onAllowance,
     onNavigation,
     onVerseSuggestion,
   });
@@ -119,6 +136,7 @@ export const useRealtimeSocket = ({
       onReferenceStage,
       onError,
       onAudioStatus,
+  onAllowance,
       onNavigation,
       onVerseSuggestion,
     };
@@ -221,6 +239,23 @@ export const useRealtimeSocket = ({
             break;
           case "verse_suggestion":
             cb.onVerseSuggestion?.(data);
+            break;
+          // The three allowance notices, in the order a church meets them:
+          // running low, out but still running on grace, and stopped. They are
+          // surfaced through one callback with a severity so a caller can pick
+          // its own treatment without learning three message names.
+          case "allowance_warning":
+            console.warn("[RealtimeSocket] Allowance low:", data.message);
+            cb.onAllowance?.({ level: "warning", message: data.message, ...data });
+            break;
+          case "allowance_exhausted":
+            console.warn("[RealtimeSocket] Allowance spent, grace running:", data.message);
+            cb.onAllowance?.({ level: "grace", message: data.message, ...data });
+            break;
+          case "allowance_blocked":
+          case "allowance_stopped":
+            console.error("[RealtimeSocket] Allowance enforced:", data.message);
+            cb.onAllowance?.({ level: "stopped", message: data.message, ...data });
             break;
           case "error":
             console.error("[RealtimeSocket] Server error:", data.message);

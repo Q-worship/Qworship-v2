@@ -239,9 +239,29 @@ export const signIn = async (req: Request, res: Response) => {
 export const updateProfile = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?._id;
-    const allowed = ['firstName', 'lastName', 'profilePicture', 'phoneNumber', 'bio', 'username'] as const;
+    // agreeToMarketing is consent the person owns, so it is editable here.
+    // It is deliberately NOT duplicated into notificationPreferences: one flag
+    // means an opt-out cannot be contradicted by a second one.
+    const allowed = ['firstName', 'lastName', 'profilePicture', 'phoneNumber', 'bio', 'username', 'agreeToMarketing'] as const;
     const update: Record<string, unknown> = {};
     for (const field of allowed) if (req.body[field] !== undefined) update[field] = req.body[field];
+
+    // Preferences are read field by field rather than assigned wholesale: a
+    // partial object from the client would otherwise replace the whole
+    // subdocument and silently reset whatever it left out.
+    const prefs = req.body.notificationPreferences;
+    if (prefs && typeof prefs === 'object') {
+      for (const key of ['email', 'sms', 'trial', 'login'] as const) {
+        if (typeof prefs[key] === 'boolean') update[`notificationPreferences.${key}`] = prefs[key];
+      }
+    }
+    // Clamped here too, not only in the schema: min/max on an update path is
+    // only applied with runValidators, and the bound matters more than the
+    // error does.
+    const timeout = Number(req.body.sessionTimeoutMinutes);
+    if (Number.isFinite(timeout)) {
+      update.sessionTimeoutMinutes = Math.min(480, Math.max(5, Math.round(timeout)));
+    }
     const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     return res.json({ success: true, user: publicUser(user) });

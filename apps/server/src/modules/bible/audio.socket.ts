@@ -12,6 +12,7 @@ import { SermonRecorder } from "../sermons/sermon.recorder.js";
 import { getAllowedOrigins } from "../../config/origins.js";
 import { resolveOrganizationForUser } from "../organization/organization.service.js";
 import { BYTES_PER_SECOND, UsageRecorder } from "../usage/usage.recorder.js";
+import { AllowanceGuard, allowanceForOrganization } from "../usage/allowance.service.js";
 
 /**
  * setupAudioSocket — QC56 Stage 3
@@ -202,6 +203,32 @@ function frameRms(data: Buffer): number {
   return Math.sqrt(sumSquares / sampleCount);
 }
 
+/**
+ * Records a low-hours notice against the account that owns this church.
+ *
+ * Fire-and-forget: metering and enforcement must never wait on, or fail
+ * because of, a notification.
+ */
+async function notifyLowHours(
+  guard: AllowanceGuard | null,
+  remainingHours: number,
+): Promise<void> {
+  if (!guard) return;
+  try {
+    const { Organization } = await import("../organization/organization.model.js");
+    const { Account } = await import("../organization/account.model.js");
+    const { notifyHoursLow } = await import("../billing/billing.notify.js");
+
+    const church = await Organization.findById(guard.organizationId).select("accountId name").lean();
+    if (!church?.accountId) return;
+    const account = await Account.findById(church.accountId);
+    if (!account) return;
+    await notifyHoursLow(account, church.name, remainingHours);
+  } catch (error) {
+    console.error("[Usage] Could not record a low-hours notice:", error);
+  }
+}
+
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
@@ -247,9 +274,62 @@ export function setupAudioSocket(server: Server) {
     let usageRecorder: UsageRecorder | null = null;
     let pendingForwardedBytes = 0;
     let pendingSuspendedMs = 0;
+
+    // Enforcement rides on the metering path rather than running beside it, so
+    // the two cannot disagree about how much a church has used. A guard only
+    // exists once the church is resolved; until then, and whenever the church
+    // cannot be resolved at all, audio flows. Failing open is deliberate: an
+    // attribution gap is a reporting problem, and taking a live service off
+    // the air over one would be the worse failure by a long way.
+    let guard: AllowanceGuard | null = null;
     const meterForwarded = (byteLength: number) => {
       if (usageRecorder) usageRecorder.recordForwarded(byteLength);
       else pendingForwardedBytes += byteLength;
+      if (guard) applyAllowance(guard.consume(byteLength / BYTES_PER_SECOND));
+    };
+
+    /**
+     * Acts on the guard's verdict: say something, or stop.
+     *
+     * Nothing here ends a stream silently. By the time a session is stopped it
+     * has already been told it was low, and told again that it had run out and
+     * was inside a grace window.
+     */
+    const applyAllowance = (verdict: ReturnType<AllowanceGuard["consume"]>) => {
+      if (verdict.state === "ok") return;
+      try {
+        if (verdict.state === "warn") {
+          ws.send(JSON.stringify({
+            type: "allowance_warning",
+            remainingHours: Number(verdict.remainingHours.toFixed(2)),
+            message: `${guard?.churchName ?? "This church"} has ${verdict.remainingHours.toFixed(1)} hours left this month.`,
+          }));
+          // Also recorded as a notification, because the person who can buy
+          // more hours is rarely the person at the desk during a service.
+          void notifyLowHours(guard, verdict.remainingHours);
+          return;
+        }
+        if (verdict.state === "grace") {
+          ws.send(JSON.stringify({
+            type: "allowance_exhausted",
+            graceMinutes: verdict.graceMinutes,
+            message: `This month's hands-free Bible hours are used up. The service keeps running for ${verdict.graceMinutes} more minutes — buy more hours to continue after that.`,
+          }));
+          return;
+        }
+        // state === "stop"
+        ws.send(JSON.stringify({
+          type: "allowance_stopped",
+          message: "This month's hands-free Bible hours, and the grace period, are used up. Buy more hours to start again.",
+        }));
+      } catch {
+        // The socket is going away anyway; a failed notice must not throw here.
+      }
+      if (verdict.state === "stop") {
+        console.warn(`[AudioSocket] Allowance exhausted for ${guard?.churchName} — closing`);
+        transcriptionService.stop();
+        ws.close(4402, "Monthly hours used up");
+      }
     };
     const meterSuspended = (ms: number) => {
       if (usageRecorder) usageRecorder.recordSuspended(ms);
@@ -264,12 +344,43 @@ export function setupAudioSocket(server: Server) {
     void (async () => {
       try {
         const resolved = await resolveOrganizationForUser(userId, requestedOrgId);
-        const recorder = new UsageRecorder(
-          String(userId),
-          (resolved?.organization?._id as any) ?? null,
-        );
+        const organizationId = (resolved?.organization?._id as any) ?? null;
+
+        // Refusing to START is where enforcement can be strict, because
+        // nobody is mid-sentence yet. A church with nothing left is turned
+        // away here with a reason it can act on, before a byte reaches
+        // Deepgram's bill.
+        if (organizationId) {
+          const allowance = await allowanceForOrganization(organizationId);
+          if (allowance) {
+            const candidate = new AllowanceGuard(allowance);
+            if (!candidate.canStart()) {
+              console.warn(
+                `[AudioSocket] Refused: ${allowance.churchName} has used ${allowance.usedHours.toFixed(2)} of ${allowance.allowanceHours} hours`,
+              );
+              try {
+                ws.send(JSON.stringify({
+                  type: "allowance_blocked",
+                  allowanceHours: allowance.allowanceHours,
+                  usedHours: allowance.usedHours,
+                  message: `${allowance.churchName} has used all ${allowance.allowanceHours} hands-free Bible hours for this month. Buy more hours to start again.`,
+                }));
+              } catch {}
+              ws.close(4402, "Monthly hours used up");
+              return;
+            }
+            guard = candidate;
+          }
+        }
+
+        const recorder = new UsageRecorder(String(userId), organizationId);
         await recorder.start();
-        if (pendingForwardedBytes > 0) recorder.recordForwarded(pendingForwardedBytes);
+        // Audio that arrived while the church was being resolved still counts,
+        // against the meter and against the guard alike.
+        if (pendingForwardedBytes > 0) {
+          recorder.recordForwarded(pendingForwardedBytes);
+          if (guard) applyAllowance(guard.consume(pendingForwardedBytes / BYTES_PER_SECOND));
+        }
         if (pendingSuspendedMs > 0) recorder.recordSuspended(pendingSuspendedMs);
         pendingForwardedBytes = 0;
         pendingSuspendedMs = 0;

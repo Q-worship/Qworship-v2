@@ -9,6 +9,9 @@ import { organizationRouter } from "./modules/organization/organization.routes.j
 import { onboardingRouter } from "./modules/onboarding/onboarding.routes.js";
 import { usageRouter } from "./modules/usage/usage.routes.js";
 import { branchesRouter } from "./modules/organization/branches.routes.js";
+import { billingRouter } from "./modules/billing/billing.routes.js";
+import { stripeWebhookRouter } from "./modules/billing/stripe.webhook.js";
+import { startScheduler } from "./core/scheduler.js";
 import { helpRouter } from "./modules/help/help.routes.js";
 import { createServer } from "http";
 import { setupAudioSocket } from "./modules/bible/audio.socket.js";
@@ -41,6 +44,12 @@ app.use(
 ); // Connect to Vite App
 // Bible translation imports can be several megabytes. These endpoints remain
 // admin-protected; the bounded limit still prevents unrestrained request bodies.
+// BEFORE express.json, and it must stay there. Stripe signs the exact bytes
+// it sent; parsing and re-serialising the body reorders keys and the signature
+// no longer matches, which is the classic reason a webhook works locally and
+// 400s in production.
+app.use("/webhooks", stripeWebhookRouter);
+
 app.use(express.json({ limit: "25mb" }));
 
 // Request Telemetry Pipeline
@@ -79,6 +88,7 @@ app.use("/api", organizationRouter);
 app.use("/api", onboardingRouter);
 app.use("/api", usageRouter);
 app.use("/api", branchesRouter);
+app.use("/api", billingRouter);
 app.use("/api", serviceSectionsRouter);
 app.use("/api", mediaRouter);
 app.use("/api/help", helpRouter);
@@ -108,6 +118,9 @@ const startServer = async () => {
       void BibleService.initializeStore().catch((error) => {
         console.error("[BibleService] Background memory warm-up failed:", error);
       });
+      // Recurring work: gift expiry today, anything time-based later. Every
+      // job is idempotent, so running several instances is safe.
+      startScheduler();
     });
   } catch (error) {
     console.error("Failed to start server:", error);

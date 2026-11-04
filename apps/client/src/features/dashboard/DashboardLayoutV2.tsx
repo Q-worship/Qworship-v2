@@ -40,9 +40,7 @@ import { useAuthStore } from "@/features/auth/auth.store";
 import type { MediaAsset, User, Slide, Presentation, Song } from "@/types";
 import qworshipLogo from "@assets/Group 1_1754122708985.png";
 import qworshipLogoEdit from "@assets/Frame 2085662258_1754172975921.png";
-import { ProfileSettings } from "@/features/dashboard/components/ProfileSettings";
 import { NotificationsModal } from "@/features/dashboard/components/modals/NotificationsModal";
-import { SubscriptionManagement } from "@/features/dashboard/components/SubscriptionManagement";
 import { SongbookModal } from "@/features/dashboard/components/SongbookModal";
 import { SongSearchModal } from "@/features/dashboard/components/SongSearchModal";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -1393,8 +1391,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
   // User profile dropdown state
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false);
-  const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] =
     useState(false);
   const [isSongbookOpen, setIsSongbookOpen] = useState(false);
@@ -4829,8 +4825,6 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           getNotificationIcon={getNotificationIcon}
           formatTimestamp={formatTimestamp}
           markNotificationAsRead={markNotificationAsRead}
-          setIsProfileSettingsOpen={setIsProfileSettingsOpen}
-          setIsSubscriptionOpen={setIsSubscriptionOpen}
           setIsNotificationsModalOpen={setIsNotificationsModalOpen}
           handleLogout={handleLogout}
         />
@@ -5302,20 +5296,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             )}
           </div>
         )}
-        {/* Profile Settings Modal */}
-        <ProfileSettings
-          isOpen={isProfileSettingsOpen}
-          onClose={() => setIsProfileSettingsOpen(false)}
-        />
         {/* Notifications History Modal */}
         <NotificationsModal
           isOpen={isNotificationsModalOpen}
           onClose={() => setIsNotificationsModalOpen(false)}
-        />
-        {/* Subscription Management Modal */}
-        <SubscriptionManagement
-          isOpen={isSubscriptionOpen}
-          onClose={() => setIsSubscriptionOpen(false)}
         />
         {/* Songbook Modal */}
         <SongbookModal

@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import {
   formatPlanPrice,
-  getMonthlyComparePrice,
   onboardingPlans,
-  shouldShowYearlyCompare,
-  type BillingPeriod,
   type PlanId,
 } from '@/lib/onboardingPlans'
 
@@ -17,8 +14,7 @@ export function PlanSelectionOverlay({
   onProceedToCheckout,
   onStartFreeTrial,
 }: PlanSelectionOverlayProps) {
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>('pro')
-  const [billing, setBilling] = useState<BillingPeriod>('yearly')
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>('standard')
 
   return (
     <div className="plan-selection">
@@ -31,7 +27,7 @@ export function PlanSelectionOverlay({
           </span>
         </h1>
         <p className="plan-selection__subtitle">
-          Try Q-worship Cloud Presentation Pro for 30-days free on us — no credit
+          Try Q-worship Cloud Presentation free for 30 days on us — no credit
           card required, no watermarks, no limits.
         </p>
         <p className="plan-selection__instruction">
@@ -39,31 +35,8 @@ export function PlanSelectionOverlay({
         </p>
       </header>
 
-      <div className="plan-selection__billing">
-        <div className="plan-selection__toggle" role="group" aria-label="Billing period">
-          <button
-            type="button"
-            className={`plan-selection__toggle-btn${
-              billing === 'monthly' ? ' plan-selection__toggle-btn--active' : ''
-            }`}
-            onClick={() => setBilling('monthly')}
-          >
-            Monthly
-          </button>
-          <button
-            type="button"
-            className={`plan-selection__toggle-btn${
-              billing === 'yearly' ? ' plan-selection__toggle-btn--active' : ''
-            }`}
-            onClick={() => setBilling('yearly')}
-          >
-            Yearly
-          </button>
-        </div>
-        {billing === 'yearly' ? (
-          <span className="plan-selection__discount">25% Discount</span>
-        ) : null}
-      </div>
+      {/* No billing toggle: there is no yearly plan, and the "25% Discount"
+          it advertised was never a product. */}
 
       <div className="plan-selection__grid">
         {onboardingPlans.map((plan) => {
@@ -82,12 +55,7 @@ export function PlanSelectionOverlay({
               ) : null}
 
               <h2 className="plan-selection__card-name">{plan.name}</h2>
-              {shouldShowYearlyCompare(plan, billing) ? (
-                <p className="plan-selection__card-price-compare">
-                  {getMonthlyComparePrice(plan)}
-                </p>
-              ) : null}
-              <p className="plan-selection__card-price">{formatPlanPrice(plan, billing)}</p>
+              <p className="plan-selection__card-price">{formatPlanPrice(plan)}</p>
               {plan.description ? (
                 <p className="plan-selection__card-desc">{plan.description}</p>
               ) : null}

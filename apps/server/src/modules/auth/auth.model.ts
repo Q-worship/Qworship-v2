@@ -35,6 +35,24 @@ export interface IUser extends Document {
   biblePreferences?: {
     pinnedVersions: string[];
   };
+  /**
+   * How this person wants to be contacted, and how their session behaves.
+   *
+   * Marketing email is NOT here: it is `agreeToMarketing` above, set at signup
+   * and relied on for consent. A second flag for the same thing is how someone
+   * who opted out still receives mail.
+   *
+   * `sessionTimeoutMinutes` is enforced in the client as an idle timer, not by
+   * shortening the token. Tokens last 7 days on purpose — expiring one mid
+   * service is a far worse failure than an unattended tab staying open.
+   */
+  notificationPreferences?: {
+    email: boolean;
+    sms: boolean;
+    trial: boolean;
+    login: boolean;
+  };
+  sessionTimeoutMinutes?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -77,6 +95,16 @@ const UserSchema = new Schema<IUser>(
         default: ['kjv', 'nkjv', 'niv', 'msg', 'esv', 'amp'],
       },
     },
+    notificationPreferences: {
+      // Transactional mail defaults on; a church that cannot be told its
+      // hours ran out finds out during a service instead.
+      email: { type: Boolean, default: true },
+      // Off by default: SMS costs money and needs a number we may not have.
+      sms: { type: Boolean, default: false },
+      trial: { type: Boolean, default: true },
+      login: { type: Boolean, default: true },
+    },
+    sessionTimeoutMinutes: { type: Number, default: 30, min: 5, max: 480 },
   },
   { timestamps: true }
 );

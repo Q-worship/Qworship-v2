@@ -60,6 +60,12 @@ const currentUserHandler = [protect, async (req: any, res: any) => {
         selectedFeatures: req.user.selectedFeatures,
         trialStatus: req.user.trialStatus,
         biblePreferences: req.user.biblePreferences,
+        notificationPreferences: req.user.notificationPreferences,
+        sessionTimeoutMinutes: req.user.sessionTimeoutMinutes,
+        // Consent lives in its own field, set at signup; the preferences
+        // screen renders it as "Marketing Emails" rather than keeping a
+        // second flag that could disagree with it.
+        agreeToMarketing: req.user.agreeToMarketing,
         createdAt: req.user.createdAt
       },
       organizations: organizations.map(org => ({ id: org._id, name: org.name }))

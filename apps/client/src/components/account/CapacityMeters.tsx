@@ -3,10 +3,15 @@ import { Church, Clock, AlertTriangle } from "lucide-react";
 import type { SlotUsage, HourUsage } from "@/lib/accountApi";
 
 /**
- * The two limits a network actually runs into: churches, and pooled
- * transcription hours. Both are shown as what is left rather than what is
- * spent — the question anyone opening this page has is "can I add another
- * church", not "what percentage have I consumed".
+ * The two limits a church actually runs into: slots across the network, and
+ * this church's own transcription hours. Both are shown as what is left rather
+ * than what is spent — the question anyone opening this page has is "can I add
+ * another church" or "can I get through Sunday", not "what percentage have I
+ * consumed".
+ *
+ * The hours meter is deliberately ONE church's. Hours do not pool: a branch
+ * spends what it was bought and nothing else, so a network-wide figure here
+ * would tell a branch nothing about whether it can start a service.
  */
 
 interface Props {
@@ -31,7 +36,7 @@ export const CapacityMeters: React.FC<Props> = ({ slots, hours }) => {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
+      <div className="rounded-xl bg-account-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
             <Church className="h-4 w-4" />
@@ -60,12 +65,12 @@ export const CapacityMeters: React.FC<Props> = ({ slots, hours }) => {
         {slotsTight && (
           <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-amber-300">
             <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-            Every slot is in use. Add a pack or remove a branch to invite another church.
+            Every slot is in use. Buy another church slot, or remove a branch, to invite another church.
           </p>
         )}
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
+      <div className="rounded-xl bg-account-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-400">
             <Clock className="h-4 w-4" />
@@ -82,14 +87,17 @@ export const CapacityMeters: React.FC<Props> = ({ slots, hours }) => {
         </div>
         <Meter percent={hours.percentUsed} warn={hoursTight} />
         <p className="mt-2 text-xs text-gray-400">
-          {Number(hours.usedHours.toFixed(1))} of {hours.allowance} hours used, shared across every church
+          {Number(hours.usedHours.toFixed(1))} of {hours.allowance} hours used by this church
+          {hours.purchasedHours > 0 && (
+            <> — {hours.includedHours} included plus {hours.purchasedHours} bought this month</>
+          )}
         </p>
         {hoursTight && (
           <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-amber-300">
             <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
             {hours.percentUsed >= 100
-              ? "This month's hours are used up."
-              : `${hours.percentUsed}% of this month's hours are used.`}
+              ? "This church's hours are used up. Head office can buy more."
+              : `${hours.percentUsed}% of this church's hours are used.`}
           </p>
         )}
       </div>

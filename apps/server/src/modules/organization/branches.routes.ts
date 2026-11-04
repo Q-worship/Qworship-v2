@@ -3,11 +3,11 @@ import mongoose from 'mongoose';
 import { PLAN_LIST, entitlementsFor, PlanId } from '@qworship/shared';
 import { protect, authorizeAdmin } from '../auth/auth.middleware.js';
 import { Organization } from './organization.model.js';
-import { Account } from './account.model.js';
+import { Account, hoursPerChurchOf } from './account.model.js';
 import { BranchInvite, INVITE_TTL_DAYS, generateInviteCode } from './branch-invite.model.js';
 import { Membership } from './membership.model.js';
 import { canWrite, resolveActiveOrganization, grantMembership } from './organization.service.js';
-import { ensureAccountFor, slotUsage, hourUsage, setPlan } from './account.service.js';
+import { ensureAccountFor, slotUsage, hourUsage, networkHourUsage, setPlan } from './account.service.js';
 import { UsageCounter, usagePeriod } from '../usage/usage.model.js';
 
 export const branchesRouter = Router();
@@ -32,21 +32,28 @@ branchesRouter.get('/plans', (_req, res) => {
   res.json({ success: true, plans: PLAN_LIST });
 });
 
-/** The caller's subscription: plan, slot usage, pooled hours. */
+/** The caller's subscription: plan, slot usage, and this church's own hours. */
 branchesRouter.get('/subscription', protect, async (req: any, res: any) => {
   try {
     const ctx = await requireChurch(req, res);
     if (!ctx) return;
-    const [slots, hours] = await Promise.all([slotUsage(ctx.account), hourUsage(ctx.account)]);
+    const [slots, hours, branches] = await Promise.all([
+      slotUsage(ctx.account),
+      hourUsage(ctx.account, ctx.organization._id as any),
+      networkHourUsage(ctx.account),
+    ]);
     res.json({
       success: true,
       subscription: {
         planId: ctx.account.planId,
-        packs: ctx.account.packs,
+        purchasedSlots: ctx.account.purchasedSlots,
         monthlyPrice: ctx.account.monthlyPrice,
         status: ctx.account.status,
         slots,
         hours,
+        // Head office sees every church's own usage as rows; there is no
+        // network total, because no branch can spend another's hours.
+        branches,
         role: ctx.role,
       },
     });
@@ -56,25 +63,28 @@ branchesRouter.get('/subscription', protect, async (req: any, res: any) => {
   }
 });
 
-/** Change plan or pack count. Refuses a downgrade that would strand churches. */
+/** Change plan or slot count. Refuses a downgrade that would strand churches. */
 branchesRouter.post('/subscription/plan', protect, async (req: any, res: any) => {
   try {
     const ctx = await requireChurch(req, res, true);
     if (!ctx) return;
-    const { planId, packs } = req.body as { planId: PlanId; packs?: number };
+    const { planId, slots: requestedSlots } = req.body as { planId: PlanId; slots?: number };
     if (!planId || !['free', 'standard'].includes(planId)) {
       return res.status(400).json({ success: false, message: 'A valid planId is required' });
     }
-    const result = await setPlan(ctx.account, planId, Number(packs) || 1);
+    const result = await setPlan(ctx.account, planId, Number(requestedSlots) || 1);
     if (!result.ok) {
       return res.status(409).json({ success: false, message: result.reason, slots: result.usage });
     }
-    const [slots, hours] = await Promise.all([slotUsage(result.account), hourUsage(result.account)]);
+    const [slots, hours] = await Promise.all([
+      slotUsage(result.account),
+      hourUsage(result.account, ctx.organization._id as any),
+    ]);
     res.json({
       success: true,
       subscription: {
         planId: result.account.planId,
-        packs: result.account.packs,
+        purchasedSlots: result.account.purchasedSlots,
         monthlyPrice: result.account.monthlyPrice,
         status: result.account.status,
         slots,
@@ -145,7 +155,7 @@ branchesRouter.post('/branches/invite', protect, async (req: any, res: any) => {
     if (slots.available < 1) {
       return res.status(409).json({
         success: false,
-        message: `All ${slots.total} slots are in use. Add a pack or release a branch first.`,
+        message: `All ${slots.total} church slots are in use. Buy another slot or release a branch first.`,
         slots,
       });
     }
@@ -262,8 +272,8 @@ branchesRouter.delete('/branches/:id', protect, async (req: any, res: any) => {
 
     const free = entitlementsFor('free');
     const ownAccount = await Account.create({
-      ownerId: branch.ownerId, planId: 'free', packs: 0,
-      slots: free.slots, monthlyHours: free.hours, monthlyPrice: 0, status: 'active',
+      ownerId: branch.ownerId, planId: 'free', purchasedSlots: 0,
+      slots: free.slots, hoursPerChurch: free.hoursPerChurch, monthlyPrice: 0, status: 'active',
     });
     branch.accountId = ownAccount._id as any;
     branch.parentOrganizationId = null;
@@ -289,11 +299,14 @@ branchesRouter.get('/admin/accounts', protect, authorizeAdmin, async (_req: any,
         }).lean();
         const usedHours = counters.reduce((s, c) => s + (c.billableSeconds || 0), 0) / 3600;
         const pending = await BranchInvite.countDocuments({ accountId: a._id, state: 'pending' });
-        const allowance = (a.monthlyHours || 0) + (a.bonusHours || 0);
+        // Per CHURCH, not per network. Summing the network and comparing it to
+        // one church's allowance would put every multi-branch account over.
+        const allowance = hoursPerChurchOf(a);
+        const churchesOver = counters.filter((c) => (c.billableSeconds || 0) / 3600 > allowance).length;
         return {
           id: a._id,
           planId: a.planId,
-          packs: a.packs,
+          purchasedSlots: a.purchasedSlots,
           monthlyPrice: a.monthlyPrice,
           status: a.status,
           slotsTotal: (a.slots || 0) + (a.bonusSlots || 0),
@@ -302,8 +315,9 @@ branchesRouter.get('/admin/accounts', protect, authorizeAdmin, async (_req: any,
           pendingInvites: pending,
           parentName: churches.find((c) => !c.parentOrganizationId)?.name ?? churches[0]?.name ?? 'Unnamed',
           hoursUsed: Number(usedHours.toFixed(2)),
-          hoursAllowance: allowance,
-          overAllowance: usedHours > allowance,
+          hoursAllowancePerChurch: allowance,
+          churchesOverAllowance: churchesOver,
+          overAllowance: churchesOver > 0,
         };
       }),
     );

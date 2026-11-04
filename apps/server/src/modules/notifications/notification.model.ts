@@ -30,6 +30,16 @@ const NotificationSchema = new Schema<INotification>(
         'plan_expired',
         'payment_success',
         'new_plan',
+        // Billing — written by modules/billing/billing.notify.ts. These were
+        // missing from this list, so every billing notice failed validation and
+        // was swallowed by createNotification's catch: a declined card, a lapsed
+        // plan and a church running out of hours all happened in silence.
+        'payment_failed',
+        'payment_recovered',
+        'plan_ended',
+        'hours_low',
+        'payment_disputed',
+        'topup_refunded',
         // Admin-triggered
         'admin_feature',
         'admin_bible',

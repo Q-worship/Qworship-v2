@@ -3,7 +3,24 @@ import { Media } from './media.model.js';
 import path from 'path';
 import fs from 'fs';
 import { objectStorage } from './s3.service.js';
+import { resolveActiveOrganization } from '../organization/organization.service.js';
 import sharp from 'sharp';
+
+/**
+ * The church an upload belongs to, for storage accounting.
+ *
+ * Best effort: an asset whose church cannot be resolved is still stored, just
+ * unattributed. Refusing an upload over an attribution gap would be the wrong
+ * trade, exactly as it is for transcription.
+ */
+async function uploadingOrganizationId(req: Request): Promise<any | null> {
+  try {
+    const resolved = await resolveActiveOrganization(req as any);
+    return resolved?.organization?._id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export const uploadMedia = async (req: Request, res: Response) => {
   console.log('[UPLOAD] Starting User Media Upload route check...');
@@ -71,6 +88,7 @@ export const uploadMedia = async (req: Request, res: Response) => {
         fileUrl: fileUrl,
         fileSize: finalFileSize,
         uploadedBy: (req as any).user._id,
+        organizationId: await uploadingOrganizationId(req),
         usageCount: 0,
       });
 

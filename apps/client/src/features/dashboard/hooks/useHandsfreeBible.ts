@@ -1347,6 +1347,32 @@ export const useHandsfreeBible = ({
       setIsAudioStreaming(true);
       setMicrophoneStatus("Listening");
     },
+    /**
+     * The monthly hours running low, running out, or stopping the stream.
+     *
+     * Deliberately loud: a church that loses hands-free Bible mid-service must
+     * find out from the product, not from noticing the verses stopped moving.
+     * The warning and grace notices stay on screen longer than a normal toast
+     * because whoever needs to act on them is running a service, not watching
+     * the corner of a screen.
+     */
+    onAllowance: (notice) => {
+      if (notice.level === "stopped") {
+        setIsAudioStreaming(false);
+        setMicrophoneStatus("Hours used up");
+      }
+      toast({
+        title:
+          notice.level === "warning"
+            ? "Hands-free Bible hours running low"
+            : notice.level === "grace"
+              ? "Hours used up — grace period"
+              : "Hands-free Bible stopped",
+        description: notice.message,
+        variant: notice.level === "warning" ? "default" : "destructive",
+        duration: notice.level === "warning" ? 10000 : 20000,
+      });
+    },
   });
 
   // QUOTE MODE (trial): keep the server's matcher in step with the toggle.

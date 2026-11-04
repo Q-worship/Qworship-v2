@@ -1,14 +1,13 @@
 import { Link } from 'wouter'
-import type { BillingPeriod, PricingPlan } from '@/types/content'
+import type { PricingPlan } from '@/types/content'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 
 interface PricingPlanCardsSectionProps {
   plans: PricingPlan[]
-  billing: BillingPeriod
 }
 
-export function PricingPlanCardsSection({ plans, billing }: PricingPlanCardsSectionProps) {
+export function PricingPlanCardsSection({ plans }: PricingPlanCardsSectionProps) {
   return (
     <section className="pricing-plan-cards-section reveal">
       <SiteContainer>
@@ -31,9 +30,7 @@ export function PricingPlanCardsSection({ plans, billing }: PricingPlanCardsSect
                 </div>
 
                 <div className="pricing-plan-card-price-row">
-                  <span className="pricing-plan-card-price">
-                    {billing === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice}
-                  </span>
+                  <span className="pricing-plan-card-price">{plan.monthlyPrice}</span>
                   <span className="pricing-plan-card-period">/mo</span>
                 </div>
 

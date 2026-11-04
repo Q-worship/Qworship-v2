@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
+import { request } from "@/lib/apiResult";
 
 /**
  * The account, plan and network endpoints. Kept in one module outside any
@@ -13,7 +14,7 @@ export interface Plan {
   monthlyPrice: number;
   includedSlots: number;
   includedHours: number;
-  canBuyPacks: boolean;
+  canBuySlots: boolean;
   features: string[];
 }
 
@@ -27,10 +28,25 @@ export interface SlotUsage {
 
 export interface HourUsage {
   period: string;
+  /** This church's own monthly allowance, before anything bought on top. */
+  includedHours: number;
+  /** Hours head office bought for this church, for this period only. */
+  purchasedHours: number;
+  /** What this church may spend: included plus purchased. Never a network total. */
   allowance: number;
   usedHours: number;
   remainingHours: number;
   percentUsed: number;
+}
+
+/** One church's hours, as head office sees it in the branch tables. */
+export interface BranchHourUsage extends HourUsage {
+  organizationId: string;
+  name: string;
+  /** Cloud storage this church is using, measured from its uploaded files. */
+  storageUsedGb: number;
+  storageLimitGb: number;
+  storagePercentUsed: number;
 }
 
 export interface Branch {
@@ -61,47 +77,16 @@ export interface BranchesResponse {
 
 export interface Subscription {
   planId: "free" | "standard";
-  packs: number;
+  /** Church slots bought, one church each. Zero on the Free plan. */
+  purchasedSlots: number;
   monthlyPrice: number;
   status: "active" | "trialing" | "past_due" | "cancelled";
   slots: SlotUsage;
+  /** The CALLING church's own hours, not a network figure. */
   hours: HourUsage;
+  /** Every church on the account with its own hours. Rows, never a sum. */
+  branches: BranchHourUsage[];
   role: "owner" | "admin" | "member";
-}
-
-/**
- * Reads the server's message rather than inventing one, so a refusal explains
- * itself — a blocked downgrade says how many churches to release.
- *
- * apiRequest throws on a non-2xx before returning, and its message is the raw
- * body prefixed with the status ("409: {\"success\":false,...}"). Left alone
- * that JSON lands in a toast, so it is unpacked back into the sentence the
- * server actually wrote.
- */
-function readableError(error: unknown): Error {
-  const raw = error instanceof Error ? error.message : String(error);
-  const match = /^\d{3}:\s*(\{[\s\S]*\})$/.exec(raw.trim());
-  if (match) {
-    try {
-      const body = JSON.parse(match[1]);
-      if (typeof body?.message === "string") return new Error(body.message);
-    } catch {
-      // Not JSON after all; fall through to the raw text.
-    }
-  }
-  return new Error(raw);
-}
-
-async function request<T>(fn: () => Promise<Response>): Promise<T> {
-  let res: Response;
-  try {
-    res = await fn();
-  } catch (error) {
-    throw readableError(error);
-  }
-  const body = await res.json().catch(() => null);
-  if (body?.success === false) throw new Error(body.message || "Request failed");
-  return body as T;
 }
 
 export async function fetchBranches(): Promise<BranchesResponse> {
@@ -138,9 +123,9 @@ export async function fetchPlans(): Promise<{ plans: Plan[] }> {
   return request<{ plans: Plan[] }>(() => apiRequest("GET", "/api/plans"));
 }
 
-export async function changePlan(planId: "free" | "standard", packs = 1) {
+export async function changePlan(planId: "free" | "standard", slots = 1) {
   return request<{ subscription: Subscription }>(() =>
-    apiRequest("POST", "/api/subscription/plan", { planId, packs }),
+    apiRequest("POST", "/api/subscription/plan", { planId, slots }),
   );
 }
 

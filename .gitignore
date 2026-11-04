@@ -20,3 +20,5 @@ apps/server/uploads/
 .cursor/
 apps/server/uploads/presentations/
 apps/server/uploads/presentations/*
+
+/revamp-ui

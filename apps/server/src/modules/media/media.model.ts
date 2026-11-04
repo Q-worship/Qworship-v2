@@ -8,6 +8,10 @@ const mediaSchema = new mongoose.Schema({
   filePath: { type: String }, // local path on server
   thumbnail: { type: String, default: null },
   uploadedBy: { type: String, default: 'System' },
+  // The church this asset belongs to, so storage can be reported and limited
+  // per church the way hours are. Absent on rows uploaded before this existed;
+  // `storageUsage` falls back to the uploader's membership for those.
+  organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null, index: true },
   tags: [{ type: String }],
   collection: { type: String, default: 'General' },
   season: { type: String, default: null },

@@ -9,10 +9,9 @@ import { PricingPlansHeader } from '@/components/sections/pricing/PricingPlansHe
 import { PricingProductBanner } from '@/components/sections/pricing/PricingProductBanner'
 import { PricingProductNav } from '@/components/sections/pricing/PricingProductNav'
 import { FinalCTASection } from '@/components/sections/FinalCTASection'
-import type { BillingPeriod, PricingProductId } from '@/types/content'
+import type { PricingProductId } from '@/types/content'
 
 export function Pricing() {
-  const [billing, setBilling] = useState<BillingPeriod>('monthly')
   const [activeProduct, setActiveProduct] = useState<PricingProductId>('live-console')
   const product = getPricingProduct(activeProduct)
 
@@ -28,10 +27,8 @@ export function Pricing() {
       <div key={activeProduct}>
         <PricingPlansHeader
           plansHeader={product.plansHeader}
-          billing={billing}
-          onBillingChange={setBilling}
         />
-        <PricingPlanCardsSection plans={product.plans} billing={billing} />
+        <PricingPlanCardsSection plans={product.plans} />
         <PricingIncludedSection
           heading={product.includedHeading}
           subtitle={product.includedSubtitle}

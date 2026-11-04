@@ -37,10 +37,32 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
+/**
+ * Whether this person may use the paid product at all.
+ *
+ * TWO SYSTEMS, ONE ANSWER. Entitlements used to live only on the User as
+ * `subscriptionStatus` and `trialStatus`. Billing now lives on the Account —
+ * plan, slots, hours, Stripe — and the two were never connected: an account
+ * could pay for Standard and still be refused here because the person's old
+ * trial flag had lapsed. A paying customer locked out of the product.
+ *
+ * So the ACCOUNT is asked first and the legacy user flags are kept as a
+ * fallback. The order matters: this must only ever widen access during the
+ * transition, never narrow it, or a release turns into an outage for everyone
+ * whose account row has not caught up.
+ */
 export const requireProductAccess = async (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
   if (!user) return res.status(401).json({ success: false, message: 'Not authorized' });
-  if (user.role === 'admin' || user.role === 'superadmin' || user.subscriptionStatus === 'active' || user.trialStatus === 'converted') return next();
+
+  // Staff always pass.
+  if (user.role === 'admin' || user.role === 'superadmin') return next();
+
+  // The account is the source of truth for anything paid for.
+  if (await accountGrantsAccess(req)) return next();
+
+  // Legacy flags, for accounts that predate billing or could not be resolved.
+  if (user.subscriptionStatus === 'active' || user.trialStatus === 'converted') return next();
   if (user.trialStatus === 'active' && user.trialEndDate && user.trialEndDate > new Date()) return next();
   if (user.trialStatus === 'active') {
     user.trialStatus = 'expired';
@@ -49,6 +71,36 @@ export const requireProductAccess = async (req: Request, res: Response, next: Ne
   }
   return res.status(402).json({ success: false, message: 'Your free trial has expired', errorType: 'TRIAL_EXPIRED' });
 };
+
+/**
+ * Does the caller's church sit on an account that is paid for?
+ *
+ * Imported lazily so this middleware — which every protected route loads —
+ * does not drag the whole organization and billing graph into its import
+ * chain. Any failure resolving the account returns false rather than throwing,
+ * because the legacy check below it is a safe place to land.
+ *
+ * `past_due` counts as access on purpose. A card that failed on a Saturday
+ * must not take a church off the air on Sunday; Stripe retries, and only a
+ * cancelled subscription actually revokes.
+ */
+async function accountGrantsAccess(req: Request): Promise<boolean> {
+  try {
+    const { resolveActiveOrganization } = await import('../organization/organization.service.js');
+    const { Account } = await import('../organization/account.model.js');
+
+    const resolved = await resolveActiveOrganization(req as any);
+    const accountId = (resolved?.organization as any)?.accountId;
+    if (!accountId) return false;
+
+    const account = await Account.findById(accountId).select('planId status').lean();
+    if (!account) return false;
+
+    return account.planId === 'standard' && account.status !== 'cancelled';
+  } catch {
+    return false;
+  }
+}
 
 export const authorizeAdmin = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;

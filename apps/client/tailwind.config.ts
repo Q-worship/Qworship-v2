@@ -20,6 +20,26 @@ export default {
     },
     extend: {
       colors: {
+        /**
+         * Account and billing surfaces, sampled from the design exports.
+         *
+         * The updated Plans tab moved these from purple-tinted panels to flat
+         * near-blacks on the purple page, and the contrast is what separates a
+         * card from its background — the design draws no border at all, so a
+         * `border-white/10` here reads as an outline the design does not have.
+         */
+        account: {
+          /** The page behind everything. */
+          bg: "#1a102d",
+          /** A card, panel or tile. */
+          card: "#141414",
+          /** The stat strip, which sits a shade below a card. */
+          well: "#0a0a0a",
+          /** Hairline inside a card, between a header and its body. */
+          rule: "#232326",
+          /** Inputs and steppers, a shade above a card. */
+          field: "#1e1e21",
+        },
         // --- Existing dashboard HSL tokens ---
         codelytemplatewebflowionero: "var(--codelytemplatewebflowionero)",
         codelytemplatewebflowiowoodsmoke: "var(--codelytemplatewebflowiowoodsmoke)",

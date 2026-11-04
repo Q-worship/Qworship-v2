@@ -43,12 +43,19 @@ const GuidePage = lazy(() => import("@/features/dashboard/pages/GuidePage").then
 const QworshipHomeV2Wrapper = lazy(() => import("@/features/dashboard/DashboardLayoutV2").then(m => ({ default: m.QworshipHomeV2Wrapper })));
 
 import { AppLayout } from "./Layout";
+import { AppShell } from "@/features/dashboard/components/AppShellBar";
 import { useAuthStore } from "@/features/auth/auth.store";
 import { AuthApiError, getCurrentUser, setAuthToken } from "@/lib/authApi";
 const BibleWorkspace = lazy(() => import("@/features/bible-reader/components/BibleWorkspace").then(m => ({ default: m.BibleWorkspace })));
 const AssetsPage = lazy(() => import("@/features/dashboard/pages/AssetsPage").then(m => ({ default: m.AssetsPage })));
+const AccountHubPage = lazy(() => import("@/features/dashboard/profile/AccountHubPage"));
+const PersonalInformationPage = lazy(() => import("@/features/dashboard/profile/PersonalInformationPage"));
+const LoginSecurityPage = lazy(() => import("@/features/dashboard/profile/LoginSecurityPage"));
+const OrganizationDetailsPage = lazy(() => import("@/features/organization/pages/OrganizationDetailsPage"));
+const PreferencesPage = lazy(() => import("@/features/dashboard/profile/PreferencesPage"));
 const OrganizationProfilePage = lazy(() => import("@/features/organization/pages/OrganizationProfilePage"));
-const SubscriptionPage = lazy(() => import("@/features/subscription/pages/SubscriptionPage"));
+const BillingPage = lazy(() => import("@/features/subscription/pages/BillingPage"));
+const GiftPage = lazy(() => import("@/features/subscription/pages/GiftPage"));
 const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSupportPage"));
 const SermonsPage = lazy(() => import("@/features/sermons/SermonsPage"));
 const SuperAdminSidebar = lazy(() => import("@/features/super-admin/components/SuperAdminSidebar"));
@@ -273,10 +280,27 @@ export const AppRouter = () => {
                   <Route path="/bible" component={BibleWorkspace} />
                   <Route path="/songs" component={SongsMock} />
                   <Route path="/presentations" component={PresentationsMock} />
-                  <Route path="/dashboard-assets"><AssetsPage /></Route>
-                  <Route path="/dashboard-organization"><OrganizationProfilePage /></Route>
-                  <Route path="/dashboard-subscription"><SubscriptionPage /></Route>
-                  <Route path="/dashboard-help" component={HelpSupportPage} />
+                  {/* AppLayout carries no chrome of its own, so these pages
+                      would otherwise have no header and no way back. AppShell
+                      gives them the logo, the account menu and a Back link. */}
+                  <Route path="/dashboard-assets"><AppShell><AssetsPage /></AppShell></Route>
+                  {/* The account hub and its spokes. Ordered most-specific
+                      first: wouter matches in order, so a bare
+                      /dashboard-profile above would swallow the children. */}
+                  <Route path="/dashboard-profile/personal"><AppShell><PersonalInformationPage /></AppShell></Route>
+                  <Route path="/dashboard-profile/security"><AppShell><LoginSecurityPage /></AppShell></Route>
+                  <Route path="/dashboard-profile/organization"><AppShell><OrganizationDetailsPage /></AppShell></Route>
+                  <Route path="/dashboard-profile/preferences"><AppShell><PreferencesPage /></AppShell></Route>
+                  <Route path="/dashboard-profile"><AppShell><AccountHubPage /></AppShell></Route>
+                  <Route path="/dashboard-organization"><AppShell><OrganizationProfilePage /></AppShell></Route>
+                  {/* Gifting is its own route: a recipient arrives with a code
+                      and no interest in the billing tabs. Before the :tab
+                      route, which would otherwise swallow it. */}
+                  <Route path="/dashboard-subscription/gift"><AppShell><GiftPage /></AppShell></Route>
+                  {/* Five tabs under one route; the tab is the path segment. */}
+                  <Route path="/dashboard-subscription/:tab"><AppShell><BillingPage /></AppShell></Route>
+                  <Route path="/dashboard-subscription"><AppShell><BillingPage /></AppShell></Route>
+                  <Route path="/dashboard-help"><AppShell><HelpSupportPage /></AppShell></Route>
                   <Route path="/sermons" component={SermonsPage} />
                   <Route path="/lower-third-settings" component={LowerThirdSettingsRoute} />
                   <Route path="/lower-third-editor/:templateId" component={LowerThirdEditorPage} />

@@ -1,13 +1,11 @@
-import type { BillingPeriod, PricingPlansHeaderCopy } from '@/types/content'
+import type { PricingPlansHeaderCopy } from '@/types/content'
 import { SiteContainer } from '@/components/layout/SiteContainer'
 
 interface PricingPlansHeaderProps {
   plansHeader: PricingPlansHeaderCopy
-  billing: BillingPeriod
-  onBillingChange: (period: BillingPeriod) => void
 }
 
-export function PricingPlansHeader({ plansHeader, billing, onBillingChange }: PricingPlansHeaderProps) {
+export function PricingPlansHeader({ plansHeader }: PricingPlansHeaderProps) {
   return (
     <section id="plans" className="pricing-plans-header reveal scroll-mt-28">
       <SiteContainer>
@@ -22,22 +20,9 @@ export function PricingPlansHeader({ plansHeader, billing, onBillingChange }: Pr
           </div>
           <div className="pricing-plans-header-actions">
             <p className="pricing-plans-tagline">{plansHeader.tagline}</p>
-            <div className="pricing-plans-billing-toggle">
-              <button
-                type="button"
-                onClick={() => onBillingChange('monthly')}
-                className={`pricing-plans-billing-option${billing === 'monthly' ? ' is-active' : ''}`}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => onBillingChange('yearly')}
-                className={`pricing-plans-billing-option${billing === 'yearly' ? ' is-active' : ''}`}
-              >
-                Yearly
-              </button>
-            </div>
+            {/* No monthly/yearly toggle: there is no yearly plan to sell.
+                Advertising a yearly discount we do not offer is worse than
+                offering no choice at all. */}
           </div>
         </div>
       </SiteContainer>

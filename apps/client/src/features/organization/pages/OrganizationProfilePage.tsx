@@ -8,16 +8,33 @@ import { CapacityMeters } from "@/components/account/CapacityMeters";
 import { BranchList } from "../components/BranchList";
 import { InviteBranchDialog } from "../components/InviteBranchDialog";
 import { JoinNetworkCard } from "../components/JoinNetworkCard";
+import { SLOT_PRICE_USD } from "@qworship/shared";
 import {
   fetchBranches, fetchSubscription, removeBranch, revokeInvite,
   type Branch, type PendingInvite,
 } from "@/lib/accountApi";
 
 /**
+ * Page chrome, or none at all.
+ *
+ * The profile screen hosts this as a tab, where a second full-page background
+ * and a second <h1> would both be wrong, so the shell is a parameter rather
+ * than being baked into each of the three return paths below.
+ */
+const Shell: React.FC<{ embedded?: boolean; children: React.ReactNode }> = ({ embedded, children }) =>
+  embedded ? (
+    <div className="space-y-6">{children}</div>
+  ) : (
+    <div className="min-h-full bg-[#1a0f2e] text-white">
+      <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6">{children}</div>
+    </div>
+  );
+
+/**
  * The network at a glance: what the account holds, which churches are on it,
  * and what capacity is left.
  */
-export const OrganizationProfilePage: React.FC = () => {
+export const OrganizationPanel: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -64,22 +81,21 @@ export const OrganizationProfilePage: React.FC = () => {
 
   if (branchesQuery.isLoading || subscriptionQuery.isLoading) {
     return (
-      <div className="min-h-full bg-[#1a0f2e] text-white"><div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6">
-        <Skeleton className="h-9 w-56 bg-white/5" />
+      <Shell embedded={embedded}>
+        {!embedded && <Skeleton className="h-9 w-56 bg-white/5" />}
         <div className="grid gap-4 sm:grid-cols-2">
           <Skeleton className="h-36 bg-white/5" />
           <Skeleton className="h-36 bg-white/5" />
         </div>
         <Skeleton className="h-64 bg-white/5" />
-      </div></div>
+      </Shell>
     );
   }
 
   const error = branchesQuery.error || subscriptionQuery.error;
   if (error || !data || !subscription) {
     return (
-      <div className="min-h-full bg-[#1a0f2e] text-white">
-        <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
+      <Shell embedded={embedded}>
           <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-[#2a1f3d] p-5">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
             <div>
@@ -92,25 +108,26 @@ export const OrganizationProfilePage: React.FC = () => {
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+      </Shell>
     );
   }
 
   const isSingleChurch = data.branches.length <= 1 && data.pendingInvites.length === 0;
 
   return (
-    <div className="min-h-full bg-[#1a0f2e] text-white"><div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6">
+    <Shell embedded={embedded}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <Network className="h-5 w-5 text-[#b89bff]" />
-            Your churches
-          </h1>
-          <p className="mt-1 text-sm text-gray-400">
+          {!embedded && (
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <Network className="h-5 w-5 text-[#b89bff]" />
+              Your churches
+            </h1>
+          )}
+          <p className={embedded ? "text-sm text-gray-400" : "mt-1 text-sm text-gray-400"}>
             {subscription.planId === "free"
               ? "You are on the Free plan, which covers one church."
-              : `Standard plan · ${subscription.packs} ${subscription.packs === 1 ? "pack" : "packs"} · $${subscription.monthlyPrice.toFixed(2)} a month`}
+              : `Standard plan · ${subscription.slots.total} ${subscription.slots.total === 1 ? "church" : "churches"} · $${subscription.monthlyPrice.toFixed(2)} a month`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -136,8 +153,9 @@ export const OrganizationProfilePage: React.FC = () => {
           <div>
             <p className="font-medium text-white">Add branch churches</p>
             <p className="mt-0.5 text-sm text-gray-400">
-              The Standard plan covers ten churches for $15.99 a month, with pooled
-              hands-free Bible hours across all of them.
+              Standard is ${SLOT_PRICE_USD} a month for your church, and the same
+              again for each branch you add. Every church keeps its own
+              hands-free Bible hours — no branch can spend another's.
             </p>
           </div>
           <Button variant="outline" asChild className="border-[#8356F3]/60 bg-transparent text-[#b89bff] hover:bg-[#8356F3]/10">
@@ -164,8 +182,10 @@ export const OrganizationProfilePage: React.FC = () => {
         onInvited={refresh}
         slotsAvailable={data.slots.available}
       />
-    </div></div>
+    </Shell>
   );
 };
+
+export const OrganizationProfilePage: React.FC = () => <OrganizationPanel />;
 
 export default OrganizationProfilePage;
