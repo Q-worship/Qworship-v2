@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import worshipImage from "@assets/Group 1171275221 1_1753809462960.png";
-import Footer from "../components/Footer";
+import { Footer } from "@/components/layout/Footer";
 
 export default function RefundPolicy() {
   const [billingForm, setBillingForm] = useState({

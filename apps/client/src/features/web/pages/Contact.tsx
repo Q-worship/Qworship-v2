@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Link } from "wouter";
-import Footer from "@/features/web/components/Footer";
+import { Footer } from "@/components/layout/Footer";
 import {
   Monitor,
   Users,
