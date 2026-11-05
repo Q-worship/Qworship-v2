@@ -38,6 +38,10 @@ export interface NotificationPreferences {
   sms: boolean;
   trial: boolean;
   login: boolean;
+  /** Warn when many branches stream at once on a Sunday. */
+  streamPeak: boolean;
+  /** Prompt to top up the moment a church runs out mid-service. */
+  autoRefill: boolean;
 }
 
 /** The churches this person belongs to, as the session endpoint lists them. */
@@ -78,6 +82,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   sms: false,
   trial: true,
   login: true,
+  streamPeak: true,
+  autoRefill: false,
 };
 
 /** Idle-timeout choices offered in Preferences. */

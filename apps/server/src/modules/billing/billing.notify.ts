@@ -19,7 +19,10 @@ import { createNotification } from "../notifications/notification.service.js";
  * webhook must not be retried because a notification failed.
  */
 
-type NoticeKind = "trial" | "login" | "email";
+type NoticeKind = "trial" | "login" | "email" | "streamPeak" | "autoRefill";
+
+/** Kinds nobody receives until they ask. */
+const OPT_IN = new Set<NoticeKind>(["autoRefill"]);
 
 /**
  * The owner, if they want to hear about this.
@@ -33,6 +36,14 @@ async function recipient(account: IAccount, kind: NoticeKind) {
   );
   if (!owner) return null;
   const prefs = owner.notificationPreferences;
+
+  // OPT-IN kinds must be switched on explicitly. Everything else is opt-out,
+  // where an absent preference means yes — an account created before the field
+  // existed still gets told its card failed. Reading an absent `autoRefill` the
+  // same way would send buffer prompts to every owner who never asked for one,
+  // while their toggle reads off.
+  if (OPT_IN.has(kind)) return prefs?.[kind] === true ? owner : null;
+
   if (prefs && prefs[kind] === false) return null;
   return owner;
 }
@@ -208,5 +219,66 @@ export async function notifyStorageLow(
     });
   } catch (error) {
     console.error("[Billing] Could not notify low storage:", error);
+  }
+}
+
+/**
+ * Many branches are streaming at once.
+ *
+ * Sent as a service starts, not afterwards — a peak reported on Monday is
+ * trivia; the same figure at 9am on Sunday is something a production lead can
+ * still act on.
+ */
+export async function notifyStreamPeak(
+  account: IAccount,
+  concurrent: number,
+  ceiling: number,
+): Promise<void> {
+  try {
+    const owner = await recipient(account, "streamPeak");
+    if (!owner) return;
+    await createNotification({
+      userId: owner._id as any,
+      type: "stream_peak",
+      category: "subscription",
+      title: `${concurrent} services streaming at once`,
+      message: `That is ${Math.round((concurrent / Math.max(1, ceiling)) * 100)}% of your ${ceiling} branches live at the same time. Nothing is throttled — this is a heads-up while the services are running.`,
+      icon: "Activity",
+      actionUrl: "/dashboard-subscription/usage",
+      metadata: { concurrent, ceiling },
+    });
+  } catch (error) {
+    console.error("[Billing] Could not notify stream peak:", error);
+  }
+}
+
+/**
+ * A church has just run out mid-service, and the grace window is running.
+ *
+ * This is the Emergency Sunday Buffer. No card is stored, so nothing is
+ * charged automatically; what the buffer actually buys is TIME — the guard's
+ * grace window keeps the service on air while this notice puts a one-click
+ * top-up in the owner's hand. Sent only to owners who switched it on.
+ */
+export async function notifyBufferPrompt(
+  account: IAccount,
+  churchName: string,
+  graceMinutes: number,
+): Promise<void> {
+  try {
+    const owner = await recipient(account, "autoRefill");
+    if (!owner) return;
+    await createNotification({
+      userId: owner._id as any,
+      type: "buffer_prompt",
+      category: "subscription",
+      title: `${churchName} has run out of hours`,
+      message: `The service is still running and has about ${graceMinutes} minutes of grace left. Add hours now to keep it on air.`,
+      icon: "Zap",
+      actionUrl: "/dashboard-subscription/usage",
+      metadata: { churchName, graceMinutes },
+    });
+  } catch (error) {
+    console.error("[Billing] Could not send the buffer prompt:", error);
   }
 }

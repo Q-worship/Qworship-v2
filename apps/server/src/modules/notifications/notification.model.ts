@@ -41,6 +41,8 @@ const NotificationSchema = new Schema<INotification>(
         'payment_disputed',
         'topup_refunded',
         'storage_low',
+        'stream_peak',
+        'buffer_prompt',
         // Admin-triggered
         'admin_feature',
         'admin_bible',

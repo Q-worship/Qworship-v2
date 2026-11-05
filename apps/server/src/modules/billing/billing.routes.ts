@@ -10,6 +10,9 @@ import {
   startSubscriptionCheckout, startTopUpCheckout,
 } from "./stripe.service.js";
 import { usagePeriod } from "../usage/usage.model.js";
+import { usageSeries, resolveRange, type Granularity, type RangePreset } from "../usage/usage.series.js";
+import { streamHealth, streamHealthByOrganization } from "../usage/usage.health.js";
+import { Organization } from "../organization/organization.model.js";
 import {
   listSponsoredGifts, previewGift, redeemGift, startGiftCheckout,
 } from "./gift.service.js";
@@ -54,6 +57,9 @@ billingRouter.get("/billing/overview", protect, async (req: any, res: any) => {
   }
 });
 
+const RANGE_PRESETS: RangePreset[] = ["7d", "30d", "90d", "weekly", "monthly", "custom"];
+const GRANULARITIES: Granularity[] = ["day", "week", "sunday", "month"];
+
 billingRouter.get("/billing/usage", protect, async (req: any, res: any) => {
   try {
     const ctx = await requireAccount(req, res);
@@ -61,10 +67,55 @@ billingRouter.get("/billing/usage", protect, async (req: any, res: any) => {
     // Bounded: an unbounded week count is an unbounded scan of sessions.
     const weeks = Math.min(26, Math.max(1, Number(req.query.weeks) || 4));
     const overview = await billingOverview(ctx.account);
+
+    // Only values this server recognises reach the series builder; anything
+    // else falls back to the default rather than being trusted into a query.
+    const preset = RANGE_PRESETS.includes(req.query.range) ? req.query.range : undefined;
+    const granularity = GRANULARITIES.includes(req.query.granularity)
+      ? req.query.granularity
+      : undefined;
+
+    const churches = await Organization.find({ accountId: ctx.account._id })
+      .select("_id name")
+      .lean();
+
+    // A church filter must name a church ON THIS ACCOUNT. Taking the id on
+    // trust would let anyone read another network's usage.
+    const requested = req.query.organizationId ? String(req.query.organizationId) : null;
+    const scoped = requested
+      ? churches.filter((c) => String(c._id) === requested)
+      : churches;
+    if (requested && scoped.length === 0) {
+      return res.status(404).json({ success: false, message: "No such church on this account" });
+    }
+
+    const rangeRequest = {
+      preset,
+      granularity,
+      from: req.query.from ? String(req.query.from) : undefined,
+      to: req.query.to ? String(req.query.to) : undefined,
+    };
+    // Health is measured over the SAME window as the chart, so the peak on the
+    // tile and the bars underneath it always describe one range.
+    const { from, to } = resolveRange(rangeRequest);
+    const scopedIds = scoped.map((c) => c._id);
+
+    const [series, health, healthByChurch] = await Promise.all([
+      usageSeries(scopedIds, rangeRequest),
+      streamHealth(scopedIds, from, to),
+      streamHealthByOrganization(churches.map((c) => c._id), from, to),
+    ]);
+
     res.json({
       success: true,
       weeks: await usageTrend(ctx.account, weeks),
-      branches: overview.branches,
+      series,
+      health,
+      churches: churches.map((c) => ({ id: String(c._id), name: c.name })),
+      branches: overview.branches.map((b: any) => ({
+        ...b,
+        health: healthByChurch.get(String(b.organizationId)) ?? null,
+      })),
       period: overview.period,
     });
   } catch (error) {

@@ -59,7 +59,24 @@ state a price in a component.
 The exports contain stale figures — "Cloud Pro", ₦15,000/node, Free at 2 hours,
 three Bible versions, and top-up packs implying $0.71–0.80/hr. All corrected.
 The design also shows a branch lifecycle (Onboarding / Suspended / Archived)
-that does not exist; status is derived from real data instead.
+that does not exist; status is derived from real data instead — over allowance,
+active, or idle, read off the church's own numbers.
+
+The **Usage** export (`payments-&-billing-usage.svg`, also circulated as
+"Frame 11.svg") adds three more that are not built, and should not be without
+the metering first:
+
+- **Peak Sunday Streams / "30 Concurrent"** — nothing meters concurrency. The
+  tile is extra hours bought this month instead, which is real.
+- **Stream Uptime (99.8%)** — nothing measures uptime. The column is absent
+  rather than filled with a plausible-looking number.
+- **Emergency Sunday Buffer at ₦12,500** — auto-refill is deliberately deferred
+  (see Deferred features), and prices are USD from the catalog.
+
+It also draws one hours figure over one allowance for a whole network. For a
+multi-church account that is the pooled model this product deliberately does
+not have, so the tiles show a per-church figure when there is one church and a
+captioned total with no denominator when there are several.
 
 ---
 
@@ -182,6 +199,9 @@ trial-days figure anywhere in the account model.
 
 ### 6. Known gaps in testing
 
+- `pnpm test:usage` covers range resolution for every option the usage screen
+  offers (7/30/90 days, weekly, monthly, custom, Sunday-to-Sunday), and needs
+  no database.
 - `pnpm test:storage` covers the storage policy and needs no database or
   server — `verdictFor` is pure so the refusal rules run anywhere.
 - Refunds and disputes **have** been exercised against live test-mode Stripe

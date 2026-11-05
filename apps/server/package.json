@@ -11,6 +11,7 @@
     "test:e2e": "tsx tests/membership-usage.e2e.ts",
     "test:gate": "tsx tests/silence-gate.e2e.ts",
     "test:storage": "tsx tests/storage-guard.test.ts",
+    "test:usage": "tsx tests/usage-series.test.ts",
     "seed:demo": "tsx tests/seed-demo-network.ts",
     "import:bible-export": "tsx src/scripts/import-wide-bible-export.ts",
     "audit:bible": "tsx src/scripts/audit-bible-database.ts",

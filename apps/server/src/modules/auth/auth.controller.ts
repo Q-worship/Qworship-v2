@@ -251,7 +251,7 @@ export const updateProfile = async (req: Request, res: Response) => {
     // subdocument and silently reset whatever it left out.
     const prefs = req.body.notificationPreferences;
     if (prefs && typeof prefs === 'object') {
-      for (const key of ['email', 'sms', 'trial', 'login'] as const) {
+      for (const key of ['email', 'sms', 'trial', 'login', 'streamPeak', 'autoRefill'] as const) {
         if (typeof prefs[key] === 'boolean') update[`notificationPreferences.${key}`] = prefs[key];
       }
     }

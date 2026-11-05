@@ -1,3 +1,4 @@
+import type { UsageQuery } from "@/lib/billingApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -38,12 +39,24 @@ export function useBillingOverview() {
   };
 }
 
-export function useBillingUsage(weeks = 4) {
+export function useBillingUsage(usage: UsageQuery = {}, weeks = 4) {
   const query = useQuery({
-    queryKey: [...BILLING_USAGE_KEY, weeks],
-    queryFn: () => fetchBillingUsage(weeks),
+    // The range is part of the key, so switching to "last 90 days" fetches
+    // rather than showing the previous range's bars under a new label.
+    queryKey: [...BILLING_USAGE_KEY, weeks, usage],
+    queryFn: () => fetchBillingUsage(usage, weeks),
+    // Keeps the old chart on screen while the new range loads, instead of
+    // collapsing the panel to a skeleton on every change of dropdown.
+    placeholderData: (previous) => previous,
   });
-  return { ...query, weeks: query.data?.weeks ?? [], branches: query.data?.branches ?? [] };
+  return {
+    ...query,
+    weeks: query.data?.weeks ?? [],
+    series: query.data?.series,
+    health: query.data?.health,
+    churches: query.data?.churches ?? [],
+    branches: query.data?.branches ?? [],
+  };
 }
 
 export function useInvoices() {

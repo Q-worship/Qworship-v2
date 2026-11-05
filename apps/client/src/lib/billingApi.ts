@@ -62,12 +62,67 @@ export function fetchBillingOverview(): Promise<{
   return get("/api/billing/overview");
 }
 
-export function fetchBillingUsage(weeks = 4): Promise<{
+/** How a range is cut up. `sunday` is week-long but anchored to Sundays. */
+export type Granularity = "day" | "week" | "sunday" | "month";
+
+/** The ranges the usage screen offers. */
+export type RangePreset = "7d" | "30d" | "90d" | "weekly" | "monthly" | "custom";
+
+export interface UsageBucket {
+  startsAt: string;
+  endsAt: string;
+  hours: number;
+  /** Printed as-is: the server builds it so chart and table cannot disagree. */
+  label: string;
+}
+
+export interface UsageSeries {
+  buckets: UsageBucket[];
+  granularity: Granularity;
+  from: string;
+  to: string;
+  totalHours: number;
+  averageSundayHours: number;
+  sundaysWithUsage: number;
+}
+
+export interface StreamHealth {
+  peakConcurrent: number;
+  peakAt: string | null;
+  peakSundayConcurrent: number;
+  uptimePercent: number;
+  sessionsEnded: number;
+  sessionsFailed: number;
+}
+
+export interface UsageQuery {
+  range?: RangePreset;
+  granularity?: Granularity;
+  /** Only read when range is "custom". Dates as YYYY-MM-DD. */
+  from?: string;
+  to?: string;
+  /** One church, or every church on the account when absent. */
+  organizationId?: string | null;
+}
+
+export function fetchBillingUsage(
+  query: UsageQuery = {},
+  weeks = 4,
+): Promise<{
   weeks: UsageWeek[];
-  branches: BranchHourUsage[];
+  series: UsageSeries;
+  health: StreamHealth;
+  churches: { id: string; name: string }[];
+  branches: (BranchHourUsage & { health: StreamHealth | null })[];
   period: string;
 }> {
-  return get(`/api/billing/usage?weeks=${weeks}`);
+  const params = new URLSearchParams({ weeks: String(weeks) });
+  if (query.range) params.set("range", query.range);
+  if (query.granularity) params.set("granularity", query.granularity);
+  if (query.range === "custom" && query.from) params.set("from", query.from);
+  if (query.range === "custom" && query.to) params.set("to", query.to);
+  if (query.organizationId) params.set("organizationId", query.organizationId);
+  return get(`/api/billing/usage?${params.toString()}`);
 }
 
 export function fetchInvoices(): Promise<{

@@ -229,6 +229,82 @@ async function notifyLowHours(
   }
 }
 
+/**
+ * Tells the owner a church has run out while the service is still running.
+ *
+ * Separate from the low-hours notice: that one is a warning with time to
+ * spare, this one is happening now, and only owners who switched the buffer on
+ * receive it.
+ */
+async function notifyBuffer(guard: AllowanceGuard | null, graceMinutes: number): Promise<void> {
+  if (!guard) return;
+  try {
+    const { Organization } = await import("../organization/organization.model.js");
+    const { Account } = await import("../organization/account.model.js");
+    const { notifyBufferPrompt } = await import("../billing/billing.notify.js");
+
+    const church = await Organization.findById(guard.organizationId).select("accountId name").lean();
+    if (!church?.accountId) return;
+    const account = await Account.findById(church.accountId);
+    if (!account) return;
+    await notifyBufferPrompt(account, church.name, graceMinutes);
+  } catch (error) {
+    console.error("[Usage] Could not send the buffer prompt:", error);
+  }
+}
+
+/**
+ * Warns when a network is running many services at once.
+ *
+ * Checked as a session STARTS, counting the sessions still open across the
+ * account. Nothing is throttled by this — concurrency has no limit in the
+ * plan — but a production lead watching thirty branches wants to know while
+ * the services are live, not from a chart on Monday.
+ *
+ * Announced at most once an hour per account, so a network whose branches all
+ * come online within a few minutes of each other gets one notice, not thirty.
+ */
+const peakAnnouncedAt = new Map<string, number>();
+const PEAK_QUIET_MS = 60 * 60 * 1000;
+
+async function notifyPeakIfBusy(organizationId: string | null): Promise<void> {
+  if (!organizationId) return;
+  try {
+    const { Organization } = await import("../organization/organization.model.js");
+    const { Account } = await import("../organization/account.model.js");
+    const { TranscriptionSession } = await import("../usage/usage.model.js");
+    const { notifyStreamPeak } = await import("../billing/billing.notify.js");
+
+    const church = await Organization.findById(organizationId).select("accountId").lean();
+    if (!church?.accountId) return;
+    const accountKey = String(church.accountId);
+
+    const last = peakAnnouncedAt.get(accountKey) ?? 0;
+    if (Date.now() - last < PEAK_QUIET_MS) return;
+
+    const siblings = await Organization.find({ accountId: church.accountId }).select("_id").lean();
+    const ceiling = siblings.length;
+    // One church cannot saturate anything; the warning is a network concern.
+    if (ceiling < 2) return;
+
+    const live = await TranscriptionSession.countDocuments({
+      organizationId: { $in: siblings.map((s) => s._id) },
+      endedAt: { $exists: false },
+    });
+
+    // The same 80% the usage tile turns amber at, so the screen and the notice
+    // agree about what "approaching the limit" means.
+    if (live < Math.ceil(ceiling * 0.8)) return;
+
+    const account = await Account.findById(church.accountId);
+    if (!account) return;
+    peakAnnouncedAt.set(accountKey, Date.now());
+    await notifyStreamPeak(account, live, ceiling);
+  } catch (error) {
+    console.error("[Usage] Could not check the stream peak:", error);
+  }
+}
+
 export function setupAudioSocket(server: Server) {
   const wss = new WebSocketServer({ server, path: "/api/bible/audio-stream" });
 
@@ -315,6 +391,10 @@ export function setupAudioSocket(server: Server) {
             graceMinutes: verdict.graceMinutes,
             message: `This month's hands-free Bible hours are used up. The service keeps running for ${verdict.graceMinutes} more minutes — buy more hours to continue after that.`,
           }));
+          // The Emergency Sunday Buffer: the grace window is what keeps the
+          // service on air, and this puts a top-up in the owner's hand while
+          // it runs. Opt-in, and fire-and-forget.
+          void notifyBuffer(guard, verdict.graceMinutes);
           return;
         }
         // state === "stop"
@@ -375,6 +455,8 @@ export function setupAudioSocket(server: Server) {
 
         const recorder = new UsageRecorder(String(userId), organizationId);
         await recorder.start();
+        // After the session row exists, so this one is counted too.
+        void notifyPeakIfBusy(organizationId ? String(organizationId) : null);
         // Audio that arrived while the church was being resolved still counts,
         // against the meter and against the guard alike.
         if (pendingForwardedBytes > 0) {

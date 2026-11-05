@@ -51,6 +51,10 @@ export interface IUser extends Document {
     sms: boolean;
     trial: boolean;
     login: boolean;
+    /** Warn when many branches stream at once on a Sunday. */
+    streamPeak: boolean;
+    /** Prompt to top up the moment a church runs out mid-service. */
+    autoRefill: boolean;
   };
   sessionTimeoutMinutes?: number;
   createdAt: Date;
@@ -101,6 +105,11 @@ const UserSchema = new Schema<IUser>(
       email: { type: Boolean, default: true },
       // Off by default: SMS costs money and needs a number we may not have.
       sms: { type: Boolean, default: false },
+      // On by default: a network about to saturate its feeds wants to know.
+      streamPeak: { type: Boolean, default: true },
+      // Off by default. It is an extra notice during a service, and a church
+      // that has not asked for one should not start getting them.
+      autoRefill: { type: Boolean, default: false },
       trial: { type: Boolean, default: true },
       login: { type: Boolean, default: true },
     },
