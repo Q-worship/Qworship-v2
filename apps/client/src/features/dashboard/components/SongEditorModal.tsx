@@ -9,13 +9,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useCreateSong, useUpdateSong } from "@/features/songs/api/useSongs";
 import { useDebounce } from "@/hooks/use-debounce";
-
-/** How a section's lyrics look on the live screen; unset means "use the live defaults" */
-interface LyricStyle {
-  bold?: boolean;
-  italic?: boolean;
-  color?: string;
-}
+import {
+  commonLyricStyle,
+  mergeLyricStyle,
+  sameLyricStyle,
+  type LyricStyle,
+} from "@/features/songs/songFormatting";
 
 interface SectionItem {
   id: string;
@@ -49,6 +48,8 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   const debouncedVerseOrderInput = useDebounce(verseOrderInput, 300);
   const [showAddOptions, setShowAddOptions] = useState(false);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  // The section the formatting toolbar applies to; null means the whole song
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   
   const [sections, setSections] = useState<SectionItem[]>([
     { id: "v1", type: "verse", number: 1, label: "V1 (Verse 1)", content: "" },
@@ -66,6 +67,7 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
 
   // Reset or populate fields when modal opens or initialData changes
   React.useEffect(() => {
+    setSelectedSectionId(null);
     if (initialData) {
       setSongTitle(initialData.title || "");
       setAlternativeTitle(
@@ -202,12 +204,20 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     const prefix = type === "verse" ? "V" : "C";
     const label = type === "verse" ? `V${newNumber} (Verse ${newNumber})` : `C${newNumber} (Chorus ${newNumber})`;
     
+    // A new section follows the song's formatting when every section shares one
+    const firstStyle = sections[0]?.style;
+    const sharedStyle =
+      firstStyle && sections.every((s) => sameLyricStyle(s.style, firstStyle))
+        ? firstStyle
+        : undefined;
+
     const newSection: SectionItem = {
       id: `${type[0]}${newNumber}_${Date.now()}`,
       type,
       number: newNumber,
       label,
-      content: ""
+      content: "",
+      ...(sharedStyle ? { style: { ...sharedStyle } } : {}),
     };
     setSections([...sections, newSection]);
     setShowAddOptions(false);
@@ -219,30 +229,43 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     ));
   };
 
-  // An unchecked option is removed rather than stored as false, so it keeps following
-  // the live screen's own settings
-  const updateSectionStyle = (sectionId: string, change: LyricStyle) => {
+  // ---- Formatting: one toolbar. With a section selected it formats only that section;
+  // with none selected it formats the whole song (every section). ----
+  const targetSections = selectedSectionId
+    ? sections.filter((section) => section.id === selectedSectionId)
+    : sections;
+
+  // What the toolbar shows: the selected section's style, or, for the whole song, the
+  // value every section agrees on (nothing when they differ)
+  const shownStyle: LyricStyle = commonLyricStyle(targetSections.map((section) => section.style));
+  const hasAnyStyle = targetSections.some(
+    (section) => section.style?.bold || section.style?.italic || section.style?.color,
+  );
+
+  const applyStyle = (change: LyricStyle) => {
     setSections((current) =>
-      current.map((section) => {
-        if (section.id !== sectionId) return section;
-        const next: LyricStyle = { ...section.style, ...change };
-        if (!next.bold) delete next.bold;
-        if (!next.italic) delete next.italic;
-        if (!next.color) delete next.color;
-        return { ...section, style: Object.keys(next).length > 0 ? next : undefined };
-      }),
+      current.map((section) =>
+        !selectedSectionId || section.id === selectedSectionId
+          ? { ...section, style: mergeLyricStyle(section.style, change) }
+          : section,
+      ),
     );
   };
 
-  const resetSectionStyle = (sectionId: string) => {
+  const clearStyle = () => {
     setSections((current) =>
-      current.map((section) => (section.id === sectionId ? { ...section, style: undefined } : section)),
+      current.map((section) =>
+        !selectedSectionId || section.id === selectedSectionId
+          ? { ...section, style: undefined }
+          : section,
+      ),
     );
   };
 
   const deleteSection = (sectionId: string) => {
     if (sections.length > 1) {
       setSections(sections.filter(section => section.id !== sectionId));
+      if (selectedSectionId === sectionId) setSelectedSectionId(null);
     }
   };
 
@@ -310,7 +333,7 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     
     const isEditing = initialData && initialData.id;
     const mutationOptions = {
-      onSuccess: () => {
+      onSuccess: (data: any) => {
         setShowSaveConfirmation(false);
         toast({
           title: isEditing ? "Song Updated Successfully!" : "Song Saved Successfully!",
@@ -318,7 +341,9 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
             ? `"${songTitle}" has been updated in your songbook.`
             : `"${songTitle}" has been added to your songbook and will appear in recent songs.`,
         });
-        onSave?.({ title: songTitle });
+        // The saved song comes back from the server so the live service can pick up
+        // its new formatting right away
+        onSave?.({ title: songTitle, song: data?.song });
         onClose();
       },
       onError: (error: any) => {
@@ -419,78 +444,110 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
                 </div>
               </div>
 
+              {/* One formatting toolbar. It formats the selected section, or the whole
+                  song when no section is selected; the result shows on the live screen. */}
+              <div className="mt-6 flex flex-wrap items-center gap-2 bg-[#3d3166] border border-gray-500 rounded p-2">
+                <span className="text-xs text-gray-300">Formatting</span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#2a1f4b] text-white">
+                  {selectedSectionId
+                    ? (sections.find((s) => s.id === selectedSectionId)?.label ?? "Section")
+                    : "Whole song"}
+                </span>
+                {selectedSectionId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSectionId(null)}
+                    className="text-[11px] text-[#c4b0ff] hover:underline"
+                  >
+                    Format whole song
+                  </button>
+                )}
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => applyStyle({ bold: !shownStyle.bold })}
+                  aria-label="Bold"
+                  aria-pressed={!!shownStyle.bold}
+                  title="Bold"
+                  className={`h-7 w-7 rounded flex items-center justify-center transition-colors ${
+                    shownStyle.bold ? "bg-[#8356F3] text-white" : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
+                  }`}
+                >
+                  <BoldIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyStyle({ italic: !shownStyle.italic })}
+                  aria-label="Italic"
+                  aria-pressed={!!shownStyle.italic}
+                  title="Italic"
+                  className={`h-7 w-7 rounded flex items-center justify-center transition-colors ${
+                    shownStyle.italic ? "bg-[#8356F3] text-white" : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
+                  }`}
+                >
+                  <ItalicIcon size={14} />
+                </button>
+                <label
+                  title="Text colour"
+                  className="relative h-7 w-7 rounded overflow-hidden border border-gray-500 cursor-pointer"
+                  style={{ background: shownStyle.color || "#ffffff" }}
+                >
+                  <input
+                    type="color"
+                    aria-label="Text colour"
+                    value={shownStyle.color || "#ffffff"}
+                    onChange={(e) => applyStyle({ color: e.target.value })}
+                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                  />
+                </label>
+                {hasAnyStyle && (
+                  <button
+                    type="button"
+                    onClick={clearStyle}
+                    title="Clear formatting"
+                    className="h-7 px-2 rounded bg-[#2a1f4b] text-xs text-gray-300 hover:bg-[#4a3a75]"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
               {/* Sections (Songs & Choruses) */}
-              <div className="flex gap-4 mt-6">
-                {/* Sections List */}
-                <div className="flex-1 space-y-3">
+              <div className="flex gap-4 mt-3">
+                {/* Sections List: click a section to format only it; click the gap
+                    between sections to go back to formatting the whole song */}
+                <div
+                  className="flex-1 space-y-3"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) setSelectedSectionId(null);
+                  }}
+                >
                   {sections.map((section, index) => (
-                    <div key={section.id} className="bg-[#3d3166] border border-gray-500 rounded">
+                    <div
+                      key={section.id}
+                      onClick={() => setSelectedSectionId(section.id)}
+                      className={`bg-[#3d3166] border rounded cursor-pointer ${
+                        selectedSectionId === section.id
+                          ? "border-[#8356F3] ring-1 ring-[#8356F3]"
+                          : "border-gray-500"
+                      }`}
+                    >
                       <div className="flex items-center justify-between p-2 border-b border-gray-500">
                         <span className="text-gray-300 font-medium text-sm">{section.label}</span>
-                        <div className="flex items-center gap-1">
-                          {/* How these lyrics look on the live screen */}
-                          <button
-                            type="button"
-                            onClick={() => updateSectionStyle(section.id, { bold: !section.style?.bold })}
-                            aria-label="Bold"
-                            aria-pressed={!!section.style?.bold}
-                            title="Bold"
-                            className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
-                              section.style?.bold
-                                ? "bg-[#8356F3] text-white"
-                                : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
-                            }`}
-                          >
-                            <BoldIcon size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateSectionStyle(section.id, { italic: !section.style?.italic })}
-                            aria-label="Italic"
-                            aria-pressed={!!section.style?.italic}
-                            title="Italic"
-                            className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
-                              section.style?.italic
-                                ? "bg-[#8356F3] text-white"
-                                : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
-                            }`}
-                          >
-                            <ItalicIcon size={13} />
-                          </button>
-                          <label
-                            title="Text colour"
-                            className="relative h-6 w-6 rounded overflow-hidden border border-gray-500 cursor-pointer"
-                            style={{ background: section.style?.color || "#ffffff" }}
-                          >
-                            <input
-                              type="color"
-                              aria-label="Text colour"
-                              value={section.style?.color || "#ffffff"}
-                              onChange={(e) => updateSectionStyle(section.id, { color: e.target.value })}
-                              className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                            />
-                          </label>
-                          {(section.style?.bold || section.style?.italic || section.style?.color) && (
-                            <button
-                              type="button"
-                              onClick={() => resetSectionStyle(section.id)}
-                              title="Clear formatting"
-                              className="h-6 px-1.5 rounded bg-[#2a1f4b] text-[10px] text-gray-300 hover:bg-[#4a3a75]"
-                            >
-                              Clear
-                            </button>
-                          )}
-                          <Button
-                            onClick={() => deleteSection(section.id)}
-                            className="bg-[#8356F3] hover:bg-[#6d42c7] text-white text-xs h-6 w-6 p-0 ml-1"
-                          >
-                            ×
-                          </Button>
-                        </div>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSection(section.id);
+                          }}
+                          className="bg-[#8356F3] hover:bg-[#6d42c7] text-white text-xs h-6 w-6 p-0"
+                        >
+                          ×
+                        </Button>
                       </div>
                       <div className="p-2">
                         <Textarea
                           value={section.content}
+                          onFocus={() => setSelectedSectionId(section.id)}
                           onChange={(e) => updateSectionContent(section.id, e.target.value)}
                           className="bg-transparent border-none text-white placeholder-gray-400 resize-none h-24 text-sm p-0"
                           style={{

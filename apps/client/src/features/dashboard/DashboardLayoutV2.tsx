@@ -45,6 +45,7 @@ import { SongbookModal } from "@/features/dashboard/components/SongbookModal";
 import { SongSearchModal } from "@/features/dashboard/components/SongSearchModal";
 import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
+import { applySongStylesToSlides } from "@/features/songs/songFormatting";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
 import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
 import {
@@ -1268,6 +1269,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           title: s.title,
           type: s.type,
           sectionLabel: s.sectionLabel,
+          // Song formatting (bold / italic / colour) must trigger a re-send to the live window
+          lyricStyle: s.lyricStyle,
           itemId: s.itemId,
           subtype: s.subtype,
         })),
@@ -2687,6 +2690,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           title: song.title, // Show song title on all slides
           content: (lyrics as string).trim(),
           sectionLabel: label,
+          sectionName, // the section's own name in the lyrics, used to match its formatting
           songTitle: song.title, // Store song title separately for display
           // Bold / italic / colour chosen for this section in the Song editor
           ...(song.sectionStyles?.[sectionName]
@@ -2713,6 +2717,32 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     }
 
     return slides;
+  };
+
+  // Copies a saved song's bold / italic / colour onto its slides that are already in the
+  // service. Slides are matched to sections by section name; slides added before section
+  // names were recorded fall back to their order in the song.
+  const applySongFormattingToService = (song: any) => {
+    if (!song?.id) return;
+    const styles: Record<string, any> = song.sectionStyles || {};
+    const labels = Object.keys(parseLyricsIntoSections(song.lyrics || ""));
+
+    const patchItems = (items: any[]) =>
+      items.map((item) =>
+        Array.isArray(item?.slides)
+          ? { ...item, slides: applySongStylesToSlides(item.slides, song.id, labels, styles) }
+          : item,
+      );
+
+    setServiceItems((current: any[]) => patchItems(current));
+    setSectionItems((current: any) =>
+      Object.fromEntries(
+        Object.entries(current || {}).map(([section, items]) => [
+          section,
+          Array.isArray(items) ? patchItems(items) : items,
+        ]),
+      ),
+    );
   };
 
   const insertImage = () => {
@@ -5544,8 +5574,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           initialData={importedSongData}
           onSave={(songData) => {
             console.log("Song saved:", songData);
-            // No need to manually update state, as the song is already saved to the database
-            // The query will automatically refresh to show the new song
+            // The song is already saved to the database and the song list refreshes by
+            // itself. Slides of this song that are already in the service (and so on the
+            // live screen) pick up its new formatting here.
+            if (songData?.song) applySongFormattingToService(songData.song);
             setIsSongEditorOpen(false);
             setImportedSongData(null);
           }}

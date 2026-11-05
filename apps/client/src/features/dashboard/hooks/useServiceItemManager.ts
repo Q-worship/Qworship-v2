@@ -141,6 +141,7 @@ export function useServiceItemManager({
           title: song.title,
           content: (lyrics as string).trim(),
           sectionLabel: label,
+          sectionName, // the section's own name in the lyrics, used to match its formatting
           songTitle: song.title,
           // Bold / italic / colour chosen for this section in the Song editor
           ...(song.sectionStyles?.[sectionName]
