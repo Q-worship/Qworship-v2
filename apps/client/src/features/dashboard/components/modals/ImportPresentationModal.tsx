@@ -7,7 +7,6 @@ import {
   Check,
   X,
   AlertTriangle,
-  CheckCircle2,
 } from "lucide-react";
 import {
   parsePptx,
@@ -365,24 +364,14 @@ export const ImportPresentationModal: React.FC<
             </span>{" "}
             . You can allocate the slides below to the respective service items.
           </p>
-          <p
-            className={`mt-3 inline-flex items-center gap-1.5 text-xs ${
-              slidesWithWarnings === 0 ? "text-emerald-300" : "text-amber-300"
-            }`}>
-            {slidesWithWarnings === 0 ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Health check: all {total} slides can be imported as they appear in
-                PowerPoint.
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Health check: {total - slidesWithWarnings} of {total} slides import
-                exactly. Hover the warning on a slide to see what differs.
-              </>
-            )}
-          </p>
+          {/* Only shown when something can't be reproduced exactly; all-good is silent */}
+          {slidesWithWarnings > 0 && (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Health check: {total - slidesWithWarnings} of {total} slides import
+              exactly. Hover the warning on a slide to see what differs.
+            </p>
+          )}
 
           <div className="flex items-start justify-between mt-14">
             <div>

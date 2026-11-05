@@ -68,7 +68,7 @@ import {
   finalizeSlideDesign,
   type DesignNote,
 } from "@/lib/pptxSlideDesign";
-import { uploadSlideImages, type SlideImageUpload } from "@/lib/pptxSlideMedia";
+import { uploadSlideImages, type SlideImageUploadItem } from "@/lib/pptxSlideMedia";
 import { StylesDropdown } from "@/features/dashboard/components/StylesDropdown";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore } from "@/stores/useDisplayModeStore";
@@ -3572,18 +3572,16 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       design.images.forEach((need) => needs.set(need.key, need)),
     );
 
-    const uploads: SlideImageUpload[] = [];
-    const uploadKeys: string[] = [];
-    let unreadablePictures = 0;
-    for (const need of needs.values()) {
-      const image = await presentation.renderImage(need);
-      if (!image) {
-        unreadablePictures += 1;
-        continue;
-      }
-      uploadKeys.push(need.key);
-      uploads.push({ image, title: `${presentation.fileName} – picture ${uploads.length + 1}` });
-    }
+    // Pictures are rendered and uploaded several at a time, so rendering one overlaps
+    // uploading another instead of waiting for each in turn
+    const uploads: (SlideImageUploadItem & { key: string })[] = [];
+    needs.forEach((need) => {
+      uploads.push({
+        key: need.key,
+        title: `${presentation.fileName} – picture ${uploads.length + 1}`,
+        load: () => presentation.renderImage(need),
+      });
+    });
 
     const fallbackImages = new Map<number, SlideImages>();
     for (const { slide } of allocations) {
@@ -3591,24 +3589,32 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       if (slide.imageCount === 0 && !slide.hasBackground) continue;
       const images = await presentation.loadSlideImages(slide.number);
       fallbackImages.set(slide.number, images);
+      const title = `${presentation.fileName} – Slide ${slide.number}`;
       if (images.background) {
-        uploadKeys.push(`fallback-${slide.number}-background`);
-        uploads.push({ image: images.background, title: `${presentation.fileName} – Slide ${slide.number}` });
+        const background = images.background;
+        uploads.push({
+          key: `fallback-${slide.number}-background`,
+          title,
+          load: async () => background,
+        });
       }
       images.pictures.forEach((picture, index) => {
-        uploadKeys.push(`fallback-${slide.number}-${index}`);
-        uploads.push({ image: picture, title: `${presentation.fileName} – Slide ${slide.number}` });
+        uploads.push({
+          key: `fallback-${slide.number}-${index}`,
+          title,
+          load: async () => picture,
+        });
       });
     }
 
     const urlByKey = new Map<string, string>();
     let failureReason = "";
-    let failedPictures = unreadablePictures;
+    let failedPictures = 0;
     if (uploads.length > 0) {
       const result = await uploadSlideImages(uploads);
       failureReason = result.failureReason;
       result.urls.forEach((url, index) => {
-        if (url) urlByKey.set(uploadKeys[index], url);
+        if (url) urlByKey.set(uploads[index].key, url);
         else failedPictures += 1;
       });
     }

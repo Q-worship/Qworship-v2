@@ -210,7 +210,7 @@ const renderPicture = async (
 
     const keepAlpha =
       mime !== "image/jpeg" && mime !== "image/bmp" && hasTransparency(canvas);
-    const blob = await canvasToBlob(canvas, keepAlpha ? "image/png" : "image/jpeg", 0.88);
+    const blob = await canvasToBlob(canvas, keepAlpha ? "image/png" : "image/jpeg", 0.82);
     if (!blob) return null;
     return {
       blob,
