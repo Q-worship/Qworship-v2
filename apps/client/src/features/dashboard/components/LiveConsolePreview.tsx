@@ -5,6 +5,7 @@ import instagramIcon from "@assets/1658586823instagram-logo-transparent_17567334
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 
 
 export interface LiveConsolePreviewProps {
@@ -251,20 +252,9 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
                   {/* Mirrors the live screen: lyrics only, no title or section label */}
                   <div
                     className="text-white font-medium leading-relaxed text-[8px] whitespace-pre-line"
-                    style={{
-                      textShadow: "0 2px 4px rgba(0,0,0,0.8)",
-                      ...((currentSlideData as any).lyricStyle?.color && {
-                        color: (currentSlideData as any).lyricStyle.color,
-                      }),
-                      ...((currentSlideData as any).lyricStyle?.bold != null && {
-                        fontWeight: (currentSlideData as any).lyricStyle.bold ? 700 : 400,
-                      }),
-                      ...((currentSlideData as any).lyricStyle?.italic && {
-                        fontStyle: "italic",
-                      }),
-                    }}
+                    style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
                   >
-                    {currentSlideData.content}
+                    <SongLyricsBody slide={currentSlideData} />
                   </div>
                 </>
               ) : currentSlideData.type === "bible" ? (

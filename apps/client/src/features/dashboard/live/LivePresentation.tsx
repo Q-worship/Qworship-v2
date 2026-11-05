@@ -24,6 +24,7 @@ import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { OBSControlPanel } from "@/features/dashboard/components/OBSControlPanel";
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
 import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
@@ -2829,20 +2830,12 @@ export const LivePresentation = (): JSX.Element => {
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
                         "Lufgord",
-                      // Formatting saved with the song (Song editor) wins over the defaults
                       color:
-                        (slides[currentSlide - 1] as any).lyricStyle?.color ||
                         editorState.styleColor ||
                         editorState.textColor ||
                         "#ffffff",
-                      fontWeight:
-                        ((slides[currentSlide - 1] as any).lyricStyle?.bold ?? editorState.isBold)
-                          ? "bold"
-                          : "normal",
-                      fontStyle:
-                        ((slides[currentSlide - 1] as any).lyricStyle?.italic ?? editorState.isItalic)
-                          ? "italic"
-                          : "normal",
+                      fontWeight: editorState.isBold ? "bold" : "normal",
+                      fontStyle: editorState.isItalic ? "italic" : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",
@@ -2856,7 +2849,9 @@ export const LivePresentation = (): JSX.Element => {
                         overflow: "hidden",
                       }),
                     }}>
-                    {slides[currentSlide - 1].content}
+                    {/* The song's own formatting from the Song editor sits on top of
+                        these live settings */}
+                    <SongLyricsBody slide={slides[currentSlide - 1]} />
                   </div>
                 </>
               ) : slides[currentSlide - 1].type === "bible" ? (

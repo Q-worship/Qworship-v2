@@ -2,6 +2,7 @@ import React, { useRef } from "react";
 import { useLivePresentationState, TEXT_SIZE_MAX_REM } from "../useLivePresentationState";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "../../components/SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 
 export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState>> = (props) => {
@@ -439,21 +440,12 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
                         liveConsoleFontFamily,
-                      // Formatting saved with the song (Song editor) wins over the
-                      // live console defaults
                       color:
-                        (slides[currentSlide - 1] as any).lyricStyle?.color ||
                         editorState.styleColor ||
                         editorState.textColor ||
                         liveConsoleFontColor,
-                      fontWeight:
-                        ((slides[currentSlide - 1] as any).lyricStyle?.bold ?? editorState.isBold ?? liveConsoleBold)
-                          ? "bold"
-                          : "normal",
-                      fontStyle:
-                        ((slides[currentSlide - 1] as any).lyricStyle?.italic ?? editorState.isItalic ?? liveConsoleItalic)
-                          ? "italic"
-                          : "normal",
+                      fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
+                      fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",
@@ -467,7 +459,9 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         overflow: "hidden",
                       }),
                     }}>
-                    {slides[currentSlide - 1].content}
+                    {/* The song's own formatting from the Song editor sits on top of
+                        these live settings */}
+                    <SongLyricsBody slide={slides[currentSlide - 1]} />
                   </div>
                 </>
               ) : slides[currentSlide - 1].type === "bible" ? (

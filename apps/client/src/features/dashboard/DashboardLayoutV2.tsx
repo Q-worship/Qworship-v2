@@ -45,7 +45,8 @@ import { SongbookModal } from "@/features/dashboard/components/SongbookModal";
 import { SongSearchModal } from "@/features/dashboard/components/SongSearchModal";
 import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
-import { applySongStylesToSlides } from "@/features/songs/songFormatting";
+import { applySongToSlides } from "@/features/songs/songFormatting";
+import { lyricHtmlForSection } from "@/features/songs/songRichText";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
 import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
 import {
@@ -1271,6 +1272,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           sectionLabel: s.sectionLabel,
           // Song formatting (bold / italic / colour) must trigger a re-send to the live window
           lyricStyle: s.lyricStyle,
+          lyricHtml: s.lyricHtml,
           itemId: s.itemId,
           subtype: s.subtype,
         })),
@@ -2692,9 +2694,13 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           sectionLabel: label,
           sectionName, // the section's own name in the lyrics, used to match its formatting
           songTitle: song.title, // Store song title separately for display
-          // Bold / italic / colour chosen for this section in the Song editor
+          // Formatting chosen for this section in the Song editor: the section's base
+          // style, and inline formatting on selected words / lines
           ...(song.sectionStyles?.[sectionName]
             ? { lyricStyle: song.sectionStyles[sectionName] }
+            : {}),
+          ...(lyricHtmlForSection(song, sectionName, (lyrics as string).trim())
+            ? { lyricHtml: lyricHtmlForSection(song, sectionName, (lyrics as string).trim()) }
             : {}),
         });
 
@@ -2719,18 +2725,26 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     return slides;
   };
 
-  // Copies a saved song's bold / italic / colour onto its slides that are already in the
-  // service. Slides are matched to sections by section name; slides added before section
-  // names were recorded fall back to their order in the song.
+  // Copies a saved song's text and formatting (section styles and inline formatting) onto
+  // its slides that are already in the service, so the live screen shows the edits. Slides
+  // are matched to sections by section name; slides added before section names were
+  // recorded fall back to their order in the song.
   const applySongFormattingToService = (song: any) => {
     if (!song?.id) return;
     const styles: Record<string, any> = song.sectionStyles || {};
-    const labels = Object.keys(parseLyricsIntoSections(song.lyrics || ""));
+    const sections = Object.entries(parseLyricsIntoSections(song.lyrics || "")).map(
+      ([name, content]) => ({ name, content: String(content).trim() }),
+    );
 
     const patchItems = (items: any[]) =>
       items.map((item) =>
         Array.isArray(item?.slides)
-          ? { ...item, slides: applySongStylesToSlides(item.slides, song.id, labels, styles) }
+          ? {
+              ...item,
+              slides: applySongToSlides(item.slides, song.id, sections, styles, (name, content) =>
+                lyricHtmlForSection(song, name, content),
+              ),
+            }
           : item,
       );
 

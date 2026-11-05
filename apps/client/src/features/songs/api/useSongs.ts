@@ -17,8 +17,10 @@ export interface Song {
     content: string;
   }>;
   verseOrder?: string;
-  /** Bold / italic / colour per section, keyed by the section label */
-  sectionStyles?: Record<string, { bold?: boolean; italic?: boolean; color?: string }>;
+  /** Base formatting per section (font, size, bold, colour ...), keyed by the section label */
+  sectionStyles?: Record<string, import("@/features/songs/songFormatting").LyricStyle>;
+  /** Inline formatting per section (sanitised HTML), keyed by the section label */
+  sectionHtml?: Record<string, string>;
   authors?: string[] | string;
   topics?: string[] | string;
   copyright?: string;

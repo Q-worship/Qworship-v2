@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
 import { getServiceSectionKey } from "./useHistoryManager";
+import { lyricHtmlForSection } from "@/features/songs/songRichText";
 
 interface UseServiceItemManagerProps {
   selectedServiceSection: string | null;
@@ -143,9 +144,13 @@ export function useServiceItemManager({
           sectionLabel: label,
           sectionName, // the section's own name in the lyrics, used to match its formatting
           songTitle: song.title,
-          // Bold / italic / colour chosen for this section in the Song editor
+          // Formatting chosen for this section in the Song editor: the section's base
+          // style, and inline formatting on selected words / lines
           ...(song.sectionStyles?.[sectionName]
             ? { lyricStyle: song.sectionStyles[sectionName] }
+            : {}),
+          ...(lyricHtmlForSection(song, sectionName, (lyrics as string).trim())
+            ? { lyricHtml: lyricHtmlForSection(song, sectionName, (lyrics as string).trim()) }
             : {}),
         });
 

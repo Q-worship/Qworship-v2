@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { XIcon, PlusIcon, Edit, Trash2, ChevronDownIcon, Bold as BoldIcon, Italic as ItalicIcon } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { XIcon, PlusIcon, Edit, Trash2, ChevronDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,8 +13,18 @@ import {
   commonLyricStyle,
   mergeLyricStyle,
   sameLyricStyle,
+  type LyricAlign,
+  type LyricCase,
   type LyricStyle,
 } from "@/features/songs/songFormatting";
+import {
+  applyInlineFontSize,
+  lyricHtmlForSection,
+  plainToLyricHtml,
+  sanitizeLyricHtml,
+} from "@/features/songs/songRichText";
+import { LyricEditor, readLyricEditor, type LyricEditorValue } from "@/features/songs/LyricEditor";
+import { LyricToolbar } from "@/features/songs/LyricToolbar";
 
 interface SectionItem {
   id: string;
@@ -22,8 +32,18 @@ interface SectionItem {
   number: number;
   label: string;
   content: string;
+  /** Base formatting for the whole section */
   style?: LyricStyle;
+  /** Inline formatting on selected words / lines (sanitised HTML) */
+  html?: string;
 }
+
+// "rgb(12, 34, 56)" (what the browser reports) as "#0c2238" (what a colour input wants)
+const rgbToHex = (value: string): string | undefined => {
+  const match = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(value);
+  if (!match) return /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
+  return `#${[match[1], match[2], match[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("")}`;
+};
 
 interface SongEditorModalProps {
   isOpen: boolean;
@@ -50,7 +70,14 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   // The section the formatting toolbar applies to; null means the whole song
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
-  
+  // Bumped to reload every lyric box from the sections' data (opening a song, clearing formatting)
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  // The lyric boxes by section id, and the words currently selected in them
+  const editorsRef = useRef(new Map<string, HTMLDivElement>());
+  const savedSelection = useRef<{ sectionId: string; range: Range } | null>(null);
+  const [inlineSectionId, setInlineSectionId] = useState<string | null>(null);
+  const [, setSelectionTick] = useState(0);
+
   const [sections, setSections] = useState<SectionItem[]>([
     { id: "v1", type: "verse", number: 1, label: "V1 (Verse 1)", content: "" },
     { id: "v2", type: "verse", number: 2, label: "V2 (Verse 2)", content: "" },
@@ -68,6 +95,10 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   // Reset or populate fields when modal opens or initialData changes
   React.useEffect(() => {
     setSelectedSectionId(null);
+    savedSelection.current = null;
+    setInlineSectionId(null);
+    // Reload the lyric boxes from whatever is set below
+    setEditorEpoch((epoch) => epoch + 1);
     if (initialData) {
       setSongTitle(initialData.title || "");
       setAlternativeTitle(
@@ -91,7 +122,13 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
       if (initialData.lyrics) {
         const parsedSections = parseLyricsIntoSections(initialData.lyrics).map((section) => {
           const style = initialData.sectionStyles?.[section.label];
-          return style ? { ...section, style } : section;
+          // Inline formatting is only kept while it still matches the section's text
+          const html = lyricHtmlForSection(initialData, section.label, section.content);
+          return {
+            ...section,
+            ...(style ? { style } : {}),
+            ...(html ? { html } : {}),
+          };
         });
         if (parsedSections.length > 0) {
           setSections(parsedSections);
@@ -223,26 +260,79 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     setShowAddOptions(false);
   };
 
-  const updateSectionContent = (sectionId: string, content: string) => {
-    setSections(sections.map(section => 
-      section.id === sectionId ? { ...section, content } : section
-    ));
+  // The lyric box reports its text and inline formatting here as it is edited
+  const updateSectionText = (sectionId: string, value: LyricEditorValue) => {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId ? { ...section, content: value.plain, html: value.html } : section,
+      ),
+    );
   };
 
-  // ---- Formatting: one toolbar. With a section selected it formats only that section;
-  // with none selected it formats the whole song (every section). ----
+  // ---- Formatting: one toolbar, three levels ----
+  //  - words selected in a lyric box  -> only those words (inline formatting)
+  //  - a section selected             -> that whole section
+  //  - nothing selected               -> the whole song (every section)
   const targetSections = selectedSectionId
     ? sections.filter((section) => section.id === selectedSectionId)
     : sections;
 
-  // What the toolbar shows: the selected section's style, or, for the whole song, the
-  // value every section agrees on (nothing when they differ)
-  const shownStyle: LyricStyle = commonLyricStyle(targetSections.map((section) => section.style));
-  const hasAnyStyle = targetSections.some(
-    (section) => section.style?.bold || section.style?.italic || section.style?.color,
-  );
+  // Keep track of what is selected inside the lyric boxes
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onSelectionChange = () => {
+      const selection = document.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      for (const [id, el] of editorsRef.current) {
+        if (el.contains(range.commonAncestorContainer)) {
+          savedSelection.current = { sectionId: id, range: range.cloneRange() };
+          setInlineSectionId(range.collapsed ? null : id);
+          setSelectionTick((tick) => tick + 1);
+          return;
+        }
+      }
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [isOpen]);
 
-  const applyStyle = (change: LyricStyle) => {
+  const registerEditor = (sectionId: string) => (el: HTMLDivElement | null) => {
+    if (el) editorsRef.current.set(sectionId, el);
+    else editorsRef.current.delete(sectionId);
+  };
+
+  // Choosing a section (or none) also drops any words that were selected elsewhere
+  const selectSection = (sectionId: string | null) => {
+    if (savedSelection.current && savedSelection.current.sectionId !== sectionId) {
+      savedSelection.current = null;
+      setInlineSectionId(null);
+    }
+    setSelectedSectionId(sectionId);
+  };
+
+  const syncSectionFromEditor = (sectionId: string) => {
+    const el = editorsRef.current.get(sectionId);
+    if (el) updateSectionText(sectionId, readLyricEditor(el));
+  };
+
+  // Runs a browser editing command on the selected words; false when no words are selected
+  const runOnSelection = (command: (el: HTMLDivElement) => void): boolean => {
+    const saved = savedSelection.current;
+    if (!saved || saved.range.collapsed) return false;
+    const el = editorsRef.current.get(saved.sectionId);
+    if (!el) return false;
+    el.focus();
+    const selection = document.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(saved.range);
+    document.execCommand("styleWithCSS", false, "true");
+    command(el);
+    syncSectionFromEditor(saved.sectionId);
+    return true;
+  };
+
+  const applyBaseStyle = (change: LyricStyle) => {
     setSections((current) =>
       current.map((section) =>
         !selectedSectionId || section.id === selectedSectionId
@@ -252,15 +342,69 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     );
   };
 
-  const clearStyle = () => {
-    setSections((current) =>
-      current.map((section) =>
-        !selectedSectionId || section.id === selectedSectionId
-          ? { ...section, style: undefined }
-          : section,
-      ),
-    );
+  // Formats the selected words if there are any, otherwise the section / whole song
+  const format = (inline: ((el: HTMLDivElement) => void) | null, base: LyricStyle | null) => {
+    if (inline && runOnSelection(inline)) return;
+    if (base) applyBaseStyle(base);
   };
+
+  const inlineActive = inlineSectionId !== null;
+  const askBrowser = (command: string): boolean => {
+    try {
+      return document.queryCommandState(command);
+    } catch {
+      return false;
+    }
+  };
+
+  // What the toolbar shows: for selected words, what the browser reports at the selection;
+  // otherwise the section's own style, or the value every section agrees on
+  const shownBase: LyricStyle = commonLyricStyle(targetSections.map((section) => section.style));
+  const shown: LyricStyle = (() => {
+    if (!inlineActive) return shownBase;
+    let fontFamily: string | undefined;
+    let color: string | undefined;
+    try {
+      const family = document.queryCommandValue("fontName").replace(/["']/g, "").split(",")[0].trim();
+      fontFamily = family || undefined;
+      color = rgbToHex(document.queryCommandValue("foreColor"));
+    } catch {
+      // not available in this browser
+    }
+    return {
+      ...shownBase,
+      bold: askBrowser("bold"),
+      italic: askBrowser("italic"),
+      underline: askBrowser("underline"),
+      strike: askBrowser("strikeThrough"),
+      fontFamily,
+      color,
+      fontSize: undefined,
+    };
+  })();
+
+  const hasAnyFormatting = targetSections.some(
+    (section) => section.style !== undefined || section.html !== undefined,
+  );
+
+  // Clear removes the base style and any inline formatting at the current level
+  const clearFormatting = () => {
+    if (inlineActive && runOnSelection(() => document.execCommand("removeFormat"))) return;
+    setSections((current) =>
+      current.map((section) => {
+        if (selectedSectionId && section.id !== selectedSectionId) return section;
+        const { style: _style, html: _html, ...rest } = section;
+        return rest;
+      }),
+    );
+    setEditorEpoch((epoch) => epoch + 1); // reload the boxes without their inline formatting
+  };
+
+  const scopeLabel = inlineActive
+    ? "Selected text"
+    : selectedSectionId
+      ? (sections.find((s) => s.id === selectedSectionId)?.label ?? "Section")
+      : "Whole song";
 
   const deleteSection = (sectionId: string) => {
     if (sections.length > 1) {
@@ -312,16 +456,20 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
       `[${section.label}]\n${section.content}`
     ).join('\n\n');
 
-    // Formatting per section, keyed by the section label used in the lyrics
+    // Formatting per section, keyed by the section label used in the lyrics: the base style
+    // of the whole section, and inline formatting on selected words / lines
     const sectionStyles: Record<string, LyricStyle> = {};
+    const sectionHtml: Record<string, string> = {};
     sections.forEach((section) => {
       if (section.style) sectionStyles[section.label] = section.style;
+      if (section.html) sectionHtml[section.label] = sanitizeLyricHtml(section.html);
     });
 
     const songData = {
       title: songTitle,
       alternativeTitles: alternativeTitle.trim() ? [alternativeTitle.trim()] : [],
       sectionStyles,
+      sectionHtml,
       lyrics,
       structure: JSON.stringify(verseOrder), // Convert array to JSON string
       authors,
@@ -371,7 +519,8 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-[#2a1f4b] rounded-lg w-full max-w-7xl max-h-[90vh] flex flex-col text-white overflow-hidden">
+      {/* Fixed height, so the window keeps its size when switching tabs */}
+      <div className="bg-[#2a1f4b] rounded-lg w-full max-w-7xl h-[90vh] flex flex-col text-white overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-600 flex-shrink-0">
           <h2 className="text-xl font-semibold">Song editor</h2>
@@ -418,10 +567,13 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Title & Lyrics Tab */}
           {activeTab === "title-lyrics" && (
             <div className="p-4 space-y-4">
+              {/* The title row and the toolbar end where the sections end (the buttons
+                  column on the right is w-20 plus a gap-4, which is pr-24) */}
+              <div className="pr-24 space-y-4">
               {/* Title Fields: song title and alternative title side by side */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -444,88 +596,63 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* One formatting toolbar. It formats the selected section, or the whole
-                  song when no section is selected; the result shows on the live screen. */}
-              <div className="mt-6 flex flex-wrap items-center gap-2 bg-[#3d3166] border border-gray-500 rounded p-2">
-                <span className="text-xs text-gray-300">Formatting</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#2a1f4b] text-white">
-                  {selectedSectionId
-                    ? (sections.find((s) => s.id === selectedSectionId)?.label ?? "Section")
-                    : "Whole song"}
-                </span>
-                {selectedSectionId && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSectionId(null)}
-                    className="text-[11px] text-[#c4b0ff] hover:underline"
-                  >
-                    Format whole song
-                  </button>
-                )}
-                <div className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => applyStyle({ bold: !shownStyle.bold })}
-                  aria-label="Bold"
-                  aria-pressed={!!shownStyle.bold}
-                  title="Bold"
-                  className={`h-7 w-7 rounded flex items-center justify-center transition-colors ${
-                    shownStyle.bold ? "bg-[#8356F3] text-white" : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
-                  }`}
-                >
-                  <BoldIcon size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyStyle({ italic: !shownStyle.italic })}
-                  aria-label="Italic"
-                  aria-pressed={!!shownStyle.italic}
-                  title="Italic"
-                  className={`h-7 w-7 rounded flex items-center justify-center transition-colors ${
-                    shownStyle.italic ? "bg-[#8356F3] text-white" : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
-                  }`}
-                >
-                  <ItalicIcon size={14} />
-                </button>
-                <label
-                  title="Text colour"
-                  className="relative h-7 w-7 rounded overflow-hidden border border-gray-500 cursor-pointer"
-                  style={{ background: shownStyle.color || "#ffffff" }}
-                >
-                  <input
-                    type="color"
-                    aria-label="Text colour"
-                    value={shownStyle.color || "#ffffff"}
-                    onChange={(e) => applyStyle({ color: e.target.value })}
-                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
-                  />
-                </label>
-                {hasAnyStyle && (
-                  <button
-                    type="button"
-                    onClick={clearStyle}
-                    title="Clear formatting"
-                    className="h-7 px-2 rounded bg-[#2a1f4b] text-xs text-gray-300 hover:bg-[#4a3a75]"
-                  >
-                    Clear
-                  </button>
-                )}
+              {/* The formatting toolbar: selected words, a selected section, or the whole song */}
+              <LyricToolbar
+                scopeLabel={scopeLabel}
+                inlineActive={inlineActive}
+                canFormatWholeSong={selectedSectionId !== null}
+                shown={shown}
+                canClear={hasAnyFormatting || inlineActive}
+                onWholeSong={() => selectSection(null)}
+                onBold={() => format(() => document.execCommand("bold"), { bold: !shownBase.bold })}
+                onItalic={() => format(() => document.execCommand("italic"), { italic: !shownBase.italic })}
+                onUnderline={() =>
+                  format(() => document.execCommand("underline"), { underline: !shownBase.underline })
+                }
+                onStrike={() =>
+                  format(() => document.execCommand("strikeThrough"), { strike: !shownBase.strike })
+                }
+                onColor={(hex) => format(() => document.execCommand("foreColor", false, hex), { color: hex })}
+                onHighlight={(hex) => format(() => document.execCommand("hiliteColor", false, hex), null)}
+                onFontFamily={(name) =>
+                  format(
+                    name ? () => document.execCommand("fontName", false, name) : null,
+                    { fontFamily: name || undefined },
+                  )
+                }
+                onFontSize={(percent) =>
+                  format(
+                    (el) => {
+                      // The browser only knows seven sizes; use its biggest as a marker and
+                      // swap in the exact size wanted
+                      document.execCommand("fontSize", false, "7");
+                      applyInlineFontSize(el, percent);
+                    },
+                    { fontSize: percent },
+                  )
+                }
+                onAlign={(align: LyricAlign) => format(null, { align })}
+                onCase={(value: LyricCase | undefined) => format(null, { textTransform: value })}
+                onLineHeight={(value) => format(null, { lineHeight: value })}
+                onLetterSpacing={(value) => format(null, { letterSpacing: value })}
+                onClear={clearFormatting}
+              />
               </div>
 
               {/* Sections (Songs & Choruses) */}
-              <div className="flex gap-4 mt-3">
+              <div className="flex gap-4">
                 {/* Sections List: click a section to format only it; click the gap
                     between sections to go back to formatting the whole song */}
                 <div
-                  className="flex-1 space-y-3"
+                  className="flex-1 min-w-0 space-y-3"
                   onClick={(e) => {
-                    if (e.target === e.currentTarget) setSelectedSectionId(null);
+                    if (e.target === e.currentTarget) selectSection(null);
                   }}
                 >
                   {sections.map((section, index) => (
                     <div
                       key={section.id}
-                      onClick={() => setSelectedSectionId(section.id)}
+                      onClick={() => selectSection(section.id)}
                       className={`bg-[#3d3166] border rounded cursor-pointer ${
                         selectedSectionId === section.id
                           ? "border-[#8356F3] ring-1 ring-[#8356F3]"
@@ -545,17 +672,17 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
                         </Button>
                       </div>
                       <div className="p-2">
-                        <Textarea
-                          value={section.content}
-                          onFocus={() => setSelectedSectionId(section.id)}
-                          onChange={(e) => updateSectionContent(section.id, e.target.value)}
-                          className="bg-transparent border-none text-white placeholder-gray-400 resize-none h-24 text-sm p-0"
-                          style={{
-                            fontWeight: section.style?.bold ? 700 : undefined,
-                            fontStyle: section.style?.italic ? "italic" : undefined,
-                            color: section.style?.color || undefined,
-                          }}
+                        {/* Edited as it will look: select words or lines to format just those */}
+                        <LyricEditor
+                          key={`${section.id}-${editorEpoch}`}
+                          initialHtml={
+                            section.html ? sanitizeLyricHtml(section.html) : plainToLyricHtml(section.content)
+                          }
+                          style={section.style}
                           placeholder={`Enter ${section.type} lyrics...`}
+                          onChange={(value) => updateSectionText(section.id, value)}
+                          onFocus={() => selectSection(section.id)}
+                          registerEditor={registerEditor(section.id)}
                         />
                       </div>
                     </div>
