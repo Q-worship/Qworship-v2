@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, LayoutGrid, List, Plus, Check, X } from "lucide-react";
+import {
+  Upload,
+  LayoutGrid,
+  List,
+  Plus,
+  Check,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
 import {
   parsePptx,
   type ParsedPresentation,
@@ -340,6 +349,18 @@ export const ImportPresentationModal: React.FC<
   /* ---------- Step 3: allocate slides to service sections ---------- */
   const total = presentation.slides.length;
 
+  // Health check: which slides come across exactly as authored, which have caveats
+  const warningsOf = (slide: ParsedSlide) =>
+    slide.health.notes.filter((note) => note.level === "warning");
+  const slidesWithWarnings = presentation.slides.filter(
+    (slide) => slide.health.status !== "ready" && warningsOf(slide).length > 0,
+  ).length;
+  const tooltipFor = (slide: ParsedSlide) =>
+    [
+      slide.title || `Slide ${slide.number}`,
+      ...warningsOf(slide).map((note) => `⚠ ${note.message}`),
+    ].join("\n");
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]">
       <div className="relative bg-[#2a1f3d] border border-[#8356F3]/30 rounded-xl shadow-2xl w-full max-w-6xl max-h-[92vh] mx-4 flex flex-col">
@@ -361,6 +382,24 @@ export const ImportPresentationModal: React.FC<
               {presentation.fileName}
             </span>{" "}
             . You can allocate the slides below to the respective service items.
+          </p>
+          <p
+            className={`mt-3 inline-flex items-center gap-1.5 text-xs ${
+              slidesWithWarnings === 0 ? "text-emerald-300" : "text-amber-300"
+            }`}>
+            {slidesWithWarnings === 0 ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Health check: all {total} slides can be imported as they appear in
+                PowerPoint.
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Health check: {total - slidesWithWarnings} of {total} slides import
+                exactly. Hover the warning on a slide to see what differs.
+              </>
+            )}
           </p>
 
           <div className="flex items-start justify-between mt-14">
@@ -404,15 +443,21 @@ export const ImportPresentationModal: React.FC<
                 return (
                   <div
                     key={slide.number}
-                    title={slide.title || `Slide ${slide.number}`}
+                    title={tooltipFor(slide)}
                     onClick={() => openAllocation(slide.number)}
                     className={`group cursor-pointer rounded-lg border p-1 transition-colors ${
                       section
                         ? "border-[#8356F3]/70"
                         : "border-transparent hover:border-[#8356F3]/70"
                     }`}>
-                    <div className="h-20 rounded-md bg-[#3a3147] flex items-center justify-center">
+                    <div className="relative h-20 rounded-md bg-[#3a3147] flex items-center justify-center">
                       <PowerPointGlyph className="w-9 h-9" />
+                      {warningsOf(slide).length > 0 && (
+                        <AlertTriangle
+                          aria-label="Some of this slide can't be reproduced exactly"
+                          className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-amber-300"
+                        />
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-1 mt-2 px-0.5">
                       <span className="text-sm font-medium text-gray-200">
@@ -456,6 +501,14 @@ export const ImportPresentationModal: React.FC<
                       {slide.title && (
                         <div className="text-xs text-gray-400 truncate">
                           {slide.title}
+                        </div>
+                      )}
+                      {warningsOf(slide).length > 0 && (
+                        <div
+                          className="flex items-center gap-1 text-[11px] text-amber-300 truncate"
+                          title={tooltipFor(slide)}>
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          {warningsOf(slide)[0].message}
                         </div>
                       )}
                     </div>
