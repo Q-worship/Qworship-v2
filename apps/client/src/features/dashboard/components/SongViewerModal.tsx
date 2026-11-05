@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useDeleteSong } from "@/features/songs/api/useSongs";
+import { isSavedSongId, useDeleteSong } from "@/features/songs/api/useSongs";
 
 interface SongData {
   id: string;
@@ -61,6 +61,18 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
   const deleteMutation = useDeleteSong();
 
   const handleDelete = () => {
+    // The built-in "Example Song" isn't stored on the server, so there is nothing to delete;
+    // it disappears by itself once the account has songs of its own
+    if (song?.id && !isSavedSongId(song.id)) {
+      toast({
+        title: "This is the built-in example",
+        description: "It goes away on its own as soon as you add your own songs.",
+        className: "bg-gradient-to-r from-purple-900 to-purple-800 text-white backdrop-blur-sm"
+      });
+      onClose();
+      setShowDeleteConfirmation(false);
+      return;
+    }
     if (song?.id) {
       deleteMutation.mutate(song.id, {
         onSuccess: () => {

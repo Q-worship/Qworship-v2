@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useCreateSong, useUpdateSong } from "@/features/songs/api/useSongs";
+import { isSavedSongId, useCreateSong, useUpdateSong } from "@/features/songs/api/useSongs";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   commonLyricStyle,
@@ -479,7 +479,9 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     
     setShowSaveConfirmation(true);
     
-    const isEditing = initialData && initialData.id;
+    // Only a song that is really saved is updated; the built-in "Example Song" (and anything
+    // else without a saved id) is saved as a new song in this account's library
+    const isEditing = isSavedSongId(initialData?.id);
     const mutationOptions = {
       onSuccess: (data: any) => {
         setShowSaveConfirmation(false);
@@ -496,16 +498,20 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
       },
       onError: (error: any) => {
         setShowSaveConfirmation(false);
+        // 404: the song isn't in this account's library (songs are private to each account)
+        const notInLibrary = isEditing && String(error?.message ?? "").startsWith("404");
         toast({
           title: "Error",
-          description: "Failed to save song: " + (error.message || "Unknown error"),
+          description: notInLibrary
+            ? "This song isn't in your library, so it can't be updated. Create it as a new song to keep your changes."
+            : "Failed to save song: " + (error.message || "Unknown error"),
           variant: "destructive",
         });
       }
     };
 
     if (isEditing) {
-      updateSongMutation.mutate({ id: initialData.id, songData }, mutationOptions);
+      updateSongMutation.mutate({ id: initialData!.id, songData }, mutationOptions);
     } else {
       createSongMutation.mutate(songData, mutationOptions);
     }

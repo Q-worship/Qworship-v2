@@ -29,6 +29,8 @@ export interface Song {
   lyrics?: string;
 }
 
+export { isSavedSongId } from "../songId";
+
 export const useSongs = () => {
   return useQuery<{ success: boolean; songs: Song[] }>({
     queryKey: ["/api/songs"],
