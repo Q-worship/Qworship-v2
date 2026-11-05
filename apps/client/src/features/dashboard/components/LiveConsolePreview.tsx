@@ -248,16 +248,21 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
             <div className="text-center w-full px-2 bg-black/40 rounded-lg p-2">
               {currentSlideData.type === "verse" || currentSlideData.type === "chorus" ? (
                 <>
-                  <div className="text-purple-300 text-[7px] font-semibold mb-0.5">
-                    {currentSlideData.songTitle || currentSlideData.title}
-                  </div>
-                  <div className="text-white/70 text-[6px] uppercase tracking-wider mb-1">
-                    {currentSlideData.sectionLabel ||
-                      (currentSlideData.type === "verse" ? "VERSE" : "CHORUS")}
-                  </div>
+                  {/* Mirrors the live screen: lyrics only, no title or section label */}
                   <div
                     className="text-white font-medium leading-relaxed text-[8px] whitespace-pre-line"
-                    style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
+                    style={{
+                      textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+                      ...((currentSlideData as any).lyricStyle?.color && {
+                        color: (currentSlideData as any).lyricStyle.color,
+                      }),
+                      ...((currentSlideData as any).lyricStyle?.bold != null && {
+                        fontWeight: (currentSlideData as any).lyricStyle.bold ? 700 : 400,
+                      }),
+                      ...((currentSlideData as any).lyricStyle?.italic && {
+                        fontStyle: "italic",
+                      }),
+                    }}
                   >
                     {currentSlideData.content}
                   </div>

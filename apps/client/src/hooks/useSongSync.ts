@@ -97,13 +97,16 @@ export const useSongSync = () => {
         // After syncing refresh the RAM cache to reload the newest list into memory
         await useSongRAMCache.getState().loadFromDisk(true);
       } else {
-        // If data is weirdly empty, we can just mark it synced to avoid endless retries
+        // The account has no songs (songs are private to each account): clear anything
+        // cached from before so another account's songs can't linger on this device
+        await db.songs.clear();
         await db.syncState.put({
           version: "songs",
           status: "synced",
           syncedAt: Date.now(),
           totalVerses: 0
         });
+        await useSongRAMCache.getState().loadFromDisk(true);
       }
     } catch (err: any) {
       console.error("[Offline Songs] Failed to sync:", err);

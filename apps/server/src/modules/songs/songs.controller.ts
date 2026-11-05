@@ -1,12 +1,34 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { Song, ISong } from './song.model.js';
 import { SongParser } from './songParser.js'; // The legacy parsing engine
 
-export const getSongsRevision = async (_req: Request, res: Response) => {
+// Songs belong to the account that created them: every query below is limited to
+// the signed-in user's own songs, so nobody sees, edits or deletes anyone else's.
+const mine = (req: any) => ({ createdBy: req.user._id });
+const ownedById = (req: any) => ({ _id: req.params.id, ...mine(req) });
+
+// Fields a client may change on an existing song (never createdBy / organizationId)
+const EDITABLE_FIELDS = [
+  'title', 'artist', 'album', 'lyrics', 'structure', 'key', 'tempo', 'ccliNumber',
+  'tags', 'sections', 'sectionStyles', 'alternativeTitles', 'authors', 'topics', 'isActive',
+] as const;
+
+const pickEditable = (body: any) => {
+  const update: Record<string, unknown> = {};
+  for (const field of EDITABLE_FIELDS) {
+    if (body && body[field] !== undefined) update[field] = body[field];
+  }
+  return update;
+};
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const getSongsRevision = async (req: any, res: Response) => {
   try {
     const [count, latest] = await Promise.all([
-      Song.countDocuments(),
-      Song.findOne({}, { updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),
+      Song.countDocuments(mine(req)),
+      Song.findOne(mine(req), { updatedAt: 1 }).sort({ updatedAt: -1 }).lean(),
     ]);
     const latestUpdate = latest?.updatedAt ? new Date(latest.updatedAt).getTime() : 0;
     res.json({ success: true, fingerprint: `${count}:${latestUpdate}`, count });
@@ -16,13 +38,11 @@ export const getSongsRevision = async (_req: Request, res: Response) => {
   }
 };
 
-// Get all songs for organization
+// Get the signed-in user's songs
 export const getSongs = async (req: any, res: Response) => {
   try {
-    // In our new architecture we don't have hardcoded organizations for everyone yet. 
-    // We fetch globally or rely on UI-side filtering if user has no org context.
-    const songs = await Song.find().sort({ title: 1 });
-    
+    const songs = await Song.find(mine(req)).sort({ title: 1 });
+
     // Convert structure to frontend format natively
     const formattedSongs = songs.map((s) => ({
       ...s.toObject(),
@@ -40,7 +60,10 @@ export const getSongs = async (req: any, res: Response) => {
 // Get single song logic
 export const getSongById = async (req: any, res: Response) => {
   try {
-    const song = await Song.findById(req.params.id);
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: "Song not found" });
+    }
+    const song = await Song.findOne(ownedById(req));
     if (!song) return res.status(404).json({ success: false, error: "Song not found" });
 
     res.json({ success: true, song: { ...song.toObject(), id: song._id.toString() } });
@@ -52,8 +75,8 @@ export const getSongById = async (req: any, res: Response) => {
 // Create a new song into MongoDB
 export const createSong = async (req: any, res: Response) => {
   try {
-    const { title, artist, album, lyrics, structure, key, tempo, tags, sections, authors, topics, ccliNumber } = req.body;
-    
+    const { title, artist, album, lyrics, structure, key, tempo, tags, sections, sectionStyles, alternativeTitles, authors, topics, ccliNumber } = req.body;
+
     // We map frontend 'sections' into our embedded schema format
     const newSong = await Song.create({
       title,
@@ -62,6 +85,8 @@ export const createSong = async (req: any, res: Response) => {
       lyrics,
       structure: Array.isArray(structure) ? structure : [],
       sections: Array.isArray(sections) ? sections : [],
+      sectionStyles: sectionStyles && typeof sectionStyles === 'object' ? sectionStyles : {},
+      alternativeTitles: Array.isArray(alternativeTitles) ? alternativeTitles : [],
       key: key || '',
       tempo: tempo || 120,
       tags: tags || [],
@@ -81,9 +106,12 @@ export const createSong = async (req: any, res: Response) => {
 
 export const updateSong = async (req: any, res: Response) => {
   try {
-    const updated = await Song.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: "Not found" });
+    }
+    const updated = await Song.findOneAndUpdate(ownedById(req), pickEditable(req.body), { new: true });
     if (!updated) return res.status(404).json({ success: false, error: "Not found" });
-    
+
     res.json({ success: true, song: { ...updated.toObject(), id: updated._id.toString() } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Update failed" });
@@ -92,17 +120,24 @@ export const updateSong = async (req: any, res: Response) => {
 
 export const deleteSong = async (req: any, res: Response) => {
   try {
-    await Song.findByIdAndDelete(req.params.id);
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: "Not found" });
+    }
+    const deleted = await Song.findOneAndDelete(ownedById(req));
+    if (!deleted) return res.status(404).json({ success: false, error: "Not found" });
     res.json({ success: true, message: "Song deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Deletion failed" });
   }
 };
 
-export const getSongForProjection = async (req: Request, res: Response) => {
+export const getSongForProjection = async (req: any, res: Response) => {
   try {
     const { songId } = req.body;
-    const song = await Song.findById(songId);
+    if (!mongoose.isValidObjectId(songId)) {
+      return res.status(404).json({ success: false, error: "Song not found" });
+    }
+    const song = await Song.findOne({ _id: songId, ...mine(req) });
     if (!song) return res.status(404).json({ success: false, error: "Song not found" });
 
     res.json({ success: true, song: { ...song.toObject(), id: song._id.toString() } });
@@ -114,14 +149,15 @@ export const getSongForProjection = async (req: Request, res: Response) => {
 export const searchSongs = async (req: any, res: Response) => {
   try {
     const { query } = req.body;
-    const regex = new RegExp(query, 'i');
+    const regex = new RegExp(escapeRegex(String(query ?? '')), 'i');
     const songs = await Song.find({
+      ...mine(req),
       $or: [{ title: regex }, { artist: regex }, { lyrics: regex }]
     });
 
-    res.json({ 
-      success: true, 
-      songs: songs.map(s => ({ ...s.toObject(), id: s._id.toString() })) 
+    res.json({
+      success: true,
+      songs: songs.map(s => ({ ...s.toObject(), id: s._id.toString() }))
     });
   } catch (error) {
     res.status(500).json({ success: false, error: "Search failed" });
@@ -154,7 +190,7 @@ export const importSong = async (req: any, res: Response) => {
       lyrics: parsedSong.lyrics,
       structure: parsedSong.structure || [],
       // The importer leaves sections blank initially until edited on the dashboard
-      sections: [], 
+      sections: [],
       organizationId: req.user._id,
       createdBy: req.user._id,
     });

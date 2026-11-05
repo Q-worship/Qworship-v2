@@ -2820,31 +2820,8 @@ export const LivePresentation = (): JSX.Element => {
               {slides[currentSlide - 1].type === "verse" ||
               slides[currentSlide - 1].type === "chorus" ? (
                 <>
-                  <h1
-                    className={`text-white mb-6 ${getTextSizeClass()}`}
-                    style={{
-                      fontFamily: titleEditorState.selectedFont || "Lufgord",
-                      color: titleEditorState.textColor || "#ffffff",
-                      textAlign: slideAlignment,
-                      fontWeight: titleEditorState.isBold ? "bold" : "normal",
-                      fontStyle: titleEditorState.isItalic
-                        ? "italic"
-                        : "normal",
-                      textDecoration:
-                        `${titleEditorState.isUnderline ? "underline" : ""} ${titleEditorState.isStrikethrough ? "line-through" : ""}`.trim() ||
-                        "none",
-                    }}>
-                    {slides[currentSlide - 1].songTitle ||
-                      slides[currentSlide - 1].title}
-                  </h1>
-                  <div
-                    className={`text-purple-400 font-medium mb-6 ${getTextSizeClass()}`}
-                    style={{ textAlign: slideAlignment }}>
-                    {slides[currentSlide - 1].sectionLabel ||
-                      (slides[currentSlide - 1].type === "verse"
-                        ? "VERSE"
-                        : "CHORUS")}
-                  </div>
+                  {/* Songs show only the lyrics on the live screen: no song title and
+                      no verse / chorus label */}
                   <div
                     className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
                     style={{
@@ -2852,12 +2829,20 @@ export const LivePresentation = (): JSX.Element => {
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
                         "Lufgord",
+                      // Formatting saved with the song (Song editor) wins over the defaults
                       color:
+                        (slides[currentSlide - 1] as any).lyricStyle?.color ||
                         editorState.styleColor ||
                         editorState.textColor ||
                         "#ffffff",
-                      fontWeight: editorState.isBold ? "bold" : "normal",
-                      fontStyle: editorState.isItalic ? "italic" : "normal",
+                      fontWeight:
+                        ((slides[currentSlide - 1] as any).lyricStyle?.bold ?? editorState.isBold)
+                          ? "bold"
+                          : "normal",
+                      fontStyle:
+                        ((slides[currentSlide - 1] as any).lyricStyle?.italic ?? editorState.isItalic)
+                          ? "italic"
+                          : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",

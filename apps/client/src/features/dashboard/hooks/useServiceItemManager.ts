@@ -142,6 +142,10 @@ export function useServiceItemManager({
           content: (lyrics as string).trim(),
           sectionLabel: label,
           songTitle: song.title,
+          // Bold / italic / colour chosen for this section in the Song editor
+          ...(song.sectionStyles?.[sectionName]
+            ? { lyricStyle: song.sectionStyles[sectionName] }
+            : {}),
         });
 
         slideNumber++;

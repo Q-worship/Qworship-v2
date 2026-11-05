@@ -430,31 +430,8 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
               {slides[currentSlide - 1].type === "verse" ||
               slides[currentSlide - 1].type === "chorus" ? (
                 <>
-                  <h1
-                    className={`text-white mb-6 ${getTextSizeClass()}`}
-                    style={{
-                      fontFamily: titleEditorState.selectedFont || liveConsoleFontFamily,
-                      color: titleEditorState.textColor || liveConsoleFontColor,
-                      textAlign: slideAlignment,
-                      fontWeight: (titleEditorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
-                      fontStyle: (titleEditorState.isItalic ?? liveConsoleItalic)
-                        ? "italic"
-                        : "normal",
-                      textDecoration:
-                        `${titleEditorState.isUnderline ? "underline" : ""} ${titleEditorState.isStrikethrough ? "line-through" : ""}`.trim() ||
-                        "none",
-                    }}>
-                    {slides[currentSlide - 1].songTitle ||
-                      slides[currentSlide - 1].title}
-                  </h1>
-                  <div
-                    className={`text-purple-400 font-medium mb-6 ${getTextSizeClass()}`}
-                    style={{ textAlign: slideAlignment }}>
-                    {slides[currentSlide - 1].sectionLabel ||
-                      (slides[currentSlide - 1].type === "verse"
-                        ? "VERSE"
-                        : "CHORUS")}
-                  </div>
+                  {/* Songs show only the lyrics on the live screen: no song title and
+                      no verse / chorus label */}
                   <div
                     className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
                     style={{
@@ -462,12 +439,21 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                         editorState.styleFontFamily ||
                         editorState.selectedFont ||
                         liveConsoleFontFamily,
+                      // Formatting saved with the song (Song editor) wins over the
+                      // live console defaults
                       color:
+                        (slides[currentSlide - 1] as any).lyricStyle?.color ||
                         editorState.styleColor ||
                         editorState.textColor ||
                         liveConsoleFontColor,
-                      fontWeight: (editorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
-                      fontStyle: (editorState.isItalic ?? liveConsoleItalic) ? "italic" : "normal",
+                      fontWeight:
+                        ((slides[currentSlide - 1] as any).lyricStyle?.bold ?? editorState.isBold ?? liveConsoleBold)
+                          ? "bold"
+                          : "normal",
+                      fontStyle:
+                        ((slides[currentSlide - 1] as any).lyricStyle?.italic ?? editorState.isItalic ?? liveConsoleItalic)
+                          ? "italic"
+                          : "normal",
                       textDecoration:
                         `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
                         "none",

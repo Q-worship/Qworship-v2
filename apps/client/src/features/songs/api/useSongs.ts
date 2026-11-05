@@ -17,6 +17,8 @@ export interface Song {
     content: string;
   }>;
   verseOrder?: string;
+  /** Bold / italic / colour per section, keyed by the section label */
+  sectionStyles?: Record<string, { bold?: boolean; italic?: boolean; color?: string }>;
   authors?: string[] | string;
   topics?: string[] | string;
   copyright?: string;

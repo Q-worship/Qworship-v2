@@ -127,36 +127,7 @@ export default function OBSPresentationView() {
           >
             {currentSlide.type === 'song' && (
               <>
-                {currentSlide.title && (
-                  <h1
-                    className="font-bold mb-4"
-                    style={{
-                      color: textColor,
-                      fontFamily: fontFamily,
-                      fontSize: `calc(${fontSize} * 0.7)`,
-                      textShadow: '2px 2px 8px rgba(0, 0, 0, 0.9)',
-                      marginBottom: '1.5rem',
-                    }}
-                    data-testid="slide-title"
-                  >
-                    {currentSlide.title}
-                  </h1>
-                )}
-                {currentSlide.sectionTitle && (
-                  <h2
-                    className="font-semibold mb-6"
-                    style={{
-                      color: '#8DD3F5',
-                      fontFamily: fontFamily,
-                      fontSize: `calc(${fontSize} * 0.5)`,
-                      textShadow: '2px 2px 6px rgba(0, 0, 0, 0.8)',
-                      marginBottom: '2rem',
-                    }}
-                    data-testid="slide-section-title"
-                  >
-                    {currentSlide.sectionTitle}
-                  </h2>
-                )}
+                {/* Songs show only the lyrics: no song title and no section label */}
                 <div
                   className="whitespace-pre-line leading-relaxed"
                   style={{

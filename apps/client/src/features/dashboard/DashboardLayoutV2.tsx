@@ -1168,7 +1168,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       const label: string = slide.sectionLabel ?? slide.title ?? "";
       const songTitle: string = slide.songTitle ?? "";
       if (ltEnabled) ltProjectLyric(content, label, songTitle, currentUserId);
-      if (mpEnabled) mpProjectLyric(content, label, songTitle, mpUserId);
+      // The audience / NDI screen shows the lyrics only: no section label or song title
+      if (mpEnabled) mpProjectLyric(content, "", "", mpUserId);
     } else if (type === "announcement") {
       const category: string = slide.category ?? slide.title ?? "";
       const subtitle: string = slide.subtitle ?? "";
@@ -2687,6 +2688,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           content: (lyrics as string).trim(),
           sectionLabel: label,
           songTitle: song.title, // Store song title separately for display
+          // Bold / italic / colour chosen for this section in the Song editor
+          ...(song.sectionStyles?.[sectionName]
+            ? { lyricStyle: song.sectionStyles[sectionName] }
+            : {}),
         });
 
         slideNumber++;

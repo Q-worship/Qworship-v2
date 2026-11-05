@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { XIcon, PlusIcon, Edit, Trash2, ChevronDownIcon } from "lucide-react";
+import { XIcon, PlusIcon, Edit, Trash2, ChevronDownIcon, Bold as BoldIcon, Italic as ItalicIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,12 +10,20 @@ import { apiRequest } from "@/lib/queryClient";
 import { useCreateSong, useUpdateSong } from "@/features/songs/api/useSongs";
 import { useDebounce } from "@/hooks/use-debounce";
 
+/** How a section's lyrics look on the live screen; unset means "use the live defaults" */
+interface LyricStyle {
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+}
+
 interface SectionItem {
   id: string;
   type: "verse" | "chorus";
   number: number;
   label: string;
   content: string;
+  style?: LyricStyle;
 }
 
 interface SongEditorModalProps {
@@ -35,8 +43,7 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("title-lyrics");
   const [songTitle, setSongTitle] = useState("");
-  const [alternativeTitle1, setAlternativeTitle1] = useState("");
-  const [alternativeTitle2, setAlternativeTitle2] = useState("");
+  const [alternativeTitle, setAlternativeTitle] = useState("");
   const [verseOrder, setVerseOrder] = useState<string[]>([]);
   const [verseOrderInput, setVerseOrderInput] = useState("");
   const debouncedVerseOrderInput = useDebounce(verseOrderInput, 300);
@@ -61,7 +68,10 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   React.useEffect(() => {
     if (initialData) {
       setSongTitle(initialData.title || "");
-      
+      setAlternativeTitle(
+        Array.isArray(initialData.alternativeTitles) ? initialData.alternativeTitles[0] || "" : "",
+      );
+
       // For editing existing songs, use authors array, for imports use artist
       if (initialData.authors && Array.isArray(initialData.authors)) {
         setAuthors(initialData.authors.join(", "));
@@ -77,7 +87,10 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
       
       // Parse lyrics into sections if provided
       if (initialData.lyrics) {
-        const parsedSections = parseLyricsIntoSections(initialData.lyrics);
+        const parsedSections = parseLyricsIntoSections(initialData.lyrics).map((section) => {
+          const style = initialData.sectionStyles?.[section.label];
+          return style ? { ...section, style } : section;
+        });
         if (parsedSections.length > 0) {
           setSections(parsedSections);
         }
@@ -111,6 +124,7 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     } else {
       // Reset form when no initial data (creating new song)
       setSongTitle("");
+      setAlternativeTitle("");
       setAuthors("");
       setTopics("");
       setCopyright("");
@@ -205,6 +219,27 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     ));
   };
 
+  // An unchecked option is removed rather than stored as false, so it keeps following
+  // the live screen's own settings
+  const updateSectionStyle = (sectionId: string, change: LyricStyle) => {
+    setSections((current) =>
+      current.map((section) => {
+        if (section.id !== sectionId) return section;
+        const next: LyricStyle = { ...section.style, ...change };
+        if (!next.bold) delete next.bold;
+        if (!next.italic) delete next.italic;
+        if (!next.color) delete next.color;
+        return { ...section, style: Object.keys(next).length > 0 ? next : undefined };
+      }),
+    );
+  };
+
+  const resetSectionStyle = (sectionId: string) => {
+    setSections((current) =>
+      current.map((section) => (section.id === sectionId ? { ...section, style: undefined } : section)),
+    );
+  };
+
   const deleteSection = (sectionId: string) => {
     if (sections.length > 1) {
       setSections(sections.filter(section => section.id !== sectionId));
@@ -254,8 +289,16 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
       `[${section.label}]\n${section.content}`
     ).join('\n\n');
 
+    // Formatting per section, keyed by the section label used in the lyrics
+    const sectionStyles: Record<string, LyricStyle> = {};
+    sections.forEach((section) => {
+      if (section.style) sectionStyles[section.label] = section.style;
+    });
+
     const songData = {
       title: songTitle,
+      alternativeTitles: alternativeTitle.trim() ? [alternativeTitle.trim()] : [],
+      sectionStyles,
       lyrics,
       structure: JSON.stringify(verseOrder), // Convert array to JSON string
       authors,
@@ -354,7 +397,7 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
           {/* Title & Lyrics Tab */}
           {activeTab === "title-lyrics" && (
             <div className="p-4 space-y-4">
-              {/* Title Fields */}
+              {/* Title Fields: song title and alternative title side by side */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-300 mb-1">Song Title</label>
@@ -365,33 +408,15 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
                     placeholder=""
                   />
                 </div>
-                <div></div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-300 mb-1">Alternative Title</label>
                   <Input
-                    value={alternativeTitle1}
-                    onChange={(e) => setAlternativeTitle1(e.target.value)}
+                    value={alternativeTitle}
+                    onChange={(e) => setAlternativeTitle(e.target.value)}
                     className="bg-[#3d3166] border-gray-500 text-white placeholder-gray-400 h-8 text-sm"
                     placeholder=""
                   />
                 </div>
-                <div></div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">Alternative Title</label>
-                  <Input
-                    value={alternativeTitle2}
-                    onChange={(e) => setAlternativeTitle2(e.target.value)}
-                    className="bg-[#3d3166] border-gray-500 text-white placeholder-gray-400 h-8 text-sm"
-                    placeholder=""
-                  />
-                </div>
-                <div></div>
               </div>
 
               {/* Sections (Songs & Choruses) */}
@@ -402,18 +427,77 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
                     <div key={section.id} className="bg-[#3d3166] border border-gray-500 rounded">
                       <div className="flex items-center justify-between p-2 border-b border-gray-500">
                         <span className="text-gray-300 font-medium text-sm">{section.label}</span>
-                        <Button
-                          onClick={() => deleteSection(section.id)}
-                          className="bg-[#8356F3] hover:bg-[#6d42c7] text-white text-xs h-6 w-6 p-0"
-                        >
-                          ×
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {/* How these lyrics look on the live screen */}
+                          <button
+                            type="button"
+                            onClick={() => updateSectionStyle(section.id, { bold: !section.style?.bold })}
+                            aria-label="Bold"
+                            aria-pressed={!!section.style?.bold}
+                            title="Bold"
+                            className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                              section.style?.bold
+                                ? "bg-[#8356F3] text-white"
+                                : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
+                            }`}
+                          >
+                            <BoldIcon size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateSectionStyle(section.id, { italic: !section.style?.italic })}
+                            aria-label="Italic"
+                            aria-pressed={!!section.style?.italic}
+                            title="Italic"
+                            className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${
+                              section.style?.italic
+                                ? "bg-[#8356F3] text-white"
+                                : "bg-[#2a1f4b] text-gray-300 hover:bg-[#4a3a75]"
+                            }`}
+                          >
+                            <ItalicIcon size={13} />
+                          </button>
+                          <label
+                            title="Text colour"
+                            className="relative h-6 w-6 rounded overflow-hidden border border-gray-500 cursor-pointer"
+                            style={{ background: section.style?.color || "#ffffff" }}
+                          >
+                            <input
+                              type="color"
+                              aria-label="Text colour"
+                              value={section.style?.color || "#ffffff"}
+                              onChange={(e) => updateSectionStyle(section.id, { color: e.target.value })}
+                              className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                            />
+                          </label>
+                          {(section.style?.bold || section.style?.italic || section.style?.color) && (
+                            <button
+                              type="button"
+                              onClick={() => resetSectionStyle(section.id)}
+                              title="Clear formatting"
+                              className="h-6 px-1.5 rounded bg-[#2a1f4b] text-[10px] text-gray-300 hover:bg-[#4a3a75]"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <Button
+                            onClick={() => deleteSection(section.id)}
+                            className="bg-[#8356F3] hover:bg-[#6d42c7] text-white text-xs h-6 w-6 p-0 ml-1"
+                          >
+                            ×
+                          </Button>
+                        </div>
                       </div>
                       <div className="p-2">
                         <Textarea
                           value={section.content}
                           onChange={(e) => updateSectionContent(section.id, e.target.value)}
                           className="bg-transparent border-none text-white placeholder-gray-400 resize-none h-24 text-sm p-0"
+                          style={{
+                            fontWeight: section.style?.bold ? 700 : undefined,
+                            fontStyle: section.style?.italic ? "italic" : undefined,
+                            color: section.style?.color || undefined,
+                          }}
                           placeholder={`Enter ${section.type} lyrics...`}
                         />
                       </div>

@@ -18,6 +18,9 @@ export interface ISong extends Document {
   ccliNumber?: string;
   tags?: string[];
   sections: ISongSection[];
+  /** Lyric formatting per section, keyed by the section label, e.g. { "V1 (Verse 1)": { bold: true } } */
+  sectionStyles?: Record<string, { bold?: boolean; italic?: boolean; color?: string }>;
+  alternativeTitles?: string[];
   organizationId: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
   isActive: boolean;
@@ -44,6 +47,8 @@ const SongSchema = new Schema<ISong>(
     ccliNumber: String,
     tags: [String],
     sections: [SongSectionSchema], // Embedded subdocument arrays
+    sectionStyles: { type: Schema.Types.Mixed, default: {} },
+    alternativeTitles: [String],
     organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     isActive: { type: Boolean, default: true },
