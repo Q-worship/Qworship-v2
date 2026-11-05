@@ -6,16 +6,34 @@ export interface ParsedSlide {
   /** 1-based position in the presentation */
   number: number;
   title: string;
+  /** True when the title came from a real title placeholder (not just the first line) */
+  hasTitleShape: boolean;
   /** Body paragraphs, excluding the title */
   lines: string[];
-  hasImage: boolean;
+  /** Number of pictures placed on the slide itself */
+  imageCount: number;
+  /** True when the slide has a picture background */
+  hasBackground: boolean;
+}
+
+/** A decoded, downscaled picture ready to upload */
+export interface SlideImage {
+  blob: Blob;
+  width: number;
+  height: number;
+  fileName: string;
+}
+
+export interface SlideImages {
+  background: SlideImage | null;
+  pictures: SlideImage[];
 }
 
 export interface ParsedPresentation {
   fileName: string;
   slides: ParsedSlide[];
-  /** Resolves a data URL (downscaled) for the slide's first embedded picture */
-  loadSlideImage: (slideNumber: number) => Promise<string | null>;
+  /** Decodes the slide's pictures (downscaled); pictures that can't be decoded are skipped */
+  loadSlideImages: (slideNumber: number) => Promise<SlideImages>;
 }
 
 interface ZipEntry {
@@ -155,6 +173,7 @@ const paragraphText = (paragraph: Element): string => {
 
 const extractSlideText = (doc: Document) => {
   let title = "";
+  let hasTitleShape = false;
   const lines: string[] = [];
 
   byLocalName(doc, "*")
@@ -170,43 +189,93 @@ const extractSlideText = (doc: Document) => {
 
       if (TITLE_PLACEHOLDERS.has(placeholder) && !title) {
         title = paragraphs.join(" ");
+        hasTitleShape = true;
       } else {
         lines.push(...paragraphs);
       }
     });
 
   if (!title && lines.length > 0) title = lines.shift() as string;
-  return { title, lines };
+  return { title, hasTitleShape, lines };
 };
 
-const bytesToDataUrl = async (
+type PictureKind = "background" | "picture";
+
+// A blip inside <p:bg> is the slide background; one inside a bullet definition
+// (<a:buBlip>) is only a bullet glyph and is not a picture on the slide.
+const classifyBlip = (blip: Element): PictureKind | null => {
+  let node: Node | null = blip.parentNode;
+  while (node) {
+    const name = (node as Element).localName;
+    if (name === "buBlip") return null;
+    if (name === "bg") return "background";
+    node = node.parentNode;
+  }
+  return "picture";
+};
+
+const canvasToBlob = (
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+): Promise<Blob | null> =>
+  new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+
+const hasTransparency = (canvas: HTMLCanvasElement): boolean => {
+  const probe = document.createElement("canvas");
+  probe.width = 32;
+  probe.height = 32;
+  const context = probe.getContext("2d");
+  if (!context) return false;
+  context.drawImage(canvas, 0, 0, 32, 32);
+  const { data } = context.getImageData(0, 0, 32, 32);
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 250) return true;
+  }
+  return false;
+};
+
+// Downscales a picture and re-encodes it (PNG only when it has transparency, JPEG
+// otherwise) so uploads stay small. Returns null for pictures the browser can't decode.
+const decodeSlideImage = async (
   bytes: Uint8Array,
   mime: string,
-): Promise<string> => {
-  const blob = new Blob([bytes as BlobPart], { type: mime });
-
-  // Downscale so large slide pictures don't bloat the saved presentation
+  baseName: string,
+): Promise<SlideImage | null> => {
   try {
-    const bitmap = await createImageBitmap(blob);
+    const bitmap = await createImageBitmap(
+      new Blob([bytes as BlobPart], { type: mime }),
+    );
     const scale = Math.min(
       1,
       MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height),
     );
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvas unavailable");
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    if (!context) return null;
+    context.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    return canvas.toDataURL("image/jpeg", 0.85);
+
+    const keepAlpha =
+      mime !== "image/jpeg" && mime !== "image/bmp" && hasTransparency(canvas);
+    const blob = await canvasToBlob(
+      canvas,
+      keepAlpha ? "image/png" : "image/jpeg",
+      0.85,
+    );
+    if (!blob) return null;
+    return {
+      blob,
+      width,
+      height,
+      fileName: `${baseName}.${keepAlpha ? "png" : "jpg"}`,
+    };
   } catch {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+    return null;
   }
 };
 
@@ -259,7 +328,11 @@ export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
       );
   }
 
-  const imagePathBySlide = new Map<number, string>();
+  interface SlidePictures {
+    background: string | null;
+    pictures: string[];
+  }
+  const picturesBySlide = new Map<number, SlidePictures>();
   const slides: ParsedSlide[] = [];
 
   for (let index = 0; index < slidePaths.length; index++) {
@@ -268,44 +341,77 @@ export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
     if (!slideXml) continue;
 
     const slideDoc = parseXml(slideXml);
-    const { title, lines } = extractSlideText(slideDoc);
+    const { title, hasTitleShape, lines } = extractSlideText(slideDoc);
 
     const relsXml = await readText(relsPathFor(slidePath));
     const rels = relsXml
       ? parseRelationships(parseXml(relsXml))
       : new Map<string, string>();
 
-    let imagePath: string | null = null;
+    // Every usable picture on the slide, in document order, each media part once
+    const found: SlidePictures = { background: null, pictures: [] };
     for (const blip of byLocalName(slideDoc, "blip")) {
+      const kind = classifyBlip(blip);
       const target = rels.get(blip.getAttributeNS(NS_RELATIONSHIPS, "embed") ?? "");
-      if (!target) continue;
+      if (!kind || !target) continue;
       const candidate = resolvePath(directoryOf(slidePath), target);
       const extension = candidate.split(".").pop()?.toLowerCase() ?? "";
-      if (IMAGE_MIME_BY_EXTENSION[extension] && entries.has(candidate)) {
-        imagePath = candidate;
-        break;
+      if (!IMAGE_MIME_BY_EXTENSION[extension] || !entries.has(candidate)) continue;
+
+      if (kind === "background") {
+        found.background ??= candidate;
+      } else if (!found.pictures.includes(candidate)) {
+        found.pictures.push(candidate);
       }
     }
 
     const number = slides.length + 1;
-    if (imagePath) imagePathBySlide.set(number, imagePath);
-    slides.push({ number, title, lines, hasImage: Boolean(imagePath) });
+    picturesBySlide.set(number, found);
+    slides.push({
+      number,
+      title,
+      hasTitleShape,
+      lines,
+      imageCount: found.pictures.length,
+      hasBackground: Boolean(found.background),
+    });
   }
 
-  const loadSlideImage = async (slideNumber: number): Promise<string | null> => {
-    const path = imagePathBySlide.get(slideNumber);
-    const entry = path ? entries.get(path) : undefined;
-    if (!path || !entry) return null;
+  const decodePart = async (
+    path: string,
+    baseName: string,
+  ): Promise<SlideImage | null> => {
+    const entry = entries.get(path);
+    if (!entry) return null;
     const extension = path.split(".").pop()?.toLowerCase() ?? "";
     try {
-      return await bytesToDataUrl(
+      return await decodeSlideImage(
         await inflateEntry(buffer, entry),
         IMAGE_MIME_BY_EXTENSION[extension],
+        baseName,
       );
     } catch {
       return null;
     }
   };
 
-  return { fileName: file.name, slides, loadSlideImage };
+  const loadSlideImages = async (slideNumber: number): Promise<SlideImages> => {
+    const found = picturesBySlide.get(slideNumber);
+    if (!found) return { background: null, pictures: [] };
+
+    const background = found.background
+      ? await decodePart(found.background, `slide-${slideNumber}-background`)
+      : null;
+    const pictures: SlideImage[] = [];
+    for (let i = 0; i < found.pictures.length; i++) {
+      const decoded = await decodePart(
+        found.pictures[i],
+        `slide-${slideNumber}-picture-${i + 1}`,
+      );
+      if (decoded) pictures.push(decoded);
+    }
+    return { background, pictures };
+  };
+
+  return { fileName: file.name, slides, loadSlideImages };
 };

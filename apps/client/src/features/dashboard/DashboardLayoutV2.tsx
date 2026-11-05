@@ -47,7 +47,17 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
 import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
-import type { ParsedPresentation } from "@/lib/pptxParser";
+import type {
+  ParsedPresentation,
+  SlideImage,
+  SlideImages,
+} from "@/lib/pptxParser";
+import {
+  buildSlideCanvas,
+  createTextMeasurer,
+  type SlideMedia,
+} from "@/lib/pptxSlideLayout";
+import { uploadSlideImages, type SlideImageUpload } from "@/lib/pptxSlideMedia";
 import { StylesDropdown } from "@/features/dashboard/components/StylesDropdown";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore } from "@/stores/useDisplayModeStore";
@@ -3526,6 +3536,35 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   ) => {
     const stamp = Date.now();
     const newEntries: { item: any; section: string }[] = [];
+    const measure = createTextMeasurer();
+
+    // Decode the pictures of the chosen slides, then upload them all up front
+    const decoded = new Map<number, SlideImages>();
+    const uploads: SlideImageUpload[] = [];
+    for (const { slide } of allocations) {
+      if (slide.imageCount === 0 && !slide.hasBackground) continue;
+      const images = await presentation.loadSlideImages(slide.number);
+      decoded.set(slide.number, images);
+      [images.background, ...images.pictures].forEach((image) => {
+        if (image) {
+          uploads.push({ image, title: `${presentation.fileName} – Slide ${slide.number}` });
+        }
+      });
+    }
+
+    const urlByImage = new Map<SlideImage, string>();
+    let failedPictures = 0;
+    let failureReason = "";
+    if (uploads.length > 0) {
+      try {
+        const urls = await uploadSlideImages(uploads);
+        uploads.forEach(({ image }, index) => urlByImage.set(image, urls[index]));
+      } catch (error) {
+        console.error("Failed to upload imported slide pictures:", error);
+        failedPictures = uploads.length;
+        failureReason = error instanceof Error ? error.message : "";
+      }
+    }
 
     for (const { slide, section } of allocations) {
       // Zero-padded so one item id is never a substring of another
@@ -3533,47 +3572,39 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       const id = `imported-${stamp}-${String(slide.number).padStart(4, "0")}`;
       const heading = slide.title.length > 40 ? `${slide.title.slice(0, 40)}…` : slide.title;
       const title = heading ? `Slide ${slide.number} – ${heading}` : `Slide ${slide.number}`;
-      const text = [slide.title, ...slide.lines].filter(Boolean).join("\n");
 
-      const imageUrl =
-        !text && slide.hasImage
-          ? await presentation.loadSlideImage(slide.number)
-          : null;
+      const images = decoded.get(slide.number);
+      const media: SlideMedia = {
+        background:
+          (images?.background && urlByImage.get(images.background)) || null,
+        pictures: (images?.pictures ?? []).flatMap((picture) => {
+          const url = urlByImage.get(picture);
+          return url ? [{ url, width: picture.width, height: picture.height }] : [];
+        }),
+      };
 
-      const item = imageUrl
-        ? {
-            id,
-            type: "media",
-            subtype: "image",
-            title,
-            content: {},
-            slides: [
-              {
-                id: `slide-${id}`,
-                itemId: id,
-                type: "media" as const,
-                subtype: "image" as const,
-                title,
-                content: imageUrl,
-              },
-            ],
-          }
-        : {
-            id,
-            type: "custom",
-            title,
-            content: text || title,
-            slides: [
-              {
-                id: `slide-${id}`,
-                itemId: id,
-                type: "custom" as const,
-                title,
-                content: text || title,
-                sectionLabel: "Imported",
-              },
-            ],
-          };
+      // Canvas slides are drawn by every viewer (thumbnails, preview, live, OBS) with
+      // text already sized and centered inside the frame
+      const canvas = buildSlideCanvas(slide, media, measure);
+      const item = {
+        id,
+        type: "media",
+        subtype: "canvas",
+        title,
+        content: canvas,
+        slides: [
+          {
+            id: `slide-${id}`,
+            itemId: id,
+            type: "media" as const,
+            subtype: "canvas" as const,
+            // Kept short: the preview prints the slide title above the frame
+            title: `Slide ${slide.number}`,
+            content: canvas,
+            sectionLabel: "Media",
+          },
+        ],
+      };
 
       newEntries.push({ item, section });
     }
@@ -3617,6 +3648,13 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       title: "Import Complete",
       description: `${newEntries.length} ${newEntries.length === 1 ? "slide" : "slides"} from "${presentation.fileName}" added to your service.`,
     });
+    if (failedPictures > 0) {
+      toast({
+        title: "Pictures not imported",
+        description: `${failedPictures} ${failedPictures === 1 ? "picture" : "pictures"} could not be uploaded${failureReason ? ` (${failureReason})` : ""}, so those slides were imported with their text only.`,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleExitApplication = () => {
