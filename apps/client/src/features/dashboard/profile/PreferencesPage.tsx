@@ -29,6 +29,7 @@ const TIMEOUT_LABELS: Record<number, string> = {
 };
 
 export const PreferencesPage: React.FC = () => {
+  const [activeTab, setActiveTab] = React.useState<"notifications" | "settings">("notifications");
   const {
     isLoading, notifications, marketing, sessionTimeoutMinutes, canUseSms, saving,
     setNotification, setMarketing, setSessionTimeout,
@@ -54,128 +55,156 @@ export const PreferencesPage: React.FC = () => {
       title="Preferences"
       subtitle="Choose how we reach you, and how long a quiet session stays open."
     >
-      <section>
-        <h2 className="text-lg font-semibold text-white">Notification Preferences</h2>
-
-        <div className="mt-4">
-          <SettingRow
-            label="Email Notification"
-            description="Receive important updates via email"
-            control={
-              <CustomToggle
-                checked={notifications.email}
-                disabled={saving}
-                onCheckedChange={(value) => setNotification("email", value)}
-              />
-            }
-          />
-
-          <SettingRow
-            label="SMS Notifications"
-            description={
-              canUseSms
-                ? "Receive urgent alerts via SMS"
-                : "Add a phone number to your profile to receive SMS alerts"
-            }
-            control={
-              canUseSms ? (
-                <CustomToggle
-                  checked={notifications.sms}
-                  disabled={saving}
-                  onCheckedChange={(value) => setNotification("sms", value)}
-                />
-              ) : (
-                // Offering a switch with nowhere to send the message is a
-                // promise we cannot keep, so it becomes the fix instead.
-                <Link
-                  href="/dashboard-profile/personal"
-                  className="text-sm font-medium text-white underline underline-offset-4 transition-colors hover:text-[#a98bff]"
-                >
-                  Add number
-                </Link>
-              )
-            }
-          />
-
-          <SettingRow
-            label="Marketing Emails"
-            description="Receive product updates and tips"
-            control={
-              <CustomToggle
-                checked={marketing}
-                disabled={saving}
-                onCheckedChange={setMarketing}
-              />
-            }
-          />
-
-          <SettingRow
-            label="Trial Notifications"
-            description="Receive trial and subscription reminders"
-            control={
-              <CustomToggle
-                checked={notifications.trial}
-                disabled={saving}
-                onCheckedChange={(value) => setNotification("trial", value)}
-              />
-            }
-          />
-
-          <SettingRow
-            label="Login Notifications"
-            description="Get notified when someone signs into your account"
-            control={
-              <CustomToggle
-                checked={notifications.login}
-                disabled={saving}
-                onCheckedChange={(value) => setNotification("login", value)}
-              />
-            }
-            last
-          />
+      {/* Tab bar matching preferences-notificatioon-tab.svg & preferences-settings-tab.svg */}
+      <div className="relative border-b border-profile-border">
+        <div className="flex gap-8">
+          <button
+            type="button"
+            onClick={() => setActiveTab("notifications")}
+            className={`relative pb-4 text-base font-medium transition-colors ${
+              activeTab === "notifications" ? "text-white" : "text-profile-muted hover:text-white"
+            }`}
+          >
+            Notification Preferences
+            {activeTab === "notifications" && (
+              <span className="absolute bottom-[-1px] left-0 right-0 h-[3px] rounded-full bg-profile-primary" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("settings")}
+            className={`relative pb-4 text-base font-medium transition-colors ${
+              activeTab === "settings" ? "text-white" : "text-profile-muted hover:text-white"
+            }`}
+          >
+            Settings
+            {activeTab === "settings" && (
+              <span className="absolute bottom-[-1px] left-0 right-0 h-[3px] rounded-full bg-profile-primary" />
+            )}
+          </button>
         </div>
-      </section>
+      </div>
 
-      <section className="mt-12 border-t border-white/10 pt-10">
-        <h2 className="text-lg font-semibold text-white">Session</h2>
+      <div className="mt-6">
+        {activeTab === "notifications" ? (
+          <section>
+            <div>
+              <SettingRow
+                label="Email Notification"
+                description="Receive important updates via email"
+                control={
+                  <CustomToggle
+                    checked={notifications.email}
+                    disabled={saving}
+                    onCheckedChange={(value) => setNotification("email", value)}
+                  />
+                }
+              />
 
-        <div className="mt-4">
-          <SettingRow
-            label="Session Timeout"
-            description="Sign out automatically after this long without activity"
-            control={
-              <Select
-                value={String(sessionTimeoutMinutes)}
-                onValueChange={(value) => setSessionTimeout(Number(value))}
-                disabled={saving}
-              >
-                <SelectTrigger className="w-36 border-white/15 bg-account-field text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-white/15 bg-account-card text-white">
-                  {SESSION_TIMEOUT_OPTIONS.map((minutes) => (
-                    <SelectItem key={minutes} value={String(minutes)}>
-                      {TIMEOUT_LABELS[minutes] ?? `${minutes} minutes`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            }
-            last
-          />
-        </div>
+              <SettingRow
+                label="SMS Notifications"
+                description={
+                  canUseSms
+                    ? "Receive urgent alerts via SMS"
+                    : "Add a phone number to your profile to receive SMS alerts"
+                }
+                control={
+                  canUseSms ? (
+                    <CustomToggle
+                      checked={notifications.sms}
+                      disabled={saving}
+                      onCheckedChange={(value) => setNotification("sms", value)}
+                    />
+                  ) : (
+                    <Link
+                      href="/dashboard-profile/personal"
+                      className="text-sm font-medium text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
+                    >
+                      Add number
+                    </Link>
+                  )
+                }
+              />
 
-        <p className="mt-4 text-xs leading-relaxed text-gray-500">
-          Saved, and applied the next time you sign in. Live services are never interrupted by
-          this — a session running a presentation stays open.
-        </p>
-      </section>
+              <SettingRow
+                label="Marketing Emails"
+                description="Receive product updates and tips"
+                control={
+                  <CustomToggle
+                    checked={marketing}
+                    disabled={saving}
+                    onCheckedChange={setMarketing}
+                  />
+                }
+              />
 
-      <p className="mt-10 text-sm text-gray-500">
+              <SettingRow
+                label="Trial Notifications"
+                description="Receive trial and subscription reminders"
+                control={
+                  <CustomToggle
+                    checked={notifications.trial}
+                    disabled={saving}
+                    onCheckedChange={(value) => setNotification("trial", value)}
+                  />
+                }
+              />
+
+              <SettingRow
+                label="Login Notifications"
+                description="Get notified when someone signs into your account"
+                control={
+                  <CustomToggle
+                    checked={notifications.login}
+                    disabled={saving}
+                    onCheckedChange={(value) => setNotification("login", value)}
+                  />
+                }
+                last
+              />
+            </div>
+          </section>
+        ) : (
+          <section>
+            <div>
+              <SettingRow
+                label="Session Timeout"
+                description="Sign out automatically after this long without activity"
+                control={
+                  <Select
+                    value={String(sessionTimeoutMinutes)}
+                    onValueChange={(value) => setSessionTimeout(Number(value))}
+                    disabled={saving}
+                  >
+                    <SelectTrigger className="w-36 border-profile-border bg-profile-field text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-profile-border bg-profile-card text-white">
+                      {SESSION_TIMEOUT_OPTIONS.map((minutes) => (
+                        <SelectItem key={minutes} value={String(minutes)}>
+                          {TIMEOUT_LABELS[minutes] ?? `${minutes} minutes`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                }
+                last
+              />
+            </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-profile-muted">
+              Saved, and applied the next time you sign in. Live services are never interrupted by
+              this — a session running a presentation stays open.
+            </p>
+          </section>
+        )}
+      </div>
+
+      <p className="mt-10 text-sm text-profile-muted">
         Looking for your password or two-factor settings? They are under{" "}
         <Link
           href="/dashboard-profile/security"
-          className="font-medium text-white underline underline-offset-4 transition-colors hover:text-[#a98bff]"
+          className="font-medium text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
         >
           Login &amp; Security
         </Link>

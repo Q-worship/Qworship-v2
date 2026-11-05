@@ -26,24 +26,24 @@ export const AppShellBar: React.FC = () => {
   const menu = useAccountMenu();
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-700 bg-[#1a0f2e] px-4">
-      <div className="flex min-w-0 items-center gap-1">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#484848]/40 border-profile-border/40 bg-[#2A203C] bg-profile-header px-6">
+      <div className="flex min-w-0 items-center gap-4">
         <button
           type="button"
           onClick={() => setLocation("/dashboard")}
-          className="flex items-center gap-2 rounded-lg px-1 py-1 text-white transition-colors hover:bg-gray-700/50"
+          className="flex items-center gap-2 rounded-lg py-1 text-white transition-opacity hover:opacity-90"
           title="Back to dashboard"
         >
           <img src={qworshipLogo} alt="Qworship" className="h-6 w-6" />
-          <span className="text-sm font-medium">Qworship</span>
+          <span className="text-sm font-semibold tracking-wide">Q-worship</span>
         </button>
-        {/* Said in words too: a logo alone does not read as the way back. */}
+        {/* Back link as shown in screenshots */}
         <button
           type="button"
           onClick={() => setLocation("/dashboard")}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-gray-400 transition-colors hover:bg-gray-700/50 hover:text-white"
+          className="flex items-center gap-1.5 py-1 text-sm text-[#CBCED5] transition-colors hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Back to dashboard</span>
         </button>
       </div>

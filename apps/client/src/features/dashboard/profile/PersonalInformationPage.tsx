@@ -69,6 +69,7 @@ export const PersonalInformationPage: React.FC = () => {
   return (
     <AccountPage
       title="Personal Information"
+      breadcrumb="Personal info"
       subtitle="Provide personal details and how we can reach you"
       sidecar={<InfoSidecar notes={ACCOUNT_NOTES} />}
     >
@@ -88,8 +89,20 @@ export const PersonalInformationPage: React.FC = () => {
             {editor()}
           </FieldRow>
 
-          {/* Masked but present: people need to recognise which account this is. */}
-          <FieldRow label="Email address" value={maskEmail(user?.email)} locked />
+          {/* Masked display with Edit link matching screenshot 2 */}
+          <FieldRow
+            label="Email address"
+            value={maskEmail(user?.email)}
+            action={
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="text-[15px] font-medium leading-[22px] text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
+              >
+                Edit
+              </button>
+            }
+          />
 
           <FieldRow
             label="Phone number"
@@ -100,7 +113,18 @@ export const PersonalInformationPage: React.FC = () => {
             {editor({ type: "tel", placeholder: "+44 7700 900000" })}
           </FieldRow>
 
-          <FieldRow label="Role" value={ROLE_LABELS[user?.role ?? ""] ?? user?.role} locked />
+          <FieldRow
+            label="Role"
+            value={ROLE_LABELS[user?.role ?? ""] ?? user?.role}
+            action={
+              <button
+                type="button"
+                className="text-[15px] font-medium leading-[22px] text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
+              >
+                {user?.role ? "Edit" : "Add"}
+              </button>
+            }
+          />
 
           <FieldRow label="Bio" value={user?.bio} {...row("bio", user?.bio)}>
             <Textarea
@@ -119,6 +143,16 @@ export const PersonalInformationPage: React.FC = () => {
             busy={uploadPhoto.isPending}
             onSelect={(file) => uploadPhoto.mutate(file)}
           />
+
+          {/* Update button matching screenshot 2 */}
+          <div className="mt-8">
+            <button
+              type="button"
+              className="rounded-lg bg-profile-primary px-8 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#7245e2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-profile-primary"
+            >
+              Update
+            </button>
+          </div>
         </>
       )}
     </AccountPage>

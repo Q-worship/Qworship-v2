@@ -21,7 +21,7 @@ export const StatTile: React.FC<{
   value: string;
   caption?: string;
 }> = ({ icon, label, value, caption }) => (
-  <div className="min-h-[159px] rounded-xl bg-account-card px-6 pb-[21px] pt-[14px]">
+  <div className="min-h-[159px] rounded-xl bg-[#1B152D] bg-account-card px-6 pb-[21px] pt-[14px]">
     <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#8356F3]/20 text-[#a98bff]">
       {icon}
     </span>
@@ -49,11 +49,11 @@ export const Panel: React.FC<{
   action?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, description, action, children }) => (
-  <section className="rounded-xl bg-account-card p-5 sm:p-6">
+  <section className="rounded-xl border border-[#2F2845] border-account-border bg-[#1B152D] bg-account-card p-5 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 className="text-base font-semibold text-white">{title}</h2>
-        {description && <p className="mt-1 text-sm text-gray-400">{description}</p>}
+        {description && <p className="mt-1 text-sm text-[#CBCED5]">{description}</p>}
       </div>
       {action}
     </div>

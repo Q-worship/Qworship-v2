@@ -95,7 +95,7 @@ export const LoginSecurityPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setChanging(true)}
-                className="text-sm font-medium text-white underline underline-offset-4 transition-colors hover:text-[#a98bff]"
+                className="text-sm font-medium text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
               >
                 Change password
               </button>

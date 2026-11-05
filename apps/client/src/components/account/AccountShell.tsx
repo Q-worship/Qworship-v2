@@ -21,18 +21,19 @@ export const AccountBreadcrumb: React.FC<{ page: string }> = ({ page }) => (
   <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
     <Link
       href="/dashboard-profile"
-      className="font-medium text-gray-400 transition-colors hover:text-white"
+      className="font-medium text-[#768092] transition-colors hover:text-white"
     >
       Account
     </Link>
-    <ChevronRight className="h-3.5 w-3.5 text-gray-600" aria-hidden />
-    <span className="font-medium text-gray-300">{page}</span>
+    <ChevronRight className="h-3.5 w-3.5 text-[#767676]" aria-hidden />
+    <span className="font-medium text-[#CBCED5]">{page}</span>
   </nav>
 );
 
 interface AccountPageProps {
   title: string;
   subtitle: string;
+  breadcrumb?: string;
   /** The static explainer card on the right. Omitted on screens without one. */
   sidecar?: React.ReactNode;
   children: React.ReactNode;
@@ -44,8 +45,8 @@ interface AccountPageProps {
  * The sidecar is a sibling of the body rather than floating, so on a phone it
  * drops below the fields instead of squeezing them.
  */
-export const AccountPage: React.FC<AccountPageProps> = ({ title, subtitle, sidecar, children }) => (
-  <div className="min-h-full bg-account-bg text-white">
+export const AccountPage: React.FC<AccountPageProps> = ({ title, subtitle, breadcrumb, sidecar, children }) => (
+  <div className="min-h-full bg-[#1A102D] bg-profile-bg text-white">
     {/*
       Geometry taken from the design export: a 1002px content column split
       579 / 101 / 323 between fields, gutter and explainer, under a 45px title
@@ -64,11 +65,11 @@ export const AccountPage: React.FC<AccountPageProps> = ({ title, subtitle, sidec
         sidecar ? "max-w-[1066px]" : "max-w-[1247px]"
       }`}
     >
-      <AccountBreadcrumb page={title} />
+      <AccountBreadcrumb page={breadcrumb ?? title} />
       <h1 className="mt-[26px] text-[32px] font-bold leading-[1.1] tracking-tight text-white sm:text-[45px]">
         {title}
       </h1>
-      <p className="mt-[22px] text-base text-gray-400 sm:text-[19px]">{subtitle}</p>
+      <p className="mt-[22px] text-base text-[#CBCED5] sm:text-[19px]">{subtitle}</p>
 
       {sidecar ? (
         <div className="mt-[72px] grid gap-y-12 lg:grid-cols-[minmax(0,1fr)_323px] lg:gap-x-[101px]">
@@ -92,25 +93,21 @@ export interface SidecarNote {
 /**
  * The standing explainer beside the fields.
  *
- * Static copy by design: it answers the questions people ask support about
- * masked values and locked fields, so it must not depend on the data it sits
- * next to.
+ * Sidecar container has a 1px border #484848, rounded-xl, matching the
+ * personal-information, login-and-security, and church-organisation-settings SVGs.
  */
 export const InfoSidecar: React.FC<{ notes: SidecarNote[] }> = ({ notes }) => (
-  // 25px inset, a 44px glyph, a 20px question over 16px copy: the export's own
-  // proportions. At the 16px heading used first, every question fitted on one
-  // line and the column read as a caption rather than a panel.
-  <aside className="rounded-2xl bg-account-card p-[25px]">
+  <aside className="rounded-xl border border-[#484848] border-profile-border bg-transparent p-[25px]">
     {notes.map((note, i) => (
       <div
         key={note.question}
-        className={i > 0 ? "mt-[53px] border-t border-white/10 pt-[54px]" : undefined}
+        className={i > 0 ? "mt-[53px] border-t border-[#484848] border-profile-border pt-[54px]" : undefined}
       >
-        <div className="text-[#a98bff]">{note.icon}</div>
+        <div className="text-[#8356F3] text-profile-primary">{note.icon}</div>
         <h2 className="mt-[22px] text-[20px] font-semibold leading-[28px] text-white">
           {note.question}
         </h2>
-        <p className="mt-[27px] text-base leading-[23px] text-gray-400">{note.answer}</p>
+        <p className="mt-[27px] text-base leading-[23px] text-[#CBCED5] text-profile-text">{note.answer}</p>
       </div>
     ))}
   </aside>
@@ -140,15 +137,14 @@ interface FieldRowProps {
 /**
  * One editable line: label, current value, and a link to change it.
  *
- * Row-level editing rather than one big form with a single Save. The design
- * asks for it, and it is the safer shape: a person changing their phone number
- * cannot accidentally resubmit a stale value in six other fields.
+ * Row-level editing rather than one big form with a single Save. Dividers
+ * use #484848, values use #CBCED5, and the primary brand purple is #8356F3.
  */
 export const FieldRow: React.FC<FieldRowProps> = ({
   label, value, empty = "Not provided", locked, action,
   editing, onEdit, onCancel, onSave, saving, children, last,
 }) => (
-  <div className={last ? "pb-6 pt-[31px]" : "border-b border-white/10 pb-6 pt-[31px]"}>
+  <div className={last ? "pb-6 pt-[31px]" : "border-b border-[#484848] border-profile-border pb-6 pt-[31px]"}>
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0 flex-1">
         <div className="text-base font-medium leading-[22px] text-white">{label}</div>
@@ -161,7 +157,7 @@ export const FieldRow: React.FC<FieldRowProps> = ({
                 size="sm"
                 onClick={onSave}
                 disabled={saving}
-                className="bg-[#8356F3] text-white hover:bg-[#7245e2] disabled:opacity-50"
+                className="bg-[#8356F3] bg-profile-primary text-white hover:bg-[#7245e2] disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save"}
               </Button>
@@ -170,7 +166,7 @@ export const FieldRow: React.FC<FieldRowProps> = ({
                 variant="ghost"
                 onClick={onCancel}
                 disabled={saving}
-                className="text-gray-400 hover:bg-white/5 hover:text-white"
+                className="text-[#768092] text-profile-muted hover:bg-white/5 hover:text-white"
               >
                 Cancel
               </Button>
@@ -179,7 +175,7 @@ export const FieldRow: React.FC<FieldRowProps> = ({
         ) : (
           <div
             className={`mt-0.5 truncate text-[15px] leading-5 ${
-              value ? "text-gray-400" : "text-gray-500"
+              value ? "text-[#CBCED5] text-profile-text" : "text-[#768092] text-profile-muted"
             }`}
           >
             {value || empty}
@@ -190,14 +186,14 @@ export const FieldRow: React.FC<FieldRowProps> = ({
       {!editing && (
         <div className="shrink-0">
           {locked ? (
-            <Lock className="h-4 w-4 text-[#a98bff]" aria-label="Cannot be changed" />
+            <Lock className="h-4 w-4 text-[#8356F3] text-profile-primary" aria-label="Cannot be changed" />
           ) : action ? (
             action
           ) : (
             <button
               type="button"
               onClick={onEdit}
-              className="text-[15px] font-medium leading-[22px] text-white underline underline-offset-4 transition-colors hover:text-[#a98bff]"
+              className="text-[15px] font-medium leading-[22px] text-white underline underline-offset-4 transition-colors hover:text-[#8356F3] hover:text-profile-primary"
             >
               {value ? "Edit" : "Add"}
             </button>
@@ -210,9 +206,6 @@ export const FieldRow: React.FC<FieldRowProps> = ({
 
 /**
  * A label-and-control line that is always on, for toggles and pickers.
- *
- * Separate from FieldRow because there is nothing to open: a switch IS its own
- * editor, so wrapping it in an Edit link would add a click to reach a click.
  */
 export const SettingRow: React.FC<{
   label: string;
@@ -220,12 +213,12 @@ export const SettingRow: React.FC<{
   control: React.ReactNode;
   last?: boolean;
 }> = ({ label, description, control, last }) => (
-  <div className={last ? "pb-6 pt-[31px]" : "border-b border-white/10 pb-6 pt-[31px]"}>
+  <div className={last ? "pb-6 pt-[31px]" : "border-b border-[#484848] border-profile-border pb-6 pt-[31px]"}>
     <div className="flex items-center justify-between gap-6">
       <div className="min-w-0">
         <div className="text-base font-medium leading-[22px] text-white">{label}</div>
         {description && (
-          <div className="mt-0.5 text-[15px] leading-5 text-gray-400">{description}</div>
+          <div className="mt-0.5 text-[15px] leading-5 text-[#CBCED5] text-profile-text">{description}</div>
         )}
       </div>
       <div className="shrink-0">{control}</div>
@@ -233,6 +226,6 @@ export const SettingRow: React.FC<{
   </div>
 );
 
-/** Shared input styling, so six screens cannot drift apart. */
+/** Shared input styling matching design SVGs: bg #2A203C, border #484848, text #CBCED5. */
 export const fieldInputClass =
-  "bg-account-field border-white/15 text-white placeholder:text-gray-600 focus-visible:ring-[#8356F3]";
+  "bg-[#2A203C] bg-profile-field border-[#484848] border-profile-border text-white placeholder:text-[#768092] placeholder:text-profile-muted focus-visible:ring-[#8356F3] focus-visible:ring-profile-primary";

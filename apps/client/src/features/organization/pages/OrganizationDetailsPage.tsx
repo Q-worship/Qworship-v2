@@ -67,7 +67,7 @@ export const OrganizationDetailsPage: React.FC = () => {
           ))}
         </div>
       ) : !organizationId ? (
-        <p className="rounded-xl bg-account-card p-6 text-sm text-gray-400">
+        <p className="rounded-xl border border-profile-border bg-profile-card p-6 text-sm text-profile-text">
           You are not part of a church yet. One is created when you finish setting up, or when you
           accept an invitation to join a network.
         </p>
@@ -107,9 +107,9 @@ export const OrganizationDetailsPage: React.FC = () => {
             );
           })}
 
-          <section className="mt-12 border-t border-white/10 pt-10">
+          <section className="mt-12 border-t border-profile-border pt-10">
             <h2 className="text-lg font-semibold text-white">Branches and capacity</h2>
-            <p className="mt-2 text-sm text-gray-400">
+            <p className="mt-2 text-sm text-profile-text">
               The churches on your account, and what your plan has room for.
             </p>
             <div className="mt-6">

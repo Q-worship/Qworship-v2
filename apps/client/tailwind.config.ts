@@ -5,10 +5,10 @@ import typographyPlugin from "@tailwindcss/typography";
 export default {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
   ],
   theme: {
     container: {
@@ -30,19 +30,39 @@ export default {
          */
         account: {
           /** The page behind everything. */
-          bg: "#1a102d",
-          /** A card, panel or tile. */
-          card: "#141414",
-          /** The stat strip, which sits a shade below a card. */
-          well: "#0a0a0a",
+          bg: "#1A102D",
+          /** A card, panel or tile matching payments-&-billing-usage.svg */
+          card: "#1B152D",
+          /** The stat strip or well, which sits a shade below a card. */
+          well: "#151024",
+          /** Border stroke around cards and panels. */
+          border: "#2F2845",
           /** Hairline inside a card, between a header and its body. */
-          rule: "#232326",
-          /** Inputs and steppers, a shade above a card. */
-          field: "#1e1e21",
+          rule: "#2F2845",
+          /** Inputs, pickers and steppers. */
+          field: "#161124",
+        },
+        /**
+         * Profile settings tokens directly extracted from revamp-ui/profile-ui SVGs:
+         * profile-settings.svg, personal-information.svg, login-and-security.svg,
+         * church-organisation-settings.svg, preferences-*.svg
+         */
+        profile: {
+          bg: "#1A102D",
+          card: "#393048",
+          header: "#2A203C",
+          field: "#2A203C",
+          border: "#484848",
+          text: "#CBCED5",
+          muted: "#768092",
+          subtle: "#767676",
+          primary: "#8356F3",
+          badge: "#FD348F",
         },
         // --- Existing dashboard HSL tokens ---
         codelytemplatewebflowionero: "var(--codelytemplatewebflowionero)",
-        codelytemplatewebflowiowoodsmoke: "var(--codelytemplatewebflowiowoodsmoke)",
+        codelytemplatewebflowiowoodsmoke:
+          "var(--codelytemplatewebflowiowoodsmoke)",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -77,34 +97,34 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
         // --- Marketing design tokens (from apps/marketing tailwind.config.ts) ---
-        'on-primary': '#ffffff',
-        surface: '#121414',
-        'surface-dim': '#121414',
-        'surface-bright': '#37393a',
-        'surface-container-lowest': '#0c0f0f',
-        'surface-container-low': '#1a1c1c',
-        'surface-container': '#1e2020',
-        'surface-container-high': '#282a2b',
-        'surface-container-highest': '#333535',
-        'on-background': '#e2e2e2',
-        'on-surface': '#e2e2e2',
-        'on-surface-variant': '#d3c0d6',
-        outline: '#9c8ba0',
-        'outline-variant': '#504254',
+        "on-primary": "#ffffff",
+        surface: "#121414",
+        "surface-dim": "#121414",
+        "surface-bright": "#37393a",
+        "surface-container-lowest": "#0c0f0f",
+        "surface-container-low": "#1a1c1c",
+        "surface-container": "#1e2020",
+        "surface-container-high": "#282a2b",
+        "surface-container-highest": "#333535",
+        "on-background": "#e2e2e2",
+        "on-surface": "#e2e2e2",
+        "on-surface-variant": "#d3c0d6",
+        outline: "#9c8ba0",
+        "outline-variant": "#504254",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
         // Marketing radii
-        xl: '0.75rem',
-        '2xl': '1rem',
-        '3xl': '1.5rem',
+        xl: "0.75rem",
+        "2xl": "1rem",
+        "3xl": "1.5rem",
       },
       fontFamily: {
         // Marketing typography
-        headline: ['"Plus Jakarta Sans"', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
+        headline: ['"Plus Jakarta Sans"', "sans-serif"],
+        body: ["Inter", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
@@ -123,4 +143,4 @@ export default {
     },
   },
   plugins: [animatePlugin, typographyPlugin],
-}
+};

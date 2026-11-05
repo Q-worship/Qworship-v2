@@ -20,7 +20,45 @@ html.lower-third-render #root {
 :root {
   --codelytemplatewebflowionero: rgba(255, 255, 255, 1);
   --codelytemplatewebflowiowoodsmoke: rgba(18, 18, 19, 1);
+
+  /* Profile Settings design tokens (from revamp-ui/profile-ui) */
+  --profile-bg: #1A102D;
+  --profile-card: #393048;
+  --profile-header: #2A203C;
+  --profile-field: #2A203C;
+  --profile-border: #484848;
+  --profile-text: #CBCED5;
+  --profile-muted: #768092;
+  --profile-subtle: #767676;
+  --profile-primary: #8356F3;
+  --profile-badge: #FD348F;
+
+  /* Account & Billing tokens (from payments-&-billing-usage.svg) */
+  --account-bg: #1A102D;
+  --account-card: #1B152D;
+  --account-well: #151024;
+  --account-border: #2F2845;
+  --account-field: #161124;
 }
+
+/* Profile & Account direct utility classes (always applied regardless of Tailwind config HMR) */
+.bg-profile-bg { background-color: #1A102D !important; }
+.bg-profile-card { background-color: #393048 !important; }
+.bg-profile-header { background-color: #2A203C !important; }
+.bg-profile-field { background-color: #2A203C !important; }
+.border-profile-border { border-color: #484848 !important; }
+.text-profile-text { color: #CBCED5 !important; }
+.text-profile-muted { color: #768092 !important; }
+.text-profile-subtle { color: #767676 !important; }
+.text-profile-primary { color: #8356F3 !important; }
+.bg-profile-primary { background-color: #8356F3 !important; }
+.border-profile-primary { border-color: #8356F3 !important; }
+
+.bg-account-bg { background-color: #1A102D !important; }
+.bg-account-card { background-color: #1B152D !important; }
+.bg-account-well { background-color: #151024 !important; }
+.border-account-border { border-color: #2F2845 !important; }
+.bg-account-field { background-color: #161124 !important; }
 
 @layer components {
   .all-\[unset\] {

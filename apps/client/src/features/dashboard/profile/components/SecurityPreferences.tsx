@@ -26,7 +26,7 @@ export const SecurityPreferences: React.FC = () => (
         Not yet active
       </span>
     </div>
-    <p className="mt-2 text-sm text-gray-500">
+    <p className="mt-2 text-sm text-profile-muted">
       Two-factor authentication is part of the agreed design and is not connected yet. It is not
       protecting your account today.
     </p>
@@ -40,11 +40,11 @@ export const SecurityPreferences: React.FC = () => (
       />
     </div>
 
-    <p className="mt-6 text-sm text-gray-500">
+    <p className="mt-6 text-sm text-profile-muted">
       Session timeout and login notifications are under{" "}
       <Link
         href="/dashboard-profile/preferences"
-        className="font-medium text-white underline underline-offset-4 transition-colors hover:text-[#a98bff]"
+        className="font-medium text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
       >
         Preferences
       </Link>
