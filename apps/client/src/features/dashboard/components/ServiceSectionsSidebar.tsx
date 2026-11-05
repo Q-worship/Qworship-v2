@@ -14,6 +14,10 @@ import {
   Globe,
   PlusIcon,
 } from "lucide-react";
+import {
+  isImportedPresentationItem,
+  PowerPointGlyph,
+} from "@/features/dashboard/components/PowerPointGlyph";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -401,7 +405,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                               className="flex items-center space-x-3">
                               <div
                                 className={`w-8 h-8 rounded flex items-center justify-center ${
-                                  item.type === "song"
+                                  isImportedPresentationItem(item)
+                                    ? "bg-[#3a3147] border border-[#8356F3]/30"
+                                    : item.type === "song"
                                     ? "bg-pink-500/20 border border-pink-500/30"
                                     : item.type === "bible"
                                       ? "bg-blue-500/20 border border-blue-500/30"
@@ -413,7 +419,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                                             ? "bg-green-500/20 border border-green-500/30"
                                             : "bg-gray-500/20 border border-gray-500/30"
                                 }`}>
-                                {item.type === "song" ? (
+                                {isImportedPresentationItem(item) ? (
+                                  <PowerPointGlyph className="w-5 h-5" />
+                                ) : item.type === "song" ? (
                                   <Music className="w-4 h-4 text-pink-300" />
                                 ) : item.type === "bible" ? (
                                   <BookOpen className="w-4 h-4 text-blue-300" />

@@ -14,6 +14,7 @@ import {
   type ParsedPresentation,
   type ParsedSlide,
 } from "@/lib/pptxParser";
+import { PowerPointGlyph } from "@/features/dashboard/components/PowerPointGlyph";
 
 export interface SlideAllocation {
   slide: ParsedSlide;
@@ -41,26 +42,6 @@ const SERVICE_SECTION_OPTIONS = [
 
 const sectionLabel = (key: string) =>
   SERVICE_SECTION_OPTIONS.find((option) => option.key === key)?.label ?? key;
-
-const PowerPointGlyph: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
-    <rect x="17" y="6" width="27" height="36" rx="3" fill="#CDBBF7" />
-    <rect x="23" y="14" width="15" height="3" rx="1.5" fill="#7A52D8" opacity="0.55" />
-    <rect x="23" y="21" width="15" height="3" rx="1.5" fill="#7A52D8" opacity="0.55" />
-    <rect x="23" y="28" width="15" height="3" rx="1.5" fill="#7A52D8" opacity="0.55" />
-    <rect x="3" y="12" width="26" height="26" rx="4" fill="#6D3FD1" />
-    <text
-      x="16"
-      y="31"
-      textAnchor="middle"
-      fontSize="18"
-      fontWeight="700"
-      fill="#FFFFFF"
-      fontFamily="Arial, Helvetica, sans-serif">
-      P
-    </text>
-  </svg>
-);
 
 const AllocateChip: React.FC<{ section?: string; className?: string }> = ({
   section,
@@ -90,7 +71,7 @@ export const ImportPresentationModal: React.FC<
   const [allocations, setAllocations] = useState<Record<number, string>>({});
   const [allocatingSlide, setAllocatingSlide] = useState<number | null>(null);
   const [pendingSection, setPendingSection] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -106,7 +87,7 @@ export const ImportPresentationModal: React.FC<
     setAllocations({});
     setAllocatingSlide(null);
     setPendingSection(null);
-    setViewMode("grid");
+    setViewMode("list");
     setIsParsing(false);
     setIsImporting(false);
     setIsDragOver(false);
@@ -177,7 +158,8 @@ export const ImportPresentationModal: React.FC<
   };
 
   const openAllocation = (slideNumber: number) => {
-    setPendingSection(allocations[slideNumber] ?? SERVICE_SECTION_OPTIONS[0].key);
+    // Nothing is pre-selected for a new slide; a slide already allocated shows its section
+    setPendingSection(allocations[slideNumber] ?? null);
     setAllocatingSlide(slideNumber);
   };
 
