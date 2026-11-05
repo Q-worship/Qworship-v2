@@ -2,6 +2,7 @@ import { useLiveConsoleStore } from "../../hooks/useLiveConsoleStore";
 import { useLowerThirdStore } from "@/stores/useLowerThirdStore";
 import { useHFBStore } from "../../hooks/useHFBStore";
 import { Radio, Settings, Image, X, Eye, EyeOff } from "lucide-react";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 
 interface RightPanelProps {
   liveWindow: Window | null;
@@ -79,9 +80,16 @@ export function LiveConsoleRightPanel({ liveWindow }: RightPanelProps) {
             <div className="absolute inset-0 flex items-center justify-center p-2">
               {store.previewProjectionType === 'song' && store.previewSongProjection && (
                 <div className="text-center w-full">
-                  <div className="text-purple-300 font-semibold mb-0.5" style={{ fontSize: '7px' }}>{store.previewSongProjection.title}</div>
-                  <div className="text-white/70 uppercase tracking-wider mb-1" style={{ fontSize: '5.5px' }}>{store.previewSongProjection.sectionTitle}</div>
-                  <div className="text-white font-medium leading-relaxed whitespace-pre-line" style={{ fontSize: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{store.previewSongProjection.lyrics}</div>
+                  {/* Mirrors the live screen: lyrics only, with the song's saved formatting */}
+                  <div className="text-white font-medium leading-relaxed whitespace-pre-line" style={{ fontSize: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
+                    <SongLyricsBody
+                      slide={{
+                        content: store.previewSongProjection.lyrics,
+                        lyricStyle: (store.previewSongProjection as any).lyricStyle,
+                        lyricHtml: (store.previewSongProjection as any).lyricHtml,
+                      }}
+                    />
+                  </div>
                 </div>
               )}
               {store.previewProjectionType === 'bible' && store.previewBibleProjection && (

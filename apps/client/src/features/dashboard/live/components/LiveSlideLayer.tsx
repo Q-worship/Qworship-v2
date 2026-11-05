@@ -3,6 +3,7 @@ import { useLivePresentationState, TEXT_SIZE_MAX_REM } from "../useLivePresentat
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "../../components/SlideCanvasRenderer";
 import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { lyricStyleToCss } from "@/features/songs/songFormatting";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 
 export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState>> = (props) => {
@@ -241,19 +242,9 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   : {}
               }>
               <div ref={songBibleMeasureRef} className="flex flex-col items-center">
-                {/* Title and section - for songs, show section below title; for Bible, show only the reference */}
-                {projectionType === "bible" ? (
-                  !referenceIsBottom && songBibleReferenceGroupEl
-                ) : (
-                  <div className="mb-6" style={{ textAlign: slideAlignment }}>
-                    <h2 ref={songBibleReferenceRef} className="text-white mb-2 font-bold">
-                      {currentSongProjection.title}
-                    </h2>
-                    <h3 className={`text-blue-300 font-medium ${getTextSizeClass()}`}>
-                      {currentSongProjection.sectionTitle}
-                    </h3>
-                  </div>
-                )}
+                {/* Scripture shows its reference; songs show only the lyrics (no song title,
+                    no verse / chorus label) */}
+                {projectionType === "bible" && !referenceIsBottom && songBibleReferenceGroupEl}
                 {/* Content text (lyrics or scripture) */}
                 <div
                   ref={songBibleContentRef}
@@ -278,22 +269,35 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     textAlign: slideAlignment,
                   }}>
                   {projectionType === "song" && pacingLineIdx >= 0 ? (
-                    currentSongProjection.lyrics.split("\n").map((line, lineIdx) => (
-                      <div
-                        key={lineIdx}
-                        style={{
-                          color: line.trim() === ""
-                            ? "transparent"
-                            : lineIdx <= pacingLineIdx
-                              ? "#fbbf24" // Amber highlight color
-                              : (editorState.styleColor || editorState.textColor || liveConsoleFontColor),
-                          minHeight: "1.2em",
-                          transition: "color 0.15s ease",
-                        }}
-                      >
-                        {line || "\u00A0"}
-                      </div>
-                    ))
+                    // Line-by-line pacing highlight: the song's base style applies, but not its
+                    // inline formatting (each line is coloured on its own here)
+                    <div style={lyricStyleToCss(currentSongProjection.lyricStyle)}>
+                      {currentSongProjection.lyrics.split("\n").map((line, lineIdx) => (
+                        <div
+                          key={lineIdx}
+                          style={{
+                            color: line.trim() === ""
+                              ? "transparent"
+                              : lineIdx <= pacingLineIdx
+                                ? "#fbbf24" // Amber highlight color
+                                : undefined,
+                            minHeight: "1.2em",
+                            transition: "color 0.15s ease",
+                          }}
+                        >
+                          {line || "\u00A0"}
+                        </div>
+                      ))}
+                    </div>
+                  ) : projectionType === "song" ? (
+                    // The song's saved formatting (base style + inline) on top of live settings
+                    <SongLyricsBody
+                      slide={{
+                        content: currentSongProjection.lyrics,
+                        lyricStyle: currentSongProjection.lyricStyle,
+                        lyricHtml: currentSongProjection.lyricHtml,
+                      }}
+                    />
                   ) : (
                     currentSongProjection.lyrics
                   )}

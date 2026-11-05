@@ -47,6 +47,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
 import { applySongToSlides } from "@/features/songs/songFormatting";
 import { lyricHtmlForSection } from "@/features/songs/songRichText";
+import { songSlideFormatting } from "@/features/songs/songSlides";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
 import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
 import {
@@ -2692,16 +2693,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           title: song.title, // Show song title on all slides
           content: (lyrics as string).trim(),
           sectionLabel: label,
-          sectionName, // the section's own name in the lyrics, used to match its formatting
           songTitle: song.title, // Store song title separately for display
-          // Formatting chosen for this section in the Song editor: the section's base
-          // style, and inline formatting on selected words / lines
-          ...(song.sectionStyles?.[sectionName]
-            ? { lyricStyle: song.sectionStyles[sectionName] }
-            : {}),
-          ...(lyricHtmlForSection(song, sectionName, (lyrics as string).trim())
-            ? { lyricHtml: lyricHtmlForSection(song, sectionName, (lyrics as string).trim()) }
-            : {}),
+          // The section's name (to match later edits) and the formatting chosen for it in
+          // the Song editor: its base style, and inline formatting on selected words / lines
+          ...songSlideFormatting(song, sectionName, (lyrics as string).trim()),
         });
 
         slideNumber++;
@@ -2967,6 +2962,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         content: section.content,
         songId: item.songId,
         sectionLabel: section.label,
+        // The song's formatting for this section (item carries sectionStyles / sectionHtml)
+        ...songSlideFormatting(item, section.label, String(section.content ?? "").trim()),
       }));
     } else if (item.type === "announcement") {
       // For announcement items, create a slide with announcement type
@@ -3185,6 +3182,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               songId: item.songId,
               sectionLabel:
                 section.label || section.type || `Section ${index + 1}`,
+              // The song's formatting for this section (item carries sectionStyles / sectionHtml)
+              ...songSlideFormatting(
+                item,
+                section.label || section.type || `Section ${index + 1}`,
+                String(section.content || section.text || "").trim(),
+              ),
             };
           });
           allSlides.push(...songSlides); // Append to existing slides

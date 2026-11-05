@@ -131,17 +131,18 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
           previewProjectionType === "song" &&
           previewSongProjection && (
             <div className="text-center w-full">
-              <div className="text-purple-300 text-[7px] font-semibold mb-0.5">
-                {previewSongProjection.title}
-              </div>
-              <div className="text-white/70 text-[6px] uppercase tracking-wider mb-1">
-                {previewSongProjection.sectionTitle}
-              </div>
+              {/* Mirrors the live screen: lyrics only, with the song's saved formatting */}
               <div
                 className="text-white font-medium leading-relaxed text-[9px] whitespace-pre-line"
                 style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
               >
-                {previewSongProjection.lyrics}
+                <SongLyricsBody
+                  slide={{
+                    content: previewSongProjection.lyrics,
+                    lyricStyle: (previewSongProjection as any).lyricStyle,
+                    lyricHtml: (previewSongProjection as any).lyricHtml,
+                  }}
+                />
               </div>
             </div>
           )}

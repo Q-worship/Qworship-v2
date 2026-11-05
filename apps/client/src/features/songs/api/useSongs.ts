@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, buildUrl } from "@/lib/queryClient";
 import { useSongRAMCache } from "@/features/dashboard/hooks/useSongRAMCache";
 
 export interface Song {
@@ -113,8 +113,12 @@ export const useImportSong = () => {
       formData.append('file', file);
       formData.append('format', format);
       
-      const response = await fetch('/api/songs/import', {
+      // Same address and sign-in token as every other request; without them the server
+      // refuses the import and nothing is saved
+      const token = localStorage.getItem('token');
+      const response = await fetch(buildUrl('/api/songs/import'), {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
       

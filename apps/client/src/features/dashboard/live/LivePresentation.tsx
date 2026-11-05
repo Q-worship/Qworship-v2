@@ -25,6 +25,7 @@ import { OBSControlPanel } from "@/features/dashboard/components/OBSControlPanel
 import { OBSStatusBadge } from "@/features/dashboard/components/OBSStatusBadge";
 import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
 import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { lyricStyleToCss } from "@/features/songs/songFormatting";
 import { obsService, OBSSettings } from "@/services/OBSConnectionService";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
@@ -89,6 +90,9 @@ export const LivePresentation = (): JSX.Element => {
     title: string;
     sectionTitle: string;
     lyrics: string;
+    /** The song's saved formatting for this section (songs only) */
+    lyricStyle?: any;
+    lyricHtml?: string;
   } | null>(null);
   const [projectionType, setProjectionType] = useState<"bible" | "song" | null>(
     null,
@@ -1541,6 +1545,8 @@ export const LivePresentation = (): JSX.Element => {
             title: data.title,
             sectionTitle: data.sectionTitle,
             lyrics: data.lyrics,
+            lyricStyle: data.format?.lyricStyle,
+            lyricHtml: data.format?.lyricHtml,
           });
           if (data.fullSongData) {
             setCurrentProjectedSong(data.fullSongData);
@@ -1563,6 +1569,8 @@ export const LivePresentation = (): JSX.Element => {
                     title: data.title,
                     sectionTitle: data.sectionTitle,
                     lyrics: data.lyrics,
+                    lyricStyle: data.format?.lyricStyle,
+                    lyricHtml: data.format?.lyricHtml,
                   },
                   bibleProjection: null,
                   projectionType: "song",
@@ -2685,19 +2693,16 @@ export const LivePresentation = (): JSX.Element => {
                   ? { backgroundColor: "transparent", backgroundImage: "none" }
                   : {}
               }>
-              {/* Title and section - for songs, show section below title; for Bible, show only title */}
-              <div className="mb-6" style={{ textAlign: slideAlignment }}>
-                <h2
-                  className={`text-white mb-2 font-bold ${getTextSizeClass()}`}>
-                  {currentSongProjection.title}
-                </h2>
-                {projectionType !== "bible" && (
-                  <h3
-                    className={`text-blue-300 font-medium ${getTextSizeClass()}`}>
-                    {currentSongProjection.sectionTitle}
-                  </h3>
-                )}
-              </div>
+              {/* Scripture shows its reference; songs show only the lyrics (no song title,
+                  no verse / chorus label) */}
+              {projectionType === "bible" && (
+                <div className="mb-6" style={{ textAlign: slideAlignment }}>
+                  <h2
+                    className={`text-white mb-2 font-bold ${getTextSizeClass()}`}>
+                    {currentSongProjection.title}
+                  </h2>
+                </div>
+              )}
               {/* Content text (lyrics or scripture) */}
               <div
                 className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
@@ -2720,24 +2725,45 @@ export const LivePresentation = (): JSX.Element => {
                   textTransform: (editorState.styleTextTransform as any) || "",
                   textAlign: slideAlignment,
                 }}>
-                {currentSongProjection.lyrics.split("\n").map((line, idx) => {
-                  const isHighlighted = pacingLineIdx >= 0 && idx === pacingLineIdx;
-                  return (
-                    <span
-                      key={idx}
-                      style={{
-                        display: "block",
-                        color: isHighlighted ? "#fbbf24" : "inherit",
-                        background: isHighlighted ? "rgba(251,191,36,0.08)" : "transparent",
-                        borderRadius: isHighlighted ? "4px" : undefined,
-                        padding: isHighlighted ? "0 4px" : undefined,
-                        transition: "color 0.2s, background 0.2s",
-                      }}
-                    >
-                      {line || "\u00A0"}
-                    </span>
-                  );
-                })}
+                {projectionType === "song" && pacingLineIdx < 0 ? (
+                  // The song's saved formatting (base style + inline) on top of live settings
+                  <SongLyricsBody
+                    slide={{
+                      content: currentSongProjection.lyrics,
+                      lyricStyle: currentSongProjection.lyricStyle,
+                      lyricHtml: currentSongProjection.lyricHtml,
+                    }}
+                  />
+                ) : (
+                  // Line-by-line (scripture, or a song while pacing highlights the current
+                  // line): a song's base style applies, its inline formatting does not
+                  <div
+                    style={
+                      projectionType === "song"
+                        ? lyricStyleToCss(currentSongProjection.lyricStyle)
+                        : undefined
+                    }
+                  >
+                    {currentSongProjection.lyrics.split("\n").map((line, idx) => {
+                      const isHighlighted = pacingLineIdx >= 0 && idx === pacingLineIdx;
+                      return (
+                        <span
+                          key={idx}
+                          style={{
+                            display: "block",
+                            color: isHighlighted ? "#fbbf24" : "inherit",
+                            background: isHighlighted ? "rgba(251,191,36,0.08)" : "transparent",
+                            borderRadius: isHighlighted ? "4px" : undefined,
+                            padding: isHighlighted ? "0 4px" : undefined,
+                            transition: "color 0.2s, background 0.2s",
+                          }}
+                        >
+                          {line || "\u00A0"}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {/* For Bible projections, show version below the scripture text */}
               {projectionType === "bible" &&

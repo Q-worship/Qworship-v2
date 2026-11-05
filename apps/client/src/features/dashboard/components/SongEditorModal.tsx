@@ -24,6 +24,7 @@ import {
   sanitizeLyricHtml,
 } from "@/features/songs/songRichText";
 import { LyricEditor, readLyricEditor, type LyricEditorValue } from "@/features/songs/LyricEditor";
+import { parseLyricsForEditor } from "@/features/songs/songLyrics";
 import { LyricToolbar } from "@/features/songs/LyricToolbar";
 
 interface SectionItem {
@@ -177,63 +178,8 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
     }
   }, [initialData, isOpen]);
 
-  // Helper function to parse lyrics into sections
-  const parseLyricsIntoSections = (lyrics: string): SectionItem[] => {
-    const sections: SectionItem[] = [];
-    const lines = lyrics.split('\n');
-    let currentSection: { type: 'verse' | 'chorus', label: string, content: string[] } | null = null;
-    let verseCount = 0;
-    let chorusCount = 0;
-
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      
-      if (trimmedLine.startsWith('[') && trimmedLine.endsWith(']')) {
-        // Save previous section if exists
-        if (currentSection && currentSection.content.length > 0) {
-          const isChorus = currentSection.type === 'chorus';
-          sections.push({
-            id: `${currentSection.type[0]}${isChorus ? chorusCount : verseCount}_${Date.now()}_${sections.length}`,
-            type: currentSection.type,
-            number: isChorus ? chorusCount : verseCount,
-            label: currentSection.label,
-            content: currentSection.content.join('\n')
-          });
-        }
-        
-        // Start new section
-        const sectionLabel = trimmedLine.slice(1, -1);
-        const isChorus = sectionLabel.toLowerCase().includes('chorus');
-        if (isChorus) {
-          chorusCount++;
-        } else {
-          verseCount++;
-        }
-        
-        currentSection = {
-          type: isChorus ? 'chorus' : 'verse',
-          label: sectionLabel,
-          content: []
-        };
-      } else if (trimmedLine && currentSection) {
-        currentSection.content.push(trimmedLine);
-      }
-    }
-    
-    // Add final section
-    if (currentSection && currentSection.content.length > 0) {
-      const isChorus = currentSection.type === 'chorus';
-      sections.push({
-        id: `${currentSection.type[0]}${isChorus ? chorusCount : verseCount}_${Date.now()}_${sections.length}`,
-        type: currentSection.type,
-        number: isChorus ? chorusCount : verseCount,
-        label: currentSection.label,
-        content: currentSection.content.join('\n')
-      });
-    }
-    
-    return sections;
-  };
+  // Reads saved lyrics back into sections (blank lines and empty sections are kept)
+  const parseLyricsIntoSections = (lyrics: string): SectionItem[] => parseLyricsForEditor(lyrics);
 
   const addSection = (type: "verse" | "chorus") => {
     const existingSections = sections.filter(section => section.type === type);

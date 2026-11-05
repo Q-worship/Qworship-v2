@@ -104,6 +104,9 @@ export function useLivePresentationState() {
     title: string;
     sectionTitle: string;
     lyrics: string;
+    /** The song's saved formatting for this section (songs only) */
+    lyricStyle?: any;
+    lyricHtml?: string;
   } | null>(null);
   const [projectionType, setProjectionType] = useState<"bible" | "song" | null>(
     null,
@@ -1781,6 +1784,8 @@ export function useLivePresentationState() {
             title: data.title,
             sectionTitle: data.sectionTitle,
             lyrics: data.lyrics,
+            lyricStyle: data.format?.lyricStyle,
+            lyricHtml: data.format?.lyricHtml,
           });
           if (data.fullSongData) {
             setCurrentProjectedSong(data.fullSongData);
@@ -1802,6 +1807,8 @@ export function useLivePresentationState() {
                     title: data.title,
                     sectionTitle: data.sectionTitle,
                     lyrics: data.lyrics,
+                    lyricStyle: data.format?.lyricStyle,
+                    lyricHtml: data.format?.lyricHtml,
                   },
                   bibleProjection: null,
                   projectionType: "song",

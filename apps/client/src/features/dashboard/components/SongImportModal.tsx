@@ -83,9 +83,13 @@ export const SongImportModal: React.FC<SongImportModalProps> = ({
       { file: selectedFile, format: selectedFormat },
       {
         onSuccess: (data) => {
+          // The server doesn't report how many sections it found, so count them in the lyrics
+          const sectionsFound =
+            data.parsedData?.sectionsFound ??
+            (String(data.song?.lyrics ?? "").match(/^\[[^\]]+\]\s*$/gm)?.length ?? 0);
           toast({
             title: "Import Successful",
-            description: `"${data.song.title}" has been imported with ${data.parsedData.sectionsFound} sections.`,
+            description: `"${data.song.title}" has been imported with ${sectionsFound} sections.`,
           });
           
           if (onImportComplete) {

@@ -111,6 +111,9 @@ interface Song {
   createdAt?: string;
   structure?: string[];
   lyrics?: string;
+  /** Formatting saved with the song, keyed by section name (see the Song editor) */
+  sectionStyles?: Record<string, any>;
+  sectionHtml?: Record<string, string>;
 }
 
 interface SongbookModalProps {
@@ -148,14 +151,23 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
     const songDataForEditor = {
       id: song.id,
       title: song.title,
+      // Everything saved with the song has to go back to the editor, or saving again
+      // would wipe it
+      alternativeTitles: song.alternativeTitles,
+      sectionStyles: song.sectionStyles,
+      sectionHtml: song.sectionHtml,
       authors: song.authors,
       topics: song.topics,
       copyright: song.copyright,
-      lyrics: song.sections
-        ? song.sections
-            .map((section) => `[${section.label}]\n${section.content}`)
-            .join("\n\n")
-        : "",
+      // The lyrics exactly as saved (empty sections and blank lines included); only the
+      // built-in example, which has no saved text, is rebuilt from its sections
+      lyrics:
+        song.lyrics ??
+        (song.sections
+          ? song.sections
+              .map((section) => `[${section.label}]\n${section.content}`)
+              .join("\n\n")
+          : ""),
       sections: song.sections,
       structure: song.verseOrder
         ? song.verseOrder.split(", ").map((s) => s.trim())
@@ -237,6 +249,12 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
             authors: song.authors,
             topics: song.topics,
             copyright: song.copyright,
+            alternativeTitles: song.alternativeTitles,
+            sectionStyles: song.sectionStyles,
+            sectionHtml: song.sectionHtml,
+            // The lyrics exactly as saved, so editing starts from what was stored
+            lyrics: song.lyrics,
+            structure: song.structure,
           };
         })
       : [

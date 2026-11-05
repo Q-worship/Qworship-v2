@@ -11,7 +11,8 @@ const ownedById = (req: any) => ({ _id: req.params.id, ...mine(req) });
 // Fields a client may change on an existing song (never createdBy / organizationId)
 const EDITABLE_FIELDS = [
   'title', 'artist', 'album', 'lyrics', 'structure', 'key', 'tempo', 'ccliNumber',
-  'tags', 'sections', 'sectionStyles', 'sectionHtml', 'alternativeTitles', 'authors', 'topics', 'isActive',
+  'tags', 'sections', 'sectionStyles', 'sectionHtml', 'alternativeTitles', 'authors', 'topics',
+  'copyright', 'isActive',
 ] as const;
 
 // ---- Lyric formatting ------------------------------------------------------------
@@ -78,6 +79,71 @@ const cleanAlternativeTitles = (value: unknown): string[] =>
     ? value.filter((t): t is string => typeof t === 'string').map((t) => t.trim().slice(0, 200)).filter(Boolean).slice(0, 10)
     : [];
 
+// ---- Authors, topics, copyright and verse order -----------------------------------
+// The editor sends authors / topics as text ("A, B") and the verse order as a JSON string
+// ('["V1","C1"]'); they are stored as lists. An older save stored the whole JSON string as a
+// single list entry, so the same parsing also repairs those songs when they are read.
+
+/** A list of short strings from an array, or from text split on commas / semicolons / lines. */
+export const cleanStringList = (value: unknown, maxItems = 50, maxLength = 200): string[] => {
+  const raw: unknown[] =
+    typeof value === 'string' ? value.split(/[,;\n]/) : Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'string') continue;
+    const text = entry.trim().slice(0, maxLength);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    result.push(text);
+    if (result.length >= maxItems) break;
+  }
+  return result;
+};
+
+export const cleanCopyright = (value: unknown): string =>
+  typeof value === 'string' ? value.slice(0, 2000) : '';
+
+/** The verse order as a list of tags, from a list, a JSON string of a list, or plain text. */
+export const normalizeStructure = (value: unknown): string[] => {
+  let candidate: unknown = value;
+  // Unwrap the JSON text however it got wrapped: as a string, as the only entry of a list,
+  // quoted again, or split on its commas into fragments like ["V1" and "C1"] (what reopening
+  // and re-saving a song that was stored the old way produced)
+  for (let pass = 0; pass < 4; pass++) {
+    if (Array.isArray(candidate)) {
+      const strings = candidate.filter((entry): entry is string => typeof entry === 'string');
+      if (strings.length === 1) {
+        candidate = strings[0];
+        continue;
+      }
+      const joined = strings.join(',').trim();
+      if (strings.length > 1 && joined.startsWith('[') && joined.endsWith(']')) {
+        try {
+          candidate = JSON.parse(joined);
+          continue;
+        } catch {
+          // not JSON: a normal list
+        }
+      }
+      break;
+    }
+    if (typeof candidate === 'string') {
+      const text = candidate.trim();
+      if (text.startsWith('[') || text.startsWith('"')) {
+        try {
+          candidate = JSON.parse(text);
+          continue;
+        } catch {
+          // not JSON: plain text
+        }
+      }
+    }
+    break;
+  }
+  return cleanStringList(candidate, 200, 40);
+};
+
 const decodeKeys = (value: unknown): Record<string, unknown> =>
   isPlainObject(value)
     ? Object.fromEntries(Object.entries(value).map(([key, entry]) => [decodeKey(key), entry]))
@@ -88,6 +154,7 @@ const present = (song: any) => {
   const plain = song.toObject();
   return {
     ...plain,
+    structure: normalizeStructure(plain.structure),
     id: song._id.toString(),
     sectionStyles: decodeKeys(plain.sectionStyles),
     sectionHtml: decodeKeys(plain.sectionHtml),
@@ -102,6 +169,10 @@ const pickEditable = (body: any) => {
   if ('sectionStyles' in update) update.sectionStyles = cleanSectionStyles(update.sectionStyles);
   if ('sectionHtml' in update) update.sectionHtml = cleanSectionHtml(update.sectionHtml);
   if ('alternativeTitles' in update) update.alternativeTitles = cleanAlternativeTitles(update.alternativeTitles);
+  if ('authors' in update) update.authors = cleanStringList(update.authors);
+  if ('topics' in update) update.topics = cleanStringList(update.topics);
+  if ('copyright' in update) update.copyright = cleanCopyright(update.copyright);
+  if ('structure' in update) update.structure = normalizeStructure(update.structure);
   return update;
 };
 
@@ -127,10 +198,13 @@ export const getSongs = async (req: any, res: Response) => {
     const songs = await Song.find(mine(req)).sort({ title: 1 });
 
     // Convert structure to frontend format natively
-    const formattedSongs = songs.map((s) => ({
-      ...present(s),
-      verseOrder: s.structure && s.structure.length > 0 ? s.structure.join(", ") : undefined,
-    }));
+    const formattedSongs = songs.map((s) => {
+      const shaped = present(s);
+      return {
+        ...shaped,
+        verseOrder: shaped.structure.length > 0 ? shaped.structure.join(", ") : undefined,
+      };
+    });
 
     res.json({ success: true, songs: formattedSongs });
   } catch (error) {
@@ -157,7 +231,7 @@ export const getSongById = async (req: any, res: Response) => {
 // Create a new song into MongoDB
 export const createSong = async (req: any, res: Response) => {
   try {
-    const { title, artist, album, lyrics, structure, key, tempo, tags, sections, sectionStyles, sectionHtml, alternativeTitles, authors, topics, ccliNumber } = req.body;
+    const { title, artist, album, lyrics, structure, key, tempo, tags, sections, sectionStyles, sectionHtml, alternativeTitles, authors, topics, copyright, ccliNumber } = req.body;
 
     // We map frontend 'sections' into our embedded schema format
     const newSong = await Song.create({
@@ -165,7 +239,7 @@ export const createSong = async (req: any, res: Response) => {
       artist: artist || '',
       album: album || '',
       lyrics,
-      structure: Array.isArray(structure) ? structure : [],
+      structure: normalizeStructure(structure),
       sections: Array.isArray(sections) ? sections : [],
       sectionStyles: cleanSectionStyles(sectionStyles),
       sectionHtml: cleanSectionHtml(sectionHtml),
@@ -173,8 +247,9 @@ export const createSong = async (req: any, res: Response) => {
       key: key || '',
       tempo: tempo || 120,
       tags: tags || [],
-      authors: authors || [],
-      topics: topics || [],
+      authors: cleanStringList(authors),
+      topics: cleanStringList(topics),
+      copyright: cleanCopyright(copyright),
       ccliNumber: ccliNumber || '',
       createdBy: req.user._id,
       organizationId: req.user._id, // Assuming personal library namespace for now

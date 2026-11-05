@@ -1,6 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
 import { getServiceSectionKey } from "./useHistoryManager";
-import { lyricHtmlForSection } from "@/features/songs/songRichText";
+import { songSlideFormatting } from "@/features/songs/songSlides";
 
 interface UseServiceItemManagerProps {
   selectedServiceSection: string | null;
@@ -142,16 +142,10 @@ export function useServiceItemManager({
           title: song.title,
           content: (lyrics as string).trim(),
           sectionLabel: label,
-          sectionName, // the section's own name in the lyrics, used to match its formatting
           songTitle: song.title,
-          // Formatting chosen for this section in the Song editor: the section's base
-          // style, and inline formatting on selected words / lines
-          ...(song.sectionStyles?.[sectionName]
-            ? { lyricStyle: song.sectionStyles[sectionName] }
-            : {}),
-          ...(lyricHtmlForSection(song, sectionName, (lyrics as string).trim())
-            ? { lyricHtml: lyricHtmlForSection(song, sectionName, (lyrics as string).trim()) }
-            : {}),
+          // The section's name (to match later edits) and the formatting chosen for it in
+          // the Song editor: its base style, and inline formatting on selected words / lines
+          ...songSlideFormatting(song, sectionName, (lyrics as string).trim()),
         });
 
         slideNumber++;
@@ -351,6 +345,8 @@ export function useServiceItemManager({
         content: section.content,
         songId: item.songId,
         sectionLabel: section.label,
+        // The song's formatting for this section (item carries sectionStyles / sectionHtml)
+        ...songSlideFormatting(item, section.label, String(section.content ?? "").trim()),
       }));
     }
 

@@ -133,10 +133,10 @@ export function LiveControlCentre(props: LiveConsoleProps) {
   });
 
   const songProps = useInlineSongBrowser({
-    onProjectSong: (title, sectionTitle, lyrics, fullSongData, pacingLineIdx) => {
-      sendCommand('PROJECT_SONG', { title, sectionTitle, lyrics, fullSongData, pacingLineIdx });
-      
-      state.setPreviewSongProjection({ title, sectionTitle, lyrics });
+    onProjectSong: (title, sectionTitle, lyrics, fullSongData, pacingLineIdx, format) => {
+      sendCommand('PROJECT_SONG', { title, sectionTitle, lyrics, fullSongData, pacingLineIdx, format });
+
+      state.setPreviewSongProjection({ title, sectionTitle, lyrics, ...format });
       state.setPreviewBibleProjection(null);
       state.setPreviewProjectionType('song');
       state.setActiveMode('song');
@@ -160,9 +160,9 @@ export function LiveControlCentre(props: LiveConsoleProps) {
     setActiveSongSectionIdx: songProps.setActiveSongSectionIdx,
     liveWindow: props.liveWindow,
     currentSongDataRef,
-    onProjectNextSection: (title, sectionTitle, lyrics, fullSongData, pacingLineIdx) => {
-      sendCommand('PROJECT_SONG', { title, sectionTitle, lyrics, fullSongData, pacingLineIdx });
-      state.setPreviewSongProjection({ title, sectionTitle, lyrics });
+    onProjectNextSection: (title, sectionTitle, lyrics, fullSongData, pacingLineIdx, format) => {
+      sendCommand('PROJECT_SONG', { title, sectionTitle, lyrics, fullSongData, pacingLineIdx, format });
+      state.setPreviewSongProjection({ title, sectionTitle, lyrics, ...format });
       state.setPreviewBibleProjection(null);
       state.setPreviewProjectionType('song');
       state.setActiveMode('song');

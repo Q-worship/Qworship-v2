@@ -23,7 +23,13 @@ interface SongData {
   copyright?: string;
   dateAdded: string;
   artist?: string;
+  sectionStyles?: Record<string, any>;
+  sectionHtml?: Record<string, string>;
 }
+
+// Authors / topics are saved as lists; show them as "A, B"
+const listText = (value: string[] | string | undefined): string =>
+  (Array.isArray(value) ? value.join(", ") : (value ?? "")).trim();
 
 interface SongViewerModalProps {
   isOpen: boolean;
@@ -124,6 +130,9 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
       lyrics: (song as any).lyrics, // Include lyrics field for fallback slide creation
       structure: (song as any).structure, // Include structure field
       verseOrder: song.verseOrder,
+      // Formatting saved with the song, so its slides show it on the live screen
+      sectionStyles: song.sectionStyles,
+      sectionHtml: song.sectionHtml,
       songId: song.id
     };
 
@@ -297,11 +306,11 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="text-sm font-medium text-gray-300 mb-2">Authors</h4>
-                  <p className="text-white">{song.authors || "Not specified"}</p>
+                  <p className="text-white">{listText(song.authors) || "Not specified"}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-300 mb-2">Topics</h4>
-                  <p className="text-white">{song.topics || "Not specified"}</p>
+                  <p className="text-white">{listText(song.topics) || "Not specified"}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-300 mb-2">Date Added</h4>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSongRAMCache } from './useSongRAMCache';
+import { sectionFormat, type SectionFormat } from '@/features/songs/songSlides';
 
 export interface SongSection { title: string; content: string }
 
@@ -9,7 +10,9 @@ interface UseInlineSongBrowserProps {
     sectionTitle: string,
     lyrics: string,
     fullSongData?: any,
-    pacingLineIdx?: number
+    pacingLineIdx?: number,
+    /** The song's saved formatting for this section (base style, inline formatting) */
+    format?: SectionFormat
   ) => void;
 }
 
@@ -67,7 +70,14 @@ export function useInlineSongBrowser({ onProjectSong }: UseInlineSongBrowserProp
       
       if (cachedSong) {
          fullSong = cachedSong;
-         if (Array.isArray(cachedSong.sections) && cachedSong.sections.length > 0) {
+         // The lyrics text is what the Song editor saves, so it is the source of truth; a
+         // song's embedded `sections` list is only a fallback for songs that have no lyrics
+         // (otherwise it can be older than the last edit)
+         if (
+           !String(cachedSong.lyrics ?? '').trim() &&
+           Array.isArray(cachedSong.sections) &&
+           cachedSong.sections.length > 0
+         ) {
             sections = cachedSong.sections.map((s: any) => ({
               title: s.title || s.type || 'Section',
               content: s.content || '',
@@ -90,7 +100,14 @@ export function useInlineSongBrowser({ onProjectSong }: UseInlineSongBrowserProp
     // Auto-project the first section to the live screen seamlessly!
     if (sections.length > 0) {
       setActiveSongSectionIdx(0);
-      onProjectSong(fullSong.title, sections[0].title, sections[0].content, undefined, -1);
+      onProjectSong(
+        fullSong.title,
+        sections[0].title,
+        sections[0].content,
+        undefined,
+        -1,
+        sectionFormat(fullSong, sections[0].title, sections[0].content),
+      );
     }
   }, [onProjectSong]);
 
@@ -107,7 +124,8 @@ export function useInlineSongBrowser({ onProjectSong }: UseInlineSongBrowserProp
         section.title,
         section.content,
         undefined,
-        isPacingPlaying ? 0 : -1
+        isPacingPlaying ? 0 : -1,
+        sectionFormat(currentSongData, section.title, section.content),
       );
     }
   }, [currentSongData, onProjectSong]);

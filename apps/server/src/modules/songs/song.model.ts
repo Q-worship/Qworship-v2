@@ -24,6 +24,9 @@ export interface ISong extends Document {
   /** Inline formatting per section (HTML for selected words / lines), keyed like sectionStyles */
   sectionHtml?: Record<string, string>;
   alternativeTitles?: string[];
+  authors?: string[];
+  topics?: string[];
+  copyright?: string;
   organizationId: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
   isActive: boolean;
@@ -53,6 +56,9 @@ const SongSchema = new Schema<ISong>(
     sectionStyles: { type: Schema.Types.Mixed, default: {} },
     sectionHtml: { type: Schema.Types.Mixed, default: {} },
     alternativeTitles: [String],
+    authors: [String],
+    topics: [String],
+    copyright: String,
     organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     isActive: { type: Boolean, default: true },
