@@ -2,6 +2,7 @@ import React from "react";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 
 export const SlideGridRenderer = (props: any) => {
   const { 
@@ -493,7 +494,7 @@ export const SlideGridRenderer = (props: any) => {
                                           <div className="space-y-0">
                                             {slide.content ? (
                                               <div
-                                                className="text-[10px] leading-tight"
+                                                className="max-h-[75px] overflow-hidden whitespace-pre-line text-[10px] leading-tight"
                                                 style={{
                                                   fontFamily:
                                                     editorState.styleFontFamily ||
@@ -521,20 +522,20 @@ export const SlideGridRenderer = (props: any) => {
                                                   textTransform:
                                                     (editorState.styleTextTransform as any) ||
                                                     "",
-                                                }}
-                                                dangerouslySetInnerHTML={{
-                                                  __html:
-                                                    typeof slide.content ===
-                                                    "string"
-                                                      ? slide.content
-                                                          .split("\n")
-                                                          .slice(0, 6)
-                                                          .join("<br/>")
-                                                      : (slide as any).content
-                                                          ?.content ||
-                                                        "Song lyrics",
-                                                }}
-                                              />
+                                                }}>
+                                                {/* The song's saved formatting on top of these
+                                                    settings, as text (not raw HTML); the box
+                                                    shows the first lines */}
+                                                {typeof slide.content ===
+                                                "string" ? (
+                                                  <SongLyricsBody
+                                                    slide={slide}
+                                                  />
+                                                ) : (
+                                                  (slide as any).content
+                                                    ?.content || "Song lyrics"
+                                                )}
+                                              </div>
                                             ) : (
                                               <div className="text-[10px]">
                                                 No lyrics available

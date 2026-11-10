@@ -4260,7 +4260,30 @@ export const DashboardMainWorkspace = (props: any) => {
                                   "none",
                               }}
                             >
-                              {slide.content || "No content available"}
+                              {/* The words with the formatting saved in the Song editor
+                                  (base style and formatted words), so this shows the edits */}
+                              {slide.content ? (
+                                <SongLyricsBody
+                                  slide={
+                                    slide.lyricStyle ||
+                                    slide.lyricHtml ||
+                                    slide.sectionName == null
+                                      ? slide
+                                      : {
+                                          // A slide made before formatting was saved with it:
+                                          // take the song's saved formatting for its section
+                                          ...slide,
+                                          ...sectionFormat(
+                                            songOfItem(editingContent),
+                                            slide.sectionName,
+                                            String(slide.content).trim(),
+                                          ),
+                                        }
+                                  }
+                                />
+                              ) : (
+                                "No content available"
+                              )}
                             </div>
                           </div>
                         ),
