@@ -27,6 +27,8 @@ const ICON_OVERRIDES: Record<string, React.ElementType> = {
 };
 
 const MARGIN = 8;
+// The highest z-index a browser accepts: nothing in the page can be drawn over the panel
+const TOP_LAYER = 2147483647;
 
 interface AddItemModalProps {
   /** Where the panel opens: beside this button. Null keeps it closed. */
@@ -37,9 +39,9 @@ interface AddItemModalProps {
 }
 
 /**
- * "Add item": the Insert Item menu as a small panel beside the Add button that opened it - to the
- * right of the button, level with it, moving up (or to the left of the button) when there is
- * no room below (or to the right). The page is not dimmed. It is drawn into the page body (a
+ * "Add item": the Insert Item menu as a panel beside the Add button that opened it - to the
+ * right of the button and level with it (to the left when there is no room on the right). It only
+ * moves up or down as far as the window needs. The page is not dimmed. It is drawn into the page body (a
  * portal) above everything, so no section of the sidebar or the workspace can sit on top of it or
  * clip it. It closes on Esc, a click anywhere else, or when the page is resized or scrolled.
  */
@@ -66,8 +68,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ anchor, onClose, ite
     if (left + width > viewportWidth - MARGIN) left = anchor.left - width - MARGIN;
     left = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, viewportWidth - MARGIN - width));
 
-    let top = anchor.top;
-    if (top + height > viewportHeight - MARGIN) top = anchor.bottom - height;
+    // Level with the button (its middle against the panel's middle), so it always sits beside the
+    // button - for a section low on the screen too - and only moves as far as the window needs
+    let top = (anchor.top + anchor.bottom) / 2 - height / 2;
     top = Math.min(Math.max(top, MARGIN), Math.max(MARGIN, viewportHeight - MARGIN - height));
 
     setPosition({ top, left });
@@ -107,14 +110,20 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ anchor, onClose, ite
   return createPortal(
     <>
       {/* Invisible: a click anywhere outside the panel closes it */}
-      <div className="fixed inset-0 z-[299]" onMouseDown={onClose} aria-hidden="true" />
+      <div
+        className="fixed inset-0"
+        style={{ zIndex: TOP_LAYER - 1 }}
+        onMouseDown={onClose}
+        aria-hidden="true"
+      />
 
       <div
         ref={panelRef}
         role="dialog"
         aria-label="Add item"
-        className="fixed z-[300] w-[300px] overflow-y-auto rounded-2xl border border-white/10 bg-[#12091c] shadow-2xl"
+        className="fixed w-[400px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#12091c] shadow-2xl"
         style={{
+          zIndex: TOP_LAYER,
           top: position?.top ?? 0,
           left: position?.left ?? 0,
           maxHeight: `calc(100vh - ${MARGIN * 2}px)`,

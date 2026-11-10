@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { lyricStyleToCss } from "./songFormatting";
-import { htmlMatchesContent, sanitizeLyricHtml } from "./songRichText";
+import { htmlMatchesContent, relativeLyricUnits, sanitizeLyricHtml } from "./songRichText";
 
 /**
  * The lyrics of a song slide with the formatting chosen in the Song editor: the section's base
@@ -16,7 +16,8 @@ export const SongLyricsBody: React.FC<{ slide: any }> = ({ slide }) => {
   const html = useMemo(() => {
     if (!lyricHtml) return null;
     const clean = sanitizeLyricHtml(lyricHtml);
-    return clean && htmlMatchesContent(clean, content) ? clean : null;
+    // Relative sizes only, so the screen can shrink a long verse to fit it
+    return clean && htmlMatchesContent(clean, content) ? relativeLyricUnits(clean) : null;
   }, [lyricHtml, content]);
 
   return (

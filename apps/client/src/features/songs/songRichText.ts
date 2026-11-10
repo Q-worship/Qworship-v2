@@ -129,6 +129,22 @@ export const sanitizeLyricHtml = (html: string | null | undefined): string => {
 const BLOCK_TAGS = new Set(["DIV", "P", "LI"]);
 
 /** The text of lyric HTML with one line per line break / block, as the editor shows it. */
+/**
+ * For showing a verse: sizes in absolute units (px, pt, rem - what pasted text brings) become
+ * relative (em), taking 16px as the normal size. Absolute sizes do not follow the text when the
+ * screen shrinks a long verse to fit, so a verse that carried them could never be made to fit
+ * and its last lines were cut off. The editor's own sizes are already relative (em).
+ */
+export const relativeLyricUnits = (html: string): string =>
+  html.replace(
+    /(font-size|line-height|letter-spacing)(\s*:\s*)(-?\d+(?:\.\d+)?)(px|pt|rem)/gi,
+    (_match, property: string, separator: string, amount: string, unit: string) => {
+      const value = parseFloat(amount);
+      const em = unit.toLowerCase() === "pt" ? value / 12 : unit.toLowerCase() === "rem" ? value : value / 16;
+      return `${property}${separator}${Math.round(em * 1000) / 1000}em`;
+    },
+  );
+
 export const lyricHtmlToPlain = (html: string | null | undefined): string => {
   if (!html) return "";
   const body = parseHtml(String(html)).body;
