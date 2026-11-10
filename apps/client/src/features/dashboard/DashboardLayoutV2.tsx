@@ -46,6 +46,7 @@ import { SongSearchModal } from "@/features/dashboard/components/SongSearchModal
 import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
 import { applySongToSlides } from "@/features/songs/songFormatting";
+import { syncSongSlides } from "@/features/songs/songSlideSync";
 import { lyricHtmlForSection } from "@/features/songs/songRichText";
 import { songSlideFormatting } from "@/features/songs/songSlides";
 import {
@@ -2788,7 +2789,16 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       return Array.isArray(refreshed?.slides)
         ? {
             ...refreshed,
-            slides: applySongToSlides(refreshed.slides, song.id, sections, styles, htmlFor),
+            // text and formatting updated, a slide added for a new section, the slide of a
+            // deleted section removed
+            slides: syncSongSlides(
+              refreshed.slides,
+              song.id,
+              sections,
+              styles,
+              htmlFor,
+              String(refreshed.id),
+            ),
           }
         : refreshed;
     };
