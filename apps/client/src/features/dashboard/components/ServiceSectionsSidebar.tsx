@@ -1,4 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
+import { AddFileIcon } from "@/features/dashboard/components/AddFileIcon";
+import {
+  AddItemModal,
+  type AddItemMenuEntry,
+} from "@/features/dashboard/components/AddItemModal";
 import {
   CalendarIcon,
   ChevronLeftIcon,
@@ -80,6 +85,10 @@ interface ServiceSectionsSidebarProps {
   setSelectedSlide: (slide: any) => void;
   editingContent: any;
   showDeleteConfirmation: (section: string, item: any) => void;
+
+  // The Insert Item menu entries (what the header's Insert Item menu adds), shown in the
+  // "Add item" modal; each one adds to the selected section
+  insertItemMenuItems: AddItemMenuEntry[];
 }
 
 export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
@@ -116,7 +125,11 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
   editingContent,
   showDeleteConfirmation,
   isSidebarCollapsed,
+  insertItemMenuItems,
 }) => {
+  // The "Add item" modal opened by a section's Add button
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+
   return (
     <aside
       className={`bg-[#12091c] flex flex-col h-full z-10 transition-all duration-300 ease-in-out border-[#ffffff20] ${
@@ -277,6 +290,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
 
               return (
                 <div key={section} className="border-b border-gray-700 pb-2">
+                  {/* The header row: the section button, and an Add button that shows when the
+                      row is hovered (always on touch screens, which cannot hover) */}
+                  <div className="group/header relative">
                   <button
                     onClick={() => {
                       setSelectedServiceSection(isSelected ? null : section);
@@ -315,7 +331,7 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                       </span>
 
                       {isSelected && (
-                        <div className="flex items-center space-x-1">
+                        <div className="flex items-center space-x-1 transition-opacity group-hover/header:opacity-0 group-focus-within/header:opacity-0 [@media(hover:none)]:hidden">
                           <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                           <span className="text-xs text-white/80">
                             {sectionItemCount > 0
@@ -326,6 +342,23 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                       )}
                     </div>
                   </button>
+
+                  <button
+                    type="button"
+                    aria-label={`Add an item to ${section}`}
+                    title="Add item"
+                    onClick={() => {
+                      // The item is added to this section, so this is the selected one
+                      if (selectedServiceSection !== section) {
+                        setSelectedServiceSection(section);
+                      }
+                      setAddMenuOpen(true);
+                    }}
+                    className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded border border-[#00C3C7]/50 bg-[#00C3C7]/10 px-2.5 py-1 text-xs text-[#00C3C7] opacity-0 transition-opacity hover:bg-[#00C3C7]/20 focus-visible:opacity-100 focus-visible:outline-none group-hover/header:opacity-100 [@media(hover:none)]:opacity-100">
+                    <AddFileIcon className="h-4 w-4" />
+                    <span>Add</span>
+                  </button>
+                  </div>
 
                   {/* Default message when section is selected - always show if selected */}
                   {isSelected && (
@@ -492,6 +525,12 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
           </div>
         )}
       </div>
+
+      <AddItemModal
+        open={addMenuOpen}
+        onClose={() => setAddMenuOpen(false)}
+        items={insertItemMenuItems}
+      />
     </aside>
   );
 };

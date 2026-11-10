@@ -2111,7 +2111,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       submenuItems: [
         {
           name: "PowerPoint Presentation",
-          action: () => console.log("Import PowerPoint"),
+          // Opens the Import Presentation modal, where each slide is given its section
+          action: () => handleImportPresentation(),
         },
         { name: "Media Files", action: () => console.log("Import Media") },
         { name: "Song Database", action: () => console.log("Import Songs") },
@@ -5249,6 +5250,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
                 showDeleteConfirmation={showDeleteConfirmation}
                 isAddItemVisible={isAddItemVisible}
                 setIsAddItemVisible={setIsAddItemVisible}
+                insertItemMenuItems={insertItemMenuItems}
               />
 
               {/* Warning Notification */}
