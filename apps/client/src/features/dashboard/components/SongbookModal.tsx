@@ -15,80 +15,13 @@ import { SongImportModal } from "./SongImportModal";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
+import { parseLyricsForEditor } from "@/features/songs/songLyrics";
+import { describeSongTime, formatExactTime } from "@/features/songs/songTime";
+import { useNow } from "@/features/songs/useNow";
 
-// Helper function to parse lyrics into sections
-const parseLyricsIntoSections = (lyrics: string) => {
-  const sections = [];
-  const lines = lyrics.split("\n");
-  let currentSection = null;
-  let sectionContent = [];
-  let verseCount = 0;
-  let chorusCount = 0;
-
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-
-    if (trimmedLine.startsWith("[") && trimmedLine.endsWith("]")) {
-      // Save previous section if exists
-      if (currentSection && sectionContent.length > 0) {
-        const isChorus =
-          currentSection.toLowerCase().includes("chorus") ||
-          currentSection.toLowerCase() === "c" ||
-          currentSection.toLowerCase().startsWith("c");
-
-        const sectionNumber = isChorus ? chorusCount + 1 : verseCount + 1;
-        if (isChorus) {
-          chorusCount++;
-        } else {
-          verseCount++;
-        }
-
-        const sectionData: any = {
-          id: `section${sections.length + 1}`,
-          type: isChorus ? "chorus" : "verse",
-          number: sectionNumber,
-          label: currentSection,
-          content: sectionContent.join("\n"),
-        };
-
-        sections.push(sectionData);
-      }
-
-      // Start new section
-      currentSection = trimmedLine.slice(1, -1);
-      sectionContent = [];
-    } else if (trimmedLine && currentSection) {
-      sectionContent.push(trimmedLine);
-    }
-  }
-
-  // Add final section
-  if (currentSection && sectionContent.length > 0) {
-    const isChorus =
-      currentSection.toLowerCase().includes("chorus") ||
-      currentSection.toLowerCase() === "c" ||
-      currentSection.toLowerCase().startsWith("c");
-
-    const sectionNumber = isChorus ? chorusCount + 1 : verseCount + 1;
-    if (isChorus) {
-      chorusCount++;
-    } else {
-      verseCount++;
-    }
-
-    const sectionData = {
-      id: `section${sections.length + 1}`,
-      type: isChorus ? "chorus" : "verse",
-      number: sectionNumber,
-      label: currentSection,
-      content: sectionContent.join("\n"),
-    };
-
-    sections.push(sectionData);
-  }
-
-  return sections;
-};
+// Reads saved lyrics into sections the same way the Song editor does, so the sections (and the
+// verse order tags that point at them) are exactly the ones that were saved
+const parseLyricsIntoSections = (lyrics: string) => parseLyricsForEditor(lyrics);
 
 interface Song {
   id: string;
@@ -109,6 +42,8 @@ interface Song {
   topics?: string[] | string;
   copyright?: string;
   createdAt?: string;
+  /** When the song was last saved (changes on every edit) */
+  updatedAt?: string;
   structure?: string[];
   lyrics?: string;
   /** Formatting saved with the song, keyed by section name (see the Song editor) */
@@ -134,7 +69,11 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [sortBy, setSortBy] = useState("Suggested");
-  const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  // The song being viewed is looked up by id in the current list (not copied when clicked),
+  // so the viewer always shows its latest saved version and edit time
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
+  // Ticks, so "Edited 5 min ago" stays right while the songbook is open
+  const now = useNow();
   const [isSongViewerOpen, setIsSongViewerOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const { toast } = useToast();
@@ -144,7 +83,7 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
   const handleEditSong = (song: Song) => {
     // Close all modals
     setIsSongViewerOpen(false);
-    setSelectedSong(null);
+    setSelectedSongId(null);
     onClose(); // Close songbook modal
 
     // Prepare song data for editor
@@ -184,7 +123,7 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
     try {
       // Close the viewer modal first
       setIsSongViewerOpen(false);
-      setSelectedSong(null);
+      setSelectedSongId(null);
 
       // The SongViewerModal already handles the API call and toast notifications
       // We just need to refresh the songs list
@@ -243,6 +182,8 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
               month: "short",
               day: "numeric",
             }),
+            createdAt: song.createdAt,
+            updatedAt: song.updatedAt,
             thumbnail: song.title?.substring(0, 2).toUpperCase() || "??",
             verseOrder,
             sections,
@@ -298,7 +239,7 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
   }, [savedSongs]);
 
   const handleSongClick = (song: Song) => {
-    setSelectedSong(song);
+    setSelectedSongId(song.id);
     setIsSongViewerOpen(true);
   };
 
@@ -315,12 +256,26 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
     { value: "Suggested", label: "Suggested" },
   ];
 
-  const filteredSongs = recentSongs.filter(
-    (song) =>
-      song.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      (song.artist &&
-        song.artist.toLowerCase().includes(debouncedSearchQuery.toLowerCase())),
-  );
+  const lastTouched = (song: Song) =>
+    new Date(song.updatedAt || song.createdAt || 0).getTime() || 0;
+
+  const filteredSongs = recentSongs
+    .filter(
+      (song) =>
+        song.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        (song.artist &&
+          song.artist.toLowerCase().includes(debouncedSearchQuery.toLowerCase())),
+    )
+    // "Name" is A to Z; every other choice puts the most recently edited song first, so a song
+    // that was just edited is at the top
+    .sort((a, b) =>
+      sortBy === "Name"
+        ? a.title.localeCompare(b.title)
+        : lastTouched(b) - lastTouched(a),
+    );
+
+  // The song being viewed, taken from the current list so it is always its latest version
+  const selectedSong = recentSongs.find((song) => song.id === selectedSongId) ?? null;
 
   if (!isOpen) return null;
 
@@ -395,8 +350,14 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
                       )}
                     </div>
                   </div>
-                  <span className="text-sm text-gray-400">
-                    {song.dateAdded}
+                  {/* When it was last edited, kept current as time passes (hover for the
+                      exact date and time) */}
+                  <span
+                    className="text-sm text-gray-400"
+                    title={formatExactTime(song.updatedAt || song.createdAt)}>
+                    {song.createdAt || song.updatedAt
+                      ? describeSongTime(song, now)
+                      : song.dateAdded}
                   </span>
                 </div>
               ))}
@@ -434,7 +395,7 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
         isOpen={isSongViewerOpen}
         onClose={() => {
           setIsSongViewerOpen(false);
-          setSelectedSong(null);
+          setSelectedSongId(null);
         }}
         song={selectedSong}
         onEdit={handleEditSong}

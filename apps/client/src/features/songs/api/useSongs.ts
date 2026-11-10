@@ -1,5 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiRequest, buildUrl } from "@/lib/queryClient";
+import { removeSongFromList, upsertSongInList } from "../songListCache";
 import { useSongRAMCache } from "@/features/dashboard/hooks/useSongRAMCache";
 
 export interface Song {
@@ -25,11 +26,24 @@ export interface Song {
   topics?: string[] | string;
   copyright?: string;
   createdAt?: string;
+  /** When the song was last saved; changes on every edit */
+  updatedAt?: string;
   structure?: string[];
   lyrics?: string;
 }
 
 export { isSavedSongId } from "../songId";
+
+const SONGS_KEY = ["/api/songs"];
+
+// Puts a just-saved song into the cached list (replacing it if it is already there)
+const cacheSong = (queryClient: QueryClient, song: Song) => {
+  queryClient.setQueryData<{ success: boolean; songs: Song[] }>(SONGS_KEY, (old) => ({
+    success: true,
+    ...old,
+    songs: upsertSongInList(old?.songs ?? [], song),
+  }));
+};
 
 export const useSongs = () => {
   return useQuery<{ success: boolean; songs: Song[] }>({
@@ -60,8 +74,9 @@ export const useCreateSong = () => {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.removeQueries({ queryKey: ["/api/songs"] });
-      queryClient.refetchQueries({ queryKey: ["/api/songs"] });
+      // Show the new song in the list at once, then confirm with the server
+      if (data?.song) cacheSong(queryClient, data.song);
+      queryClient.invalidateQueries({ queryKey: SONGS_KEY });
       // Keep the live console's offline song search (backed by IndexedDB/RAM,
       // not this query cache) in sync so newly-added songs show up in it
       // immediately instead of only after the next project-selection sync.
@@ -80,10 +95,11 @@ export const useUpdateSong = () => {
       }
       return response.json();
     },
-    onSuccess: (data, variables) => {
-      queryClient.removeQueries({ queryKey: ["/api/songs"] });
-      queryClient.removeQueries({ queryKey: ["/api/songs", variables.id] });
-      queryClient.refetchQueries({ queryKey: ["/api/songs"] });
+    onSuccess: (data) => {
+      // The edited song replaces its old version in the list at once (it is the same song,
+      // not a new one), then the list is confirmed with the server
+      if (data?.song) cacheSong(queryClient, data.song);
+      queryClient.invalidateQueries({ queryKey: SONGS_KEY });
       if (data?.song) useSongRAMCache.getState().invalidate(data.song);
     },
   });
@@ -99,8 +115,11 @@ export const useDeleteSong = () => {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/songs"] });
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData<{ success: boolean; songs: Song[] }>(SONGS_KEY, (old) =>
+        old ? { ...old, songs: removeSongFromList(old.songs, id) } : old,
+      );
+      queryClient.invalidateQueries({ queryKey: SONGS_KEY });
     },
   });
 };

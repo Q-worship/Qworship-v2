@@ -1168,10 +1168,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         ltProjectScripture(content, reference, version, currentUserId);
       if (mpEnabled) mpProjectScripture(content, reference, version, mpUserId);
     } else if (type === "verse" || type === "chorus" || type === "song") {
-      const label: string = slide.sectionLabel ?? slide.title ?? "";
-      const songTitle: string = slide.songTitle ?? "";
-      if (ltEnabled) ltProjectLyric(content, label, songTitle, currentUserId);
-      // The audience / NDI screen shows the lyrics only: no section label or song title
+      // Every screen shows the lyrics only: no verse / chorus label and no song title, on the
+      // lower-third overlay as well as the audience / NDI screen
+      if (ltEnabled) ltProjectLyric(content, "", "", currentUserId);
       if (mpEnabled) mpProjectLyric(content, "", "", mpUserId);
     } else if (type === "announcement") {
       const category: string = slide.category ?? slide.title ?? "";

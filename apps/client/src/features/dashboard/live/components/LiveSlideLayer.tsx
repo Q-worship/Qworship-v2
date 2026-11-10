@@ -161,6 +161,42 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     ],
   );
 
+  // Song slides (verse / chorus): shrink the lyrics until the whole verse fits the box, so a
+  // long verse is never cut off at the bottom. At the normal size nothing changes: the size
+  // the live settings give is kept, and only scaled down when the text would not fit.
+  const deckSongMeasureRef = useRef<HTMLDivElement>(null);
+  const deckSongContentRef = useRef<HTMLDivElement>(null);
+  useAutoFitTextSize(
+    deckBibleBoxRef,
+    deckSongMeasureRef,
+    (factor) => {
+      const el = deckSongContentRef.current;
+      if (!el) return;
+      const clamp = /text-\[(clamp\([^\]]+\))\]/.exec(getTextSizeClass() || "")?.[1];
+      el.style.fontSize =
+        factor >= 1
+          ? ""
+          : clamp
+            ? `calc(${clamp} * ${factor})`
+            : `${songBibleBaseRem * factor}rem`;
+    },
+    [
+      currentDeckSlide?.id,
+      currentDeckSlide?.content,
+      currentDeckSlide?.type,
+      currentDeckSlide?.lyricHtml,
+      currentDeckSlide?.lyricStyle,
+      slideTextSize,
+      songBibleBaseRem,
+      contentFixedArea,
+      slidesTransparent,
+      editorState.styleFontFamily,
+      editorState.selectedFont,
+      editorState.isBold,
+      editorState.isItalic,
+    ],
+  );
+
   // editorState arrives via postMessage sync and starts as `{}` in a
   // freshly-opened live window until the first EDITOR_STATE_SYNC lands, so
   // referenceStyle must never be read without a fallback here - doing so
@@ -429,15 +465,22 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             ) : (
             /* Non-media slides use the normal padded container */
             <div
-              ref={slides[currentSlide - 1].type === "bible" ? deckBibleBoxRef : undefined}
+              ref={
+                slides[currentSlide - 1].type === "bible" ||
+                slides[currentSlide - 1].type === "verse" ||
+                slides[currentSlide - 1].type === "chorus"
+                  ? deckBibleBoxRef
+                  : undefined
+              }
               key={`slide-${currentSlide}-${animationKey}`}
               className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${slidesTransparent ? "max-h-[92vh]" : contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}>
               {slides[currentSlide - 1].type === "verse" ||
               slides[currentSlide - 1].type === "chorus" ? (
-                <>
+                <div ref={deckSongMeasureRef}>
                   {/* Songs show only the lyrics on the live screen: no song title and
                       no verse / chorus label */}
                   <div
+                    ref={deckSongContentRef}
                     className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
                     style={{
                       fontFamily:
@@ -458,16 +501,12 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       textTransform:
                         (editorState.styleTextTransform as any) || "",
                       textAlign: slideAlignment,
-                      ...(contentFixedArea && {
-                        maxHeight: "60vh",
-                        overflow: "hidden",
-                      }),
                     }}>
                     {/* The song's own formatting from the Song editor sits on top of
                         these live settings */}
                     <SongLyricsBody slide={slides[currentSlide - 1]} />
                   </div>
-                </>
+                </div>
               ) : slides[currentSlide - 1].type === "bible" ? (
                 <div ref={deckBibleMeasureRef} className="flex flex-col items-center">
                   {!referenceIsBottom && deckBibleReferenceEl}

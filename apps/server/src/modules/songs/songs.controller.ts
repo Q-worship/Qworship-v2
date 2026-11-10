@@ -20,6 +20,7 @@ const EDITABLE_FIELDS = [
 // Both are keyed by the section's name in the lyrics (e.g. "V1 (Verse 1)"). The screens
 // that show the HTML sanitise it again, so this is a size / shape check, not the only guard.
 
+const DUPLICATE_WINDOW_MS = 60_000;
 const MAX_SECTIONS = 100;
 const MAX_KEY_LENGTH = 200;
 const MAX_HTML_LENGTH = 30000;
@@ -232,6 +233,18 @@ export const getSongById = async (req: any, res: Response) => {
 export const createSong = async (req: any, res: Response) => {
   try {
     const { title, artist, album, lyrics, structure, key, tempo, tags, sections, sectionStyles, sectionHtml, alternativeTitles, authors, topics, copyright, ccliNumber } = req.body;
+
+    // A double click or a retry must not save the same song twice: the same song (title and
+    // lyrics) this account saved in the last minute is returned instead of another copy
+    if (typeof title === 'string' && typeof lyrics === 'string') {
+      const duplicate = await Song.findOne({
+        ...mine(req),
+        title,
+        lyrics,
+        createdAt: { $gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) },
+      });
+      if (duplicate) return res.json({ success: true, song: present(duplicate), duplicate: true });
+    }
 
     // We map frontend 'sections' into our embedded schema format
     const newSong = await Song.create({

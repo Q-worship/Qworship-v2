@@ -22,6 +22,8 @@ import { SidebarOpen, SidebarClose } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { WebPageEditor } from "@/features/dashboard/components/WebPageEditor";
 import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { FitLyricsBox } from "@/features/songs/FitLyricsBox";
 import { SlideCanvasEditor } from "./SlideCanvasEditor";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
@@ -3977,33 +3979,8 @@ import type { Slide } from "@/types";\n${text}`,
                     ) : selectedSlide.slide.type === "verse" ||
                       selectedSlide.slide.type === "chorus" ? (
                       <>
-                        <h1
-                          className="text-white text-3xl font-bold mb-6"
-                          style={{
-                            fontFamily:
-                              titleEditorState.selectedFont ||
-                              "Lufgord",
-                            fontSize:
-                              titleEditorState.fontSize || "18px",
-                            color:
-                              titleEditorState.textColor || "#ffffff",
-                            textAlign:
-                              (titleEditorState.textAlign as any) ||
-                              "center",
-                            fontWeight: titleEditorState.isBold
-                              ? "bold"
-                              : "normal",
-                            fontStyle: titleEditorState.isItalic
-                              ? "italic"
-                              : "normal",
-                            textDecoration:
-                              `${titleEditorState.isUnderline ? "underline" : ""} ${titleEditorState.isStrikethrough ? "line-through" : ""}`.trim() ||
-                              "none",
-                          }}
-                        >
-                          {selectedSlide.slide.songTitle ||
-                            selectedSlide.slide.title}
-                        </h1>
+                        {/* A song slide shows only its lyrics: no song title and no
+                            verse / chorus label */}
                         {/* Show author's name when enabled */}
                         {showAuthorOnScreen &&
                           editingContent?.content?.authors &&
@@ -4015,15 +3992,9 @@ import type { Slide } from "@/types";\n${text}`,
                               )}
                             </div>
                           )}
-                        <div className="text-purple-400 text-lg font-medium mb-4">
-                          {selectedSlide.slide.sectionLabel ||
-                            (selectedSlide.slide.type === "verse"
-                              ? "VERSE"
-                              : "CHORUS")}
-                        </div>
                         <div
                           key={`preview-song-content-${JSON.stringify(editorState)}`}
-                          className="text-gray-300 text-xl leading-relaxed space-y-2"
+                          className="text-gray-300 text-xl leading-relaxed space-y-2 whitespace-pre-line"
                           style={{
                             fontFamily:
                               editorState.styleFontFamily ||
@@ -4054,15 +4025,8 @@ import type { Slide } from "@/types";\n${text}`,
                               "",
                           }}
                         >
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                selectedSlide.slide.content.replace(
-                                  /\n/g,
-                                  "<br/>",
-                                ),
-                            }}
-                          />
+                          {/* The song's saved formatting; text is shown as text, never as HTML */}
+                          <SongLyricsBody slide={selectedSlide.slide} />
                         </div>
                       </>
                     ) : selectedSlide.slide.type === "announcement" ? (
@@ -5024,6 +4988,45 @@ import type { Slide } from "@/types";\n${text}`,
                         {currentlyDisplayedSlide.content}
                       </div>
                     </div>
+                  ) : currentlyDisplayedSlide.type === "verse" ||
+                    currentlyDisplayedSlide.type === "chorus" ? (
+                    // A song shows only its lyrics (no song title, no verse / chorus label),
+                    // with the song's saved formatting, and the whole verse always fits
+                    <FitLyricsBox
+                      baseSize="3rem"
+                      deps={[
+                        currentlyDisplayedSlide.id,
+                        currentlyDisplayedSlide.content,
+                        currentlyDisplayedSlide.lyricHtml,
+                        currentlyDisplayedSlide.lyricStyle,
+                        editorState.styleFontFamily,
+                        editorState.selectedFont,
+                        editorState.isBold,
+                        editorState.isItalic,
+                      ]}
+                    >
+                      {(contentRef) => (
+                        <div
+                          ref={contentRef}
+                          className="text-white text-center max-w-4xl mx-auto px-8 whitespace-pre-line"
+                          style={{
+                            fontFamily: editorState.styleFontFamily || editorState.selectedFont || "Lufgord",
+                            fontSize: "3rem",
+                            color: editorState.styleColor || editorState.textColor || "#ffffff",
+                            textAlign: (editorState.textAlign as any) || "center",
+                            fontWeight: editorState.isBold ? "bold" : "normal",
+                            fontStyle: editorState.isItalic ? "italic" : "normal",
+                            textDecoration: `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() || "none",
+                            textShadow: editorState.styleTextShadow || "",
+                            letterSpacing: editorState.styleLetterSpacing || "",
+                            textTransform: (editorState.styleTextTransform as any) || "",
+                            lineHeight: "1.2",
+                          }}
+                        >
+                          <SongLyricsBody slide={currentlyDisplayedSlide} />
+                        </div>
+                      )}
+                    </FitLyricsBox>
                   ) : (
                     <div className="text-center z-10 w-full flex flex-col items-center">
                       <h1

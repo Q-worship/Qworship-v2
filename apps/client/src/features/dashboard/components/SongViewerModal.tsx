@@ -5,6 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { isSavedSongId, useDeleteSong } from "@/features/songs/api/useSongs";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { sectionFormat } from "@/features/songs/songSlides";
+import { formatExactTime, formatRelativeTime, wasEdited } from "@/features/songs/songTime";
+import { useNow } from "@/features/songs/useNow";
 
 interface SongData {
   id: string;
@@ -22,6 +26,9 @@ interface SongData {
   topics?: string[] | string;
   copyright?: string;
   dateAdded: string;
+  createdAt?: string;
+  /** When the song was last saved (changes on every edit) */
+  updatedAt?: string;
   artist?: string;
   sectionStyles?: Record<string, any>;
   sectionHtml?: Record<string, string>;
@@ -54,6 +61,8 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
   const [selectedServiceSections, setSelectedServiceSections] = useState<string[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // Ticks, so "Last edited 5 min ago" stays right while the song is open
+  const now = useNow();
 
   // Service sections for presentation
   const serviceSections = [
@@ -119,14 +128,17 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
   const handleAddToSelectedSections = () => {
     if (!song || selectedServiceSections.length === 0) return;
 
+    const presentableSections = (song.sections || []).filter((section) => section.content?.trim());
+
     // Create song item for the service sections
     const songItem = {
       id: `song-${song.id}-${Date.now()}`,
       type: "song",
       title: song.title,
       artist: song.artist || (Array.isArray(song.authors) ? song.authors.join(", ") : song.authors) || "Unknown Artist",
-      content: song.sections || [],
-      sections: song.sections || [], // Add sections field for slide creation
+      // Sections with no words are left out, so they don't become blank slides on the screen
+      content: presentableSections,
+      sections: presentableSections, // Add sections field for slide creation
       lyrics: (song as any).lyrics, // Include lyrics field for fallback slide creation
       structure: (song as any).structure, // Include structure field
       verseOrder: song.verseOrder,
@@ -166,13 +178,37 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
 
   if (!isOpen || !song) return null;
 
-  // Debug logging
-  console.log("SongViewerModal received song:", song);
-  console.log("Song sections:", song.sections);
-  console.log("Song verseOrder:", song.verseOrder);
+  type ViewSection = NonNullable<SongData["sections"]>[number];
+
+  // One saved section, shown the way it was saved: with its formatting and its blank lines
+  const renderSection = (section: ViewSection, key: string) => (
+    <div key={key} className="bg-[#3d3166] rounded-lg p-4">
+      <h4 className="text-[#8356F3] font-medium mb-2">{section.label}</h4>
+      <div className="text-white whitespace-pre-line leading-relaxed">
+        {section.content ? (
+          <SongLyricsBody
+            slide={{
+              content: section.content,
+              ...sectionFormat(song, section.label, section.content),
+            }}
+          />
+        ) : (
+          "No lyrics added yet..."
+        )}
+      </div>
+    </div>
+  );
+
+  // The tag the editor gives a section in the verse order: V1, V2 ... C1 ...
+  const sectionMatchesTag = (section: ViewSection, tag: string) => {
+    const expected = `${section.type === "verse" ? "V" : "C"}${section.number}`;
+    return expected === tag || (section.type === "chorus" && section.number === 1 && tag === "C");
+  };
 
   const renderSongLyrics = () => {
-    if (!song.sections || song.sections.length === 0) {
+    // A section with no words has nothing to show
+    const sections = (song.sections ?? []).filter((section) => section.content?.trim());
+    if (sections.length === 0) {
       return (
         <div className="bg-[#3d3166] rounded-lg p-4">
           <p className="text-gray-400">No lyrics available for this song.</p>
@@ -181,54 +217,30 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
     }
 
     if (!song.verseOrder) {
-      return (
-        <div className="space-y-4">
-          {song.sections.map((section) => (
-            <div key={section.id} className="bg-[#3d3166] rounded-lg p-4">
-              <h4 className="text-[#8356F3] font-medium mb-2">{section.label}</h4>
-              <div className="text-white whitespace-pre-line leading-relaxed">
-                {section.content || "No lyrics added yet..."}
-              </div>
-            </div>
-          ))}
-        </div>
-      );
+      return <div className="space-y-4">{sections.map((section) => renderSection(section, section.id))}</div>;
     }
 
-    // Render sections based on verse order
-    const orderArray = song.verseOrder.split(", ");
+    // In the verse order first (a section can repeat), then any saved section the order does
+    // not list, so nothing that was saved is ever hidden
+    const order = song.verseOrder.split(",").map((tag) => tag.trim()).filter(Boolean);
+    const inOrder = order.flatMap((tag, index) => {
+      const section = sections.find((candidate) => sectionMatchesTag(candidate, tag));
+      return section ? [{ section, key: `${section.id}-${index}` }] : [];
+    });
+    const used = new Set(inOrder.map((entry) => entry.section.id));
+    const leftOut = sections.filter((section) => !used.has(section.id));
+
     return (
       <div className="space-y-4">
-        {orderArray.map((sectionTag, index) => {
-          console.log(`Looking for section with tag: "${sectionTag}"`);
-          
-          const section = song.sections?.find(s => {
-            const prefix = s.type === "verse" ? "V" : "C";
-            const expectedTag = `${prefix}${s.number}`;
-            const alternateTag = s.type === "chorus" && s.number === 1 ? "C" : expectedTag;
-            
-            console.log(`  Checking section: ${s.label} (type: ${s.type}, number: ${s.number})`);
-            console.log(`  Expected tags: "${expectedTag}" or "${alternateTag}"`);
-            
-            return expectedTag === sectionTag || alternateTag === sectionTag;
-          });
-          
-          console.log(`  Found section for "${sectionTag}":`, section);
-          
-          if (!section) {
-            console.log(`  No section found for "${sectionTag}"`);
-            return null;
-          }
-          
-          return (
-            <div key={`${section.id}-${index}`} className="bg-[#3d3166] rounded-lg p-4">
-              <h4 className="text-[#8356F3] font-medium mb-2">{section.label}</h4>
-              <div className="text-white whitespace-pre-line leading-relaxed">
-                {section.content || "No lyrics added yet..."}
-              </div>
-            </div>
-          );
-        })}
+        {inOrder.map((entry) => renderSection(entry.section, entry.key))}
+        {leftOut.length > 0 && (
+          <>
+            {inOrder.length > 0 && (
+              <p className="pt-2 text-xs uppercase tracking-wide text-gray-400">Not in the verse order</p>
+            )}
+            {leftOut.map((section) => renderSection(section, `extra-${section.id}`))}
+          </>
+        )}
       </div>
     );
   };
@@ -314,7 +326,17 @@ export const SongViewerModal: React.FC<SongViewerModalProps> = ({
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-300 mb-2">Date Added</h4>
-                  <p className="text-white">{song.dateAdded}</p>
+                  <p className="text-white" title={formatExactTime(song.createdAt)}>
+                    {song.createdAt ? formatRelativeTime(song.createdAt, now) : song.dateAdded}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">Last Edited</h4>
+                  <p className="text-white" title={formatExactTime(song.updatedAt)}>
+                    {wasEdited(song.createdAt, song.updatedAt)
+                      ? formatRelativeTime(song.updatedAt, now)
+                      : "Not edited yet"}
+                  </p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-300 mb-2">Sections</h4>

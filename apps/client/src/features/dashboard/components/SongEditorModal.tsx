@@ -92,6 +92,7 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   // Mutation hooks from FSD architecture
   const createSongMutation = useCreateSong();
   const updateSongMutation = useUpdateSong();
+  const isSaving = createSongMutation.isPending || updateSongMutation.isPending;
 
   // Reset or populate fields when modal opens or initialData changes
   React.useEffect(() => {
@@ -388,6 +389,9 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
   };
 
   const handleSave = () => {
+    // One save at a time: a second click while the first is still going would create the
+    // same song twice
+    if (isSaving) return;
     if (!songTitle.trim()) {
       toast({
         title: "Error",
@@ -797,16 +801,18 @@ export const SongEditorModal: React.FC<SongEditorModalProps> = ({
           </Button>
           <Button
             onClick={handleSave}
-            className="bg-[#8356F3] hover:bg-[#6d42c7] text-white h-8 px-4 text-sm"
+            disabled={isSaving}
+            className="bg-[#8356F3] hover:bg-[#6d42c7] text-white h-8 px-4 text-sm disabled:opacity-60"
           >
-            Save
+            {isSaving ? "Saving…" : "Save"}
           </Button>
         </div>
       </div>
 
       {/* Save Confirmation Modal */}
       {showSaveConfirmation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        // Above the editor (z-60), so it really blocks clicks while the song is saving
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
           <div className="bg-[#2a1f3f] border border-gray-500 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="text-center">
               <div className="animate-spin w-8 h-8 border-4 border-[#8356F3] border-t-transparent rounded-full mx-auto mb-4" />
