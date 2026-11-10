@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { AddFileIcon } from "@/features/dashboard/components/AddFileIcon";
 import {
   AddItemModal,
+  type AddItemAnchor,
   type AddItemMenuEntry,
 } from "@/features/dashboard/components/AddItemModal";
 import {
@@ -127,8 +128,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
   isSidebarCollapsed,
   insertItemMenuItems,
 }) => {
-  // The "Add item" modal opened by a section's Add button
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  // Where the "Add item" panel is open (beside the Add button that was clicked); null = closed
+  const [addMenuAnchor, setAddMenuAnchor] = useState<AddItemAnchor | null>(null);
+  const closeAddMenu = useCallback(() => setAddMenuAnchor(null), []);
 
   return (
     <aside
@@ -346,13 +348,19 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                   <button
                     type="button"
                     aria-label={`Add an item to ${section}`}
-                    title="Add item"
-                    onClick={() => {
+                    onClick={(event) => {
                       // The item is added to this section, so this is the selected one
                       if (selectedServiceSection !== section) {
                         setSelectedServiceSection(section);
                       }
-                      setAddMenuOpen(true);
+                      // The panel opens beside this button
+                      const box = event.currentTarget.getBoundingClientRect();
+                      setAddMenuAnchor({
+                        top: box.top,
+                        bottom: box.bottom,
+                        left: box.left,
+                        right: box.right,
+                      });
                     }}
                     className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded border border-[#00C3C7]/50 bg-[#00C3C7]/10 px-2.5 py-1 text-xs text-[#00C3C7] opacity-0 transition-opacity hover:bg-[#00C3C7]/20 focus-visible:opacity-100 focus-visible:outline-none group-hover/header:opacity-100 [@media(hover:none)]:opacity-100">
                     <AddFileIcon className="h-4 w-4" />
@@ -527,8 +535,8 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
       </div>
 
       <AddItemModal
-        open={addMenuOpen}
-        onClose={() => setAddMenuOpen(false)}
+        anchor={addMenuAnchor}
+        onClose={closeAddMenu}
         items={insertItemMenuItems}
       />
     </aside>
