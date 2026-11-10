@@ -48,6 +48,11 @@ import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal
 import { applySongToSlides } from "@/features/songs/songFormatting";
 import { lyricHtmlForSection } from "@/features/songs/songRichText";
 import { songSlideFormatting } from "@/features/songs/songSlides";
+import {
+  isItemOfSong,
+  refreshItemFromSavedSong,
+  songOfItem,
+} from "@/features/songs/songBuildPanel";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
 import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
 import {
@@ -2719,28 +2724,75 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     return slides;
   };
 
-  // Copies a saved song's text and formatting (section styles and inline formatting) onto
-  // its slides that are already in the service, so the live screen shows the edits. Slides
-  // are matched to sections by section name; slides added before section names were
-  // recorded fall back to their order in the song.
-  const applySongFormattingToService = (song: any) => {
+  // The item open in Edit & Preparation, readable from a callback that was created earlier
+  // (a save finishes seconds after it started)
+  const editingContentRef = useRef<any>(null);
+  editingContentRef.current = editingContent;
+
+  // Edit & Preparation shows the song of the item that is open. Opening a different song (from
+  // the service list, a slide, the songbook or a search) loads ITS lyrics, whichever shape the
+  // item has - before, only some routes did, and the others kept showing the previous song.
+  // Typing never changes which item is open, so it is not disturbed.
+  const loadedSongItemRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editingContent || editingContent.type !== "song") {
+      loadedSongItemRef.current = null;
+      return;
+    }
+    if (loadedSongItemRef.current === editingContent.id) return;
+    loadedSongItemRef.current = editingContent.id;
+
+    const song = songOfItem(editingContent);
+    if (!song) {
+      // A song item with no words yet: nothing of an earlier song should be shown for it
+      setParsedLyrics({});
+      setSongEditorContent("");
+      return;
+    }
+
+    const sections = parseLyricsIntoSections(song.lyrics);
+    setSongEditorContent(song.lyrics);
+    setParsedLyrics(sections);
+    setSongArrangement(Object.keys(sections));
+    setCurrentSongTitle(
+      editingContent.title === "Song" ? "" : editingContent.title || "",
+    );
+
+    // A songbook item keeps its sections as a list; from here on the item holds the song
+    // itself (id, lyrics, formatting), so editing it keeps its slides linked to the song
+    if (!editingContent.content || Array.isArray(editingContent.content) || typeof editingContent.content !== "object") {
+      setEditingContent((prev: any) =>
+        prev && prev.id === editingContent.id ? { ...prev, content: song } : prev,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingContent?.id, editingContent?.type]);
+
+  // Copies a saved song's text and formatting (section styles and inline formatting) onto the
+  // song's items that are already in the service: the item itself (so Edit & Preparation shows
+  // the edit), its slides (so the live screen shows it) and the slide on the dashboard's live
+  // view. Slides are matched to sections by section name; slides added before section names
+  // were recorded fall back to their order in the song. `previousTitle` is the song's title
+  // before this save, so an item still showing it follows a renamed song.
+  const applySongFormattingToService = (song: any, previousTitle?: string) => {
     if (!song?.id) return;
     const styles: Record<string, any> = song.sectionStyles || {};
     const sections = Object.entries(parseLyricsIntoSections(song.lyrics || "")).map(
       ([name, content]) => ({ name, content: String(content).trim() }),
     );
+    const htmlFor = (name: string, content: string) =>
+      lyricHtmlForSection(song, name, content);
 
-    const patchItems = (items: any[]) =>
-      items.map((item) =>
-        Array.isArray(item?.slides)
-          ? {
-              ...item,
-              slides: applySongToSlides(item.slides, song.id, sections, styles, (name, content) =>
-                lyricHtmlForSection(song, name, content),
-              ),
-            }
-          : item,
-      );
+    const patchItem = (item: any) => {
+      const refreshed = refreshItemFromSavedSong(item, song, previousTitle);
+      return Array.isArray(refreshed?.slides)
+        ? {
+            ...refreshed,
+            slides: applySongToSlides(refreshed.slides, song.id, sections, styles, htmlFor),
+          }
+        : refreshed;
+    };
+    const patchItems = (items: any[]) => items.map(patchItem);
 
     setServiceItems((current: any[]) => patchItems(current));
     setSectionItems((current: any) =>
@@ -2751,6 +2803,30 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         ]),
       ),
     );
+    setInsertedItems((current: any[]) => patchItems(current));
+
+    // The slide the dashboard's live view is showing is a copy, so it is refreshed too
+    setCurrentlyDisplayedSlide((current: any) =>
+      current?.songId === song.id
+        ? applySongToSlides([current], song.id, sections, styles, htmlFor)[0]
+        : current,
+    );
+
+    // The song open in Edit & Preparation shows the new words and formatting right away
+    const open = editingContentRef.current;
+    if (open && isItemOfSong(open, String(song.id))) {
+      const patched = patchItem(open);
+      const parsed = parseLyricsIntoSections(song.lyrics || "");
+      setEditingContent((current: any) =>
+        current && isItemOfSong(current, String(song.id)) ? patchItem(current) : current,
+      );
+      setSongEditorContent(song.lyrics || "");
+      setParsedLyrics(parsed);
+      setSongArrangement(Object.keys(parsed));
+      if (patched.title !== open.title) {
+        setCurrentSongTitle(patched.title === "Song" ? "" : patched.title || "");
+      }
+    }
   };
 
   const insertImage = () => {
@@ -3014,34 +3090,35 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
   // Function to add song to multiple service sections (from Song Viewer)
   const addSongToServiceSections = (songItem: any, sectionIds: string[]) => {
-    sectionIds.forEach((sectionId) => {
-      // Create unique item for each section
-      const itemWithUniqueId = {
+    // One item per section, created once: the same item (and id) is what is recorded for
+    // undo, stored in the section, opened for editing and used to build its slides. Before,
+    // each step made its own copy with its own id, so the item opened for editing was not
+    // the one stored in the service and typing in it changed nothing there.
+    const stamp = Date.now();
+    const createdItems = sectionIds.map((sectionId, index) => ({
+      sectionId,
+      item: {
         ...songItem,
-        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
-      };
+        id: `song-${songItem.songId}-${sectionId}-${stamp}-${index}`,
+      },
+    }));
 
+    createdItems.forEach(({ sectionId, item }) => {
       // Record the addition action for undo/redo
       recordAction({
         type: "ADD_ITEM",
-        itemId: itemWithUniqueId.id,
+        itemId: item.id,
         sectionName: sectionId,
-        item: itemWithUniqueId,
+        item,
         description: `Add song "${songItem.title}" to ${sectionId}`,
       });
     });
 
-    sectionIds.forEach((sectionId) => {
-      // Create unique item for each section
-      const itemWithUniqueId = {
-        ...songItem,
-        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
-      };
-
+    createdItems.forEach(({ sectionId, item }) => {
       // Add item to the section
       setSectionItems((prev) => ({
         ...prev,
-        [sectionId]: [...(prev[sectionId] || []), itemWithUniqueId],
+        [sectionId]: [...(prev[sectionId] || []), item],
       }));
 
       // Auto-expand the section to show the added item
@@ -3051,16 +3128,17 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       }));
     });
 
-    // Add to global inserted items (only add one instance)
-    setInsertedItems((prev) => [...prev, songItem]);
+    // The first created item is the one opened for editing (and the one in the upper list)
+    const primaryItem = createdItems[0]?.item ?? songItem;
+    setInsertedItems((prev) => [...prev, primaryItem]);
     setSelectedContentType(songItem.type);
-    setEditingContent(songItem);
+    setEditingContent(primaryItem);
 
     // Initialize song title for immediate editing
     setCurrentSongTitle(songItem.title === "Song" ? "" : songItem.title || "");
 
     // Initialize editor history when starting to edit a song
-    const initialContent = songItem.content?.lyrics || "";
+    const initialContent = songOfItem(primaryItem)?.lyrics || "";
     setSongEditorContent(initialContent);
     setEditorHistory([initialContent]);
     setHistoryIndex(0);
@@ -3072,15 +3150,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
     // Manually compute next section items to pipeline into rebuild
     const nextSectionItems = { ...sectionItems };
-    sectionIds.forEach((sectionId) => {
-      const itemWithUniqueId = {
-        ...songItem,
-        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
-      };
-      nextSectionItems[sectionId] = [
-        ...(nextSectionItems[sectionId] || []),
-        itemWithUniqueId,
-      ];
+    createdItems.forEach(({ sectionId, item }) => {
+      nextSectionItems[sectionId] = [...(nextSectionItems[sectionId] || []), item];
     });
 
     // Rebuild slides to append new song slides using explicit state mapping
@@ -5593,7 +5664,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
             // The song is already saved to the database and the song list refreshes by
             // itself. Slides of this song that are already in the service (and so on the
             // live screen) pick up its new formatting here.
-            if (songData?.song) applySongFormattingToService(songData.song);
+            if (songData?.song) applySongFormattingToService(songData.song, importedSongData?.title);
             setIsSongEditorOpen(false);
             setImportedSongData(null);
           }}
