@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction } from "express";
 import { FREE_SONG_LIMIT } from "@qworship/shared";
 import { Song } from "./song.model.js";
 import { capabilitiesFor } from "../billing/capability.service.js";
-import { resolveActiveOrganization } from "../organization/organization.service.js";
 
 /**
  * Caps how many songs a free church may KEEP, not what it may do with them.
@@ -32,12 +31,23 @@ export const enforceSongLimit = async (
     // before a service.
     if (capabilities.features["songs.full"] || !capabilities.resolved) return next();
 
-    const resolved = await resolveActiveOrganization(req as any);
-    const organizationId = resolved?.organization?._id;
-    if (!organizationId) return next();
+    // COUNTED THE SAME WAY THE LIBRARY IS LISTED, which is by `createdBy`:
+    // songs are currently a private per-user library (see `mine()` in
+    // songs.controller.ts, which also writes the USER id into
+    // organizationId — "personal library namespace for now").
+    //
+    // Counting by church would therefore have matched nothing and the cap
+    // would have silently never fired. It would also have made the refusal
+    // lie: a person must never be told they hold 25 songs while their own
+    // library shows a different number.
+    //
+    // WHEN SONGS BECOME PER-CHURCH, THIS COUNT MOVES WITH THEM. It has to
+    // keep naming exactly the set the person can see.
+    const userId = (req as any).user?._id;
+    if (!userId) return next();
 
     // Only songs that still count: a deactivated one is not in the library.
-    const held = await Song.countDocuments({ organizationId, isActive: { $ne: false } });
+    const held = await Song.countDocuments({ createdBy: userId, isActive: { $ne: false } });
     if (held < FREE_SONG_LIMIT) return next();
 
     res.status(402).json({
