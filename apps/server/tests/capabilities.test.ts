@@ -1,5 +1,5 @@
 import {
-  FEATURE_IDS, FREE_HOURS, TRIAL_DAYS, TRIAL_HOURS,
+  FEATURE_IDS, FREE_HOURS, FREE_SONG_LIMIT, TRIAL_DAYS, TRIAL_HOURS,
   bibleVersionNeedsPlan, featureMapFor, featuresFor, hasFeature,
 } from '@qworship/shared';
 import { capabilitiesForAccount } from '../src/modules/billing/capability.service.js';
@@ -130,6 +130,31 @@ check(
   'a resolved verdict is marked resolved',
   capabilitiesForAccount({ planId: 'free', status: 'active' }).resolved === true,
   'only a confident verdict may refuse anybody',
+);
+
+// ── The canvas is free, in full ────────────────────────────────────────────
+
+check(
+  'the canvas is not a gated capability at all',
+  !FEATURE_IDS.includes('canvas.rich' as never),
+  'client-side only, so there is no line we could hold — we do not sell one',
+);
+
+// ── Songs ──────────────────────────────────────────────────────────────────
+
+check(
+  'free does not hold the full song book',
+  !hasFeature('free', 'songs.full'),
+);
+check('standard does', hasFeature('standard', 'songs.full'));
+check(
+  'a trialing church gets the full song book',
+  hasFeature('free', 'songs.full', true),
+);
+check(
+  'the free song cap is a real number',
+  Number.isInteger(FREE_SONG_LIMIT) && FREE_SONG_LIMIT > 0,
+  String(FREE_SONG_LIMIT),
 );
 
 // ── Who gets a trial ───────────────────────────────────────────────────────

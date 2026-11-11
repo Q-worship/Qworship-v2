@@ -60,6 +60,10 @@ state a price in a component.
   "helpful" change could otherwise make $5.97 a way to rent Standard. The
   economics agree: matching Standard's 30 hours via top-ups costs $55.72
   against $15.99, and leaves you on KJV throughout.
+- **Free holds 25 songs** (`FREE_SONG_LIMIT`), checked on CREATE only. Songs
+  over the cap are never hidden or deleted — a church that built forty on
+  trial keeps forty and simply cannot add another. Bulk import is Standard
+  outright, since one upload would walk past a per-song cap.
 - **Free: 1 church, 2 hours, 1 GB. Standard: 30 hours and 10 GB per church.**
   Free is a real, usable plan — not a synonym for locked out — and what it
   withholds is decided per feature in `packages/shared/src/features.ts`, never
@@ -181,18 +185,20 @@ it once the legacy readers are gone.
 Roughly in the order worth doing. None is release-blocking; the two that were
 (entitlement reconciliation, and having any scheduler at all) are done.
 
-### 1. Two plan boundaries are undefined
+### 1. PowerPoint import is advertised but unenforceable
 
-The design promises free a **"Basic Slide Canvas Builder"** and a **"Song book
-and Song builder — limited"**, but neither word is defined anywhere, and there
-is only one canvas editor and one songs module in the code. So `canvas.rich`
-and `songs.full` exist in `FEATURES` and are deliberately NOT gated: locking
-them wholesale would take from free something the plan card promises it. They
-need a product decision — which canvas tools are "basic", and what caps
-"limited" — before they can be enforced.
+`powerpoint.import` is in `FEATURES` and listed on the Standard card, but the
+conversion happens entirely in the browser (`lib/pptxParser.ts`) and no server
+route sees the file. It can only ever be a UI lock.
 
-`powerpoint.import` is also ungated: the conversion is client-side and there
-is no server route to refuse, so it can only ever be a UI lock.
+That is the same situation the slide canvas was in, and the canvas was
+resolved by making it **wholly free** — we do not advertise a line we cannot
+hold. The same reasoning applies here and the decision has not been taken.
+Either drop it to free, or accept it as a UI-only lock and say so.
+
+Note the canvas resolution is now load-bearing: every canvas tool (text,
+shapes, images, layers, QR codes, effects) is free, and `canvas.rich` has been
+removed from the catalog rather than left ungated.
 
 ### 2. Gift stacking
 

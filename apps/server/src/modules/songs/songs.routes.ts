@@ -2,6 +2,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import { protect, requireProductAccess } from '../auth/auth.middleware.js';
 import * as songsController from './songs.controller.js';
+import { requireFeature } from '../billing/capability.middleware.js';
+import { enforceSongLimit } from './song-limit.middleware.js';
 
 export const songsRouter = Router();
 songsRouter.use(protect, requireProductAccess);
@@ -22,12 +24,18 @@ songsRouter.get('/', songsController.getSongs);
 songsRouter.get('/revision', songsController.getSongsRevision);
 songsRouter.get('/:id', songsController.getSongById);
 
-// Creation and modification
-songsRouter.post('/', songsController.createSong);
+// Creation and modification.
+//
+// The cap sits on CREATE alone. Editing and deleting stay open at any
+// library size, so a church over the limit can still tidy up, fix a typo or
+// get back under it — the one thing it cannot do is add another.
+songsRouter.post('/', enforceSongLimit, songsController.createSong);
 songsRouter.put('/:id', songsController.updateSong);
 songsRouter.delete('/:id', songsController.deleteSong);
 
 // Utilities
 songsRouter.post('/projection', songsController.getSongForProjection);
 songsRouter.post('/search', songsController.searchSongs);
-songsRouter.post('/import', songUpload.single('file'), songsController.importSong);
+// Bulk import is Standard outright, not capped: one upload would otherwise
+// walk straight past a per-song limit.
+songsRouter.post('/import', requireFeature('songs.full'), songUpload.single('file'), songsController.importSong);

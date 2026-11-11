@@ -95,6 +95,25 @@ export const STANDARD_STORAGE_GB = 10;
 export const BYTES_PER_GB = 1024 ** 3;
 
 /**
+ * Songs a free church may keep in its library.
+ *
+ * Twenty-five is about a church's working rotation — four songs a Sunday,
+ * rotating — so free runs real services for months and meets the wall as it
+ * genuinely grows, which is the honest moment to ask for money rather than
+ * an artificial one on day two.
+ *
+ * ENFORCED ON CREATE ONLY. Songs over the cap are never hidden or deleted: a
+ * church that built forty during its trial keeps all forty and simply cannot
+ * add a forty-first. Taking back something somebody wrote is not a pricing
+ * decision, and a library that silently shrinks is indistinguishable from
+ * data loss.
+ *
+ * Bulk import is Standard for the same reason the cap exists — one upload
+ * would otherwise walk straight past it.
+ */
+export const FREE_SONG_LIMIT = 25;
+
+/**
  * How long a new account gets the whole product for, in days.
  *
  * The trial is not a cheaper plan; it is Standard, free, for a month. Every
@@ -109,8 +128,8 @@ export const TRIAL_DAYS = 30;
  * NOT per month: a trial is thirty days long, and this is the total for it.
  *
  * Two, the same as free, which looks odd until you see what it is for. The
- * trial does not sell HOURS, it sells FEATURES — the rich canvas, every Bible
- * version, lower thirds, PowerPoint import — and those cost us nothing to
+ * trial does not sell HOURS, it sells FEATURES — every Bible version, lower
+ * thirds, sermons, the cloud media collections — and those cost us nothing to
  * hand out. Transcription is the one thing that bills a provider by the
  * minute, so it is the one thing the trial is tight with. Giving thirty
  * trial hours would spend ~$13.80 of Deepgram on an account that may never
@@ -128,7 +147,7 @@ export const TRIAL_HOURS = 2;
  * Whether spending the trial's hours also ends its feature access.
  *
  * It does not. Running out of hours silences hands-free Bible and nothing
- * else; the canvas, the versions and the lower thirds stay until the thirty
+ * else; the versions, the lower thirds and the sermons stay until the thirty
  * days are up.
  *
  * Taking everything away at the moment somebody hits a limit is the surest
@@ -295,7 +314,7 @@ export const PLANS: Record<PlanId, Plan> = {
       "Song book and song builder — limited",
       "Media assets — limited to My Media",
       "Live projection — single window",
-      "Basic slide canvas builder",
+      "Slide canvas builder — text, shapes, images, layers, QR codes",
     ],
   },
   standard: {
@@ -314,7 +333,6 @@ export const PLANS: Record<PlanId, Plan> = {
       "Every Bible version, hands-free and on-screen",
       "Add multiple branches or campuses",
       `${STANDARD_STORAGE_GB} GB of storage for every branch`,
-      "Rich slide canvas — text, elements, images, QR codes, layers",
       "Q-worship sermons",
       "Lower third builder & pre-built templates",
       "Advanced cloud media collections",

@@ -27,10 +27,16 @@ import type { PlanId } from "./plans.js";
  * per endpoint — a volunteer does not experience "POST /lower-third/push",
  * they experience "I can't put a name on the screen". Fine-grained ids would
  * also make the plan cards and the lock badges disagree with each other.
+ *
+ * NOT HERE, AND DELIBERATELY: the slide canvas. Every one of its tools —
+ * text, shapes, images, layers, QR codes, effects — is free, because the
+ * editor is entirely client-side and saves its slides as JSON. The only way
+ * to enforce a split would be to reject a save, which loses somebody's work
+ * mid-build: a far worse failure than a free church getting a drop shadow.
+ * We do not advertise a line we cannot hold, so there is no line.
  */
 export type FeatureId =
   | "bible.allVersions"
-  | "canvas.rich"
   | "sermons"
   | "lowerThird.builder"
   | "media.cloudCollections"
@@ -69,12 +75,6 @@ export const FEATURES: Record<FeatureId, Feature> = {
     id: "bible.allVersions",
     label: "Every Bible version",
     blurb: "Standard opens every Bible version, hands-free and on-screen. Free is KJV.",
-    enforceable: true,
-  },
-  "canvas.rich": {
-    id: "canvas.rich",
-    label: "Rich slide canvas",
-    blurb: "Text, elements, images, QR codes and layers come with Standard.",
     enforceable: true,
   },
   sermons: {
@@ -157,7 +157,7 @@ export function bibleVersionNeedsPlan(version?: string | null): boolean {
  *
  * Free grants NOTHING from this list — every id here is a premium capability
  * by definition, and what free keeps (KJV, My Media, the order of service
- * builder, the basic canvas) is simply everything that was never gated. That
+ * builder, the whole slide canvas) is simply everything that was never gated. That
  * is why free is an empty array rather than a list of leftovers: a leftovers
  * list would have to be maintained in step with every unrelated feature we
  * ever ship, and forgetting to add to it would silently take something away.
