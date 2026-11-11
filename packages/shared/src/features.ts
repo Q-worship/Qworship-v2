@@ -28,26 +28,30 @@ import type { PlanId } from "./plans.js";
  * they experience "I can't put a name on the screen". Fine-grained ids would
  * also make the plan cards and the lock badges disagree with each other.
  *
- * NOT HERE, AND DELIBERATELY: the slide canvas and PowerPoint import. Both
- * happen entirely in the browser — the canvas saves slides as JSON, and
- * `lib/pptxParser.ts` reads a .pptx without the server ever seeing the file
- * — so neither can be refused anywhere that matters. The only "enforcement"
+ * NOT HERE, AND DELIBERATELY: the slide canvas, PowerPoint import, and
+ * multi-window projection. All three happen outside the server's reach — the
+ * canvas saves slides as JSON, `lib/pptxParser.ts` reads a .pptx without the
+ * file ever being uploaded, and the desktop console opens its own windows —
+ * so none can be refused anywhere that matters. The only "enforcement"
  * available is rejecting a save, which loses somebody's work mid-build: a
  * far worse failure than a free church getting a drop shadow.
  *
- * So both are free, in full. The rule this follows is worth keeping: WE DO
- * NOT ADVERTISE A LINE WE CANNOT HOLD. A capability listed here that only a
- * greyed-out button enforces is a promise to paying customers that the
- * product quietly breaks, and an invitation to anyone who opens devtools.
- * If something cannot be gated on the server, it does not belong in this
- * list at all.
+ * So all three are free, in full. The rule this follows is worth keeping:
+ * WE DO NOT ADVERTISE A LINE WE CANNOT HOLD. A capability listed here that
+ * only a greyed-out button enforces is a promise to paying customers that
+ * the product quietly breaks, and an invitation to anyone who opens
+ * devtools. If something cannot be gated on the server, it does not belong
+ * in this list at all.
+ *
+ * `support.priority` is the one deliberate exception, and is not really the
+ * same thing: it is a promise about PEOPLE answering faster, not a software
+ * capability, so there is no button to lock and nothing to circumvent.
  */
 export type FeatureId =
   | "bible.allVersions"
   | "sermons"
   | "lowerThird.builder"
   | "media.cloudCollections"
-  | "projection.multiWindow"
   | "songs.full"
   | "branches"
   | "usage.perBranch"
@@ -69,9 +73,9 @@ export interface Feature {
   /**
    * Whether the server can actually refuse this.
    *
-   * Priority support is a promise about people, not a route, and multi-window
-   * projection happens in a desktop client the server never sees. Marking
-   * them false keeps anyone from believing there is a gate here that isn't.
+   * True for everything here but `support.priority`, which is a promise about
+   * people rather than a route. Anything else that would be false does not
+   * belong in this list at all — see the note above.
    */
   enforceable: boolean;
 }
@@ -100,13 +104,6 @@ export const FEATURES: Record<FeatureId, Feature> = {
     label: "Cloud media collections",
     blurb: "Standard adds the shared cloud collections. Free keeps My Media.",
     enforceable: true,
-  },
-  "projection.multiWindow": {
-    id: "projection.multiWindow",
-    label: "Multi-window projection",
-    blurb: "Drive more than one output at once with Standard.",
-    // The desktop console owns its own windows; there is no request to refuse.
-    enforceable: false,
   },
   "songs.full": {
     id: "songs.full",

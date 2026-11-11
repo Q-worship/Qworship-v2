@@ -22,9 +22,20 @@ dotenv.config();
  * Standard account, whose plan comes from Stripe rather than from a trial.
  *
  * Run with: pnpm --filter @qworship/server migrate:account-trials
+ * Add --dry-run to see exactly what it would change and write nothing. Do
+ * that first: this touches live accounts, and a trial date written wrongly
+ * is not something anybody notices until somebody is locked out.
  */
+const DRY_RUN = process.argv.includes('--dry-run');
+
 async function migrate() {
   await connectDB();
+
+  // Says which database is about to be touched, without printing credentials.
+  const uri = process.env.MONGODB_URI || '';
+  const target = uri.replace(/\/\/[^@]*@/, '//***@').split('?')[0];
+  console.log(`${DRY_RUN ? 'DRY RUN — nothing will be written' : 'WRITING'}`);
+  console.log(`Database: ${target || '(not set)'}\n`);
 
   // Only accounts that have not already been given trial fields, and only
   // unpaid ones — a Standard account's entitlement comes from its
@@ -59,7 +70,7 @@ async function migrate() {
       account.trialStartedAt = grant.trialStartedAt;
       account.trialEndsAt = grant.trialEndsAt;
       account.trialHours = grant.trialHours;
-      await account.save();
+      if (!DRY_RUN) await account.save();
       trialing += 1;
       console.log(
         `  trial  ${account._id} — ${grant.trialEndsAt?.toISOString().slice(0, 10)} ` +
@@ -72,15 +83,16 @@ async function migrate() {
       // flags are telling us here.
       account.trialStartedAt = owner.trialStartDate ?? account.createdAt ?? new Date();
       account.trialEndsAt = owner.trialEndDate ?? account.trialStartedAt;
-      await account.save();
+      if (!DRY_RUN) await account.save();
       settled += 1;
     }
   }
 
   console.log(
-    `\nDone. ${trialing} accounts kept a running trial, ${settled} recorded as already trialed, ` +
-    `${skipped} skipped (no owner).`,
+    `\n${DRY_RUN ? 'Would change' : 'Done'}. ${trialing} accounts kept a running trial, ` +
+    `${settled} recorded as already trialed, ${skipped} skipped (no owner).`,
   );
+  if (DRY_RUN) console.log('Nothing was written. Re-run without --dry-run to apply.');
   process.exit(0);
 }
 

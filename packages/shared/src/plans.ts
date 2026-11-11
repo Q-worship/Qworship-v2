@@ -313,7 +313,7 @@ export const PLANS: Record<PlanId, Plan> = {
       "On-screen Bible search — KJV only",
       `Song book and song builder — up to ${FREE_SONG_LIMIT} songs`,
       "Media assets — limited to My Media",
-      "Live projection — single window",
+      "Live projection",
       "Slide canvas builder — text, shapes, images, layers, QR codes",
       "PowerPoint import & back-up",
     ],

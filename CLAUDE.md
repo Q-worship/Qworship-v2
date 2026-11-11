@@ -185,24 +185,21 @@ it once the legacy readers are gone.
 Roughly in the order worth doing. None is release-blocking; the two that were
 (entitlement reconciliation, and having any scheduler at all) are done.
 
-### 1. Multi-window projection is the last unenforceable claim
+### 1. Run `migrate:account-trials` before this ships
 
-**The rule, now settled:** we do not advertise a line we cannot hold. A
-capability that only a greyed-out button enforces is a promise to paying
-customers that the product quietly breaks, and an invitation to anyone who
-opens devtools. If it cannot be gated on the server, it does not belong in
-`FEATURES` at all.
+Not optional, and not yet done. `ensureAccountFor` decides a trial when it
+CREATES an account, reading the owner's legacy `trialStatus` / `trialEndDate`
+— but accounts already in the database never take that path, so without this
+script anyone mid-trial loses their remaining days on deploy day.
 
-The slide canvas and PowerPoint import were both resolved this way — both run
-entirely in the browser, so both are now **wholly free** and their ids are
-removed from the catalog rather than left ungated. A test pins this.
+    pnpm --filter @qworship/server migrate:account-trials --dry-run   # read only
+    pnpm --filter @qworship/server migrate:account-trials             # applies
 
-`projection.multiWindow` is the same shape and has NOT been resolved: the
-desktop console opens its own windows and the server never sees it, yet free
-is still sold "Live projection — single window". Either drop it to free like
-the other two, or accept it as a desktop-side honour-system limit and say so
-plainly. `support.priority` is NOT in this category — it is a promise about
-people, not a software gate, so there is nothing to enforce.
+A dry run on 2026-11-11 found **6 accounts**, all carrying a live legacy
+trial ending 5–15 December, none skipped. Some run past thirty days because
+those people had used the old extend button; the script honours whatever they
+have rather than truncating it. Idempotent — it matches on `trialStartedAt`
+not existing, so a second pass finds nothing.
 
 ### 2. Gift stacking
 

@@ -145,9 +145,14 @@ check(
   'parsed in the browser; the server never sees the file',
 );
 check(
+  'multi-window projection is not a gated capability either',
+  !FEATURE_IDS.includes('projection.multiWindow' as never),
+  'the desktop console opens its own windows',
+);
+check(
   'every gated capability the server can actually refuse is enforceable',
   FEATURE_IDS.filter((id) => !FEATURES[id].enforceable)
-    .every((id) => id === 'projection.multiWindow' || id === 'support.priority'),
+    .every((id) => id === 'support.priority'),
   'anything else unenforceable in this list is a promise we cannot keep',
 );
 
