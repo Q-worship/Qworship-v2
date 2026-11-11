@@ -8,7 +8,7 @@ import { TabSkeleton, EmptyState } from "./BillingPrimitives";
 import { PlanDetailsStrip } from "./PlanDetailsStrip";
 import { BillingIntervalToggle } from "./BillingIntervalToggle";
 import { GiftSubscriptionCard } from "./GiftSubscriptionCard";
-import { PlanOptionCards } from "./PlanOptionCards";
+import { PlanOptionCards } from "@/components/plans/PlanOptionCards";
 import { AddBranchCard } from "./AddBranchCard";
 import { TopUpPacks } from "./TopUpPacks";
 

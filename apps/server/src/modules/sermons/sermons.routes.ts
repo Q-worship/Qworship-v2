@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { protect, requireProductAccess } from "../auth/auth.middleware.js";
+import { requireFeature } from "../billing/capability.middleware.js";
 import {
   listSermons,
   getSermon,
@@ -15,7 +16,8 @@ import {
 
 export const sermonsRouter = Router();
 
-sermonsRouter.use(protect, requireProductAccess);
+// Q-worship sermons are a Standard feature; the whole module is gated.
+sermonsRouter.use(protect, requireProductAccess, requireFeature("sermons"));
 
 sermonsRouter.get("/", listSermons);
 // Before "/:id" so "template" isn't read as a sermon id.

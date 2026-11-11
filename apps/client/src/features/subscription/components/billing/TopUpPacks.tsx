@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import {
-  OVERAGE_PRICE_PER_HOUR_USD, TOP_UP_PACKS, TOP_UP_PRESET_HOURS, formatUsd, topUpPrice,
+  OVERAGE_PRICE_PER_HOUR_USD, TOP_UP_VALID_DAYS, TOP_UP_PACKS, TOP_UP_PRESET_HOURS, formatUsd, topUpPrice,
 } from "@qworship/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +84,7 @@ export const TopUpPacks: React.FC<{
               <ul className="space-y-3">
                 <Feature>{pack.hours} hours of transcription and hands-free Bible</Feature>
                 <Feature>Goes to {chosen?.name ?? "the church you choose"} alone</Feature>
-                <Feature>Expires at the end of this month</Feature>
+                <Feature>Valid for {TOP_UP_VALID_DAYS} days from purchase</Feature>
               </ul>
               <Button
                 className="mt-8 w-full bg-[#8356F3] text-white hover:bg-[#7245e2] disabled:opacity-40"

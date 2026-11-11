@@ -11,7 +11,7 @@ import {
   notifyPaymentDisputed,
   notifyTopUpRefunded,
 } from "./billing.notify.js";
-import { HourTopUp } from "../organization/hour-topup.model.js";
+import { HourTopUp, topUpExpiryFrom } from "../organization/hour-topup.model.js";
 import { Organization } from "../organization/organization.model.js";
 import { stripe, stripeConfigured } from "./stripe.client.js";
 
@@ -180,6 +180,9 @@ async function creditTopUp(
     {
       $set: {
         status,
+        // The clock starts when the money lands, not when checkout opened.
+        // Only on success: a failed row has no hours to run out.
+        ...(status === "paid" ? { expiresAt: topUpExpiryFrom() } : {}),
         stripePaymentIntentId:
           typeof session.payment_intent === "string" ? session.payment_intent : undefined,
         invoiceRef: typeof session.invoice === "string" ? session.invoice : undefined,

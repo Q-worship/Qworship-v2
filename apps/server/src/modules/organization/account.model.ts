@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { PLANS } from "@qworship/shared";
+import { PLANS, TRIAL_HOURS } from "@qworship/shared";
 
 /**
  * An Account owns the subscription; Organizations consume its slots.
@@ -53,6 +53,30 @@ export interface IAccount extends Document {
    */
   billingInterval: "month" | "year";
   status: "active" | "trialing" | "past_due" | "cancelled";
+  /**
+   * When the free trial began, and when it runs out.
+   *
+   * On the ACCOUNT, not the User, and deliberately so. Trial state used to
+   * live on `user.trialStatus` / `user.trialEndDate` while billing lived
+   * here, and the two were never connected — which is exactly how a paying
+   * church ended up refused with `402 TRIAL_EXPIRED`. Putting the trial
+   * beside the plan it converts into means one lookup answers both, and the
+   * legacy pair can finally be deleted rather than extended.
+   *
+   * Kept after expiry rather than cleared: "when did this church trial us"
+   * is the first question asked about any account that did not convert, and
+   * it is also what stops a second trial being handed out.
+   */
+  trialStartedAt?: Date;
+  trialEndsAt?: Date;
+  /**
+   * Transcription hours for the WHOLE trial run, not per month.
+   *
+   * Stored as granted, the same way price and slots are, so changing
+   * TRIAL_HOURS in the catalog cannot retroactively shorten a trial somebody
+   * is in the middle of.
+   */
+  trialHours?: number;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   /** Extra slots granted by an admin, outside the plan. */
@@ -81,6 +105,10 @@ const AccountSchema = new Schema<IAccount>(
       enum: ["active", "trialing", "past_due", "cancelled"],
       default: "active",
     },
+    trialStartedAt: { type: Date },
+    // Indexed because the scheduler sweeps for lapsed trials on it hourly.
+    trialEndsAt: { type: Date, index: true },
+    trialHours: { type: Number },
     stripeCustomerId: { type: String },
     stripeSubscriptionId: { type: String },
     bonusSlots: { type: Number, default: 0 },
@@ -105,9 +133,12 @@ export function accountSlots(account: IAccount): number {
  *
  * A paid account gets the rate it bought, because changing a subscriber's terms
  * under them is not ours to do. A FREE account bought nothing, so it tracks the
- * current catalog instead: a free church that signed up when the allowance was
- * 2 hours would otherwise sit at 2 forever, since there is no renewal to pick
- * up the new figure. That read as a bug, and it was one.
+ * current catalog instead: a free church pinned to whatever figure happened to
+ * be live on the day it signed up would never pick up a change, because there
+ * is no renewal to carry one. That read as a bug, and it was one.
+ *
+ * A TRIAL is neither. It gets the hours it was granted, held on the account,
+ * and for the length of the trial rather than per month.
  */
 export function accountHours(account: IAccount): number {
   return hoursPerChurchOf(account);
@@ -129,8 +160,17 @@ export function hoursPerChurchOf(account: {
   monthlyHours?: number;
   slots?: number;
   bonusHours?: number;
+  status?: string;
+  trialEndsAt?: Date | string | null;
+  trialHours?: number;
 }): number {
   const bonus = account.bonusHours || 0;
+  // A trial carries its own budget and is asked about FIRST, because a
+  // trialing account sits on planId "free" and would otherwise silently be
+  // given the free monthly allowance instead of the trial's run-long one.
+  // The granted figure is preferred over the catalog so that changing
+  // TRIAL_HOURS cannot shorten a trial somebody is already inside.
+  if (isTrialing(account)) return (account.trialHours ?? TRIAL_HOURS) + bonus;
   if (account.planId === "free") return PLANS.free.includedHours + bonus;
   if (account.hoursPerChurch) return account.hoursPerChurch + bonus;
   const slots = Math.max(1, account.slots || 1);
@@ -139,3 +179,48 @@ export function hoursPerChurchOf(account: {
 
 /** @deprecated pooled naming; call `hoursPerChurchOf`. */
 export const hoursAllowanceOf = hoursPerChurchOf;
+
+/**
+ * Whether this account is inside its free trial right now.
+ *
+ * Both halves are required. `status` alone goes stale the moment a trial
+ * lapses between scheduler sweeps, and a date alone would keep granting the
+ * product to an account that converted or was cancelled. Asking for both
+ * means the hour between expiry and the sweep noticing is still correct.
+ */
+export function isTrialing(account: {
+  status?: string;
+  trialEndsAt?: Date | string | null;
+}): boolean {
+  if (account.status !== "trialing") return false;
+  if (!account.trialEndsAt) return false;
+  return new Date(account.trialEndsAt) > new Date();
+}
+
+/**
+ * Whole days left in the trial, never negative.
+ *
+ * Rounded UP, because a trial with four hours left is honestly "1 day", not
+ * "0 days" — and a banner reading "0 days left" beside a product that still
+ * works is the kind of thing that generates support mail.
+ */
+export function trialDaysRemaining(account: {
+  trialEndsAt?: Date | string | null;
+}): number {
+  if (!account.trialEndsAt) return 0;
+  const ms = new Date(account.trialEndsAt).getTime() - Date.now();
+  if (ms <= 0) return 0;
+  return Math.ceil(ms / (24 * 60 * 60 * 1000));
+}
+
+/**
+ * Whether this account has ever had a trial.
+ *
+ * One to an account, forever. The trial is the whole product for nothing, so
+ * the only thing standing between it and a free subscription is refusing to
+ * hand out a second one — which is also why `trialStartedAt` is kept rather
+ * than cleared when the trial ends.
+ */
+export function hasEverTrialed(account: { trialStartedAt?: Date | null }): boolean {
+  return Boolean(account.trialStartedAt);
+}

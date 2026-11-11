@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { protect, authorizeAdmin, requireProductAccess } from '../auth/auth.middleware.js';
+import { requireFeature } from '../billing/capability.middleware.js';
 import {
   uploadMedia,
   listUserMedia,
@@ -86,7 +87,14 @@ mediaRouter.delete('/user-media-assets/:id', protect, requireProductAccess, dele
 
 // Cloud Media Routes -> /api/cloud-media
 mediaRouter.post('/cloud-media', protect, authorizeAdmin, memoryUpload.array('files'), uploadCloudMedia);
-mediaRouter.get('/cloud-media', listCloudMedia);
+// The cloud collections are Standard; My Media (/user-media-*) is not, and
+// is deliberately left ungated — free keeps its own library.
+//
+// Only the LIST is gated. The /file and /thumbnail routes below are reached
+// as plain <img src> URLs that cannot carry a bearer token, which is why
+// they have no `protect` either; without this listing there are no ids to
+// ask for, so the collection is closed at the only door that can be shut.
+mediaRouter.get('/cloud-media', protect, requireFeature('media.cloudCollections'), listCloudMedia);
 mediaRouter.get('/cloud-media/:id/thumbnail', getCloudMediaThumbnail);
 mediaRouter.get('/cloud-media/:id/file', getCloudMediaFile);
 mediaRouter.patch('/cloud-media/:id', protect, authorizeAdmin, updateCloudMedia);

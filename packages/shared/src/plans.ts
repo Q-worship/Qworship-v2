@@ -63,15 +63,22 @@ export const TRANSCRIPTION_COST_PER_HOUR_USD = 0.46;
 /**
  * Transcription hours on the Free plan, per month.
  *
- * Four hours is one service a week for a month — a whole billing cycle of
- * normal use rather than a trial that runs out mid-month. It costs us about
- * $1.84 per free account against no revenue, so it is acquisition spend: at
- * 1,000 free churches that is roughly $1,840 a month. Raise it only alongside
- * a conversion figure that justifies it.
+ * Two hours is a taste, not a working allowance: roughly one service a
+ * fortnight. That is the point. Free exists to show a church what hands-free
+ * Bible feels like and then run out, with the premium features visible but
+ * locked beside it; see FEATURES for what free actually loses.
  *
- * Free holds one church, so there is nothing here to pool or top up.
+ * It costs us about $0.92 per free account against no revenue, so it is
+ * acquisition spend: at 1,000 free churches, roughly $920 a month.
+ *
+ * It was 4, set when free was the only non-paying state and had to carry a
+ * whole billing cycle of normal use on its own. The trial now does that job —
+ * thirty days of the FULL product — so free no longer has to be generous
+ * enough to live on, and halving it costs nothing a trialist will feel.
+ *
+ * Free holds one church, so there is nothing here to pool.
  */
-export const FREE_HOURS = 4;
+export const FREE_HOURS = 2;
 
 /**
  * Cloud storage included with each plan, in gigabytes, per church.
@@ -88,15 +95,68 @@ export const STANDARD_STORAGE_GB = 10;
 export const BYTES_PER_GB = 1024 ** 3;
 
 /**
+ * How long a new account gets the whole product for, in days.
+ *
+ * The trial is not a cheaper plan; it is Standard, free, for a month. Every
+ * premium capability is open — see FEATURES — because the only thing that
+ * sells them is using them.
+ */
+export const TRIAL_DAYS = 30;
+
+/**
+ * Transcription hours a trial gets for its whole run.
+ *
+ * NOT per month: a trial is thirty days long, and this is the total for it.
+ *
+ * Two, the same as free, which looks odd until you see what it is for. The
+ * trial does not sell HOURS, it sells FEATURES — the rich canvas, every Bible
+ * version, lower thirds, PowerPoint import — and those cost us nothing to
+ * hand out. Transcription is the one thing that bills a provider by the
+ * minute, so it is the one thing the trial is tight with. Giving thirty
+ * trial hours would spend ~$13.80 of Deepgram on an account that may never
+ * pay, and would make the paid allowance feel like a downgrade.
+ *
+ * The consequence is deliberate and must not be "fixed" without a decision:
+ * a trialist who burns both hours on day three has no hands-free Bible until
+ * their free plan begins on day thirty-one. They keep every other premium
+ * feature until then (see TRIAL_KEEPS_FEATURES_UNTIL_EXPIRY), and they can
+ * buy a top-up pack, which is the intended escape and the intended revenue.
+ */
+export const TRIAL_HOURS = 2;
+
+/**
+ * Whether spending the trial's hours also ends its feature access.
+ *
+ * It does not. Running out of hours silences hands-free Bible and nothing
+ * else; the canvas, the versions and the lower thirds stay until the thirty
+ * days are up.
+ *
+ * Taking everything away at the moment somebody hits a limit is the surest
+ * way to lose them: they are at their most engaged and would be met with an
+ * app that suddenly does less than it did an hour ago. Leaving the rest open
+ * means twenty-seven more days of seeing the product work, with one locked
+ * button in front of them and a price beside it.
+ *
+ * A constant rather than a bare `true` so the rule is greppable from the
+ * enforcement code that depends on it.
+ */
+export const TRIAL_KEEPS_FEATURES_UNTIL_EXPIRY = true;
+
+/**
  * How a subscription is billed.
  *
- * Yearly is twelve months at a tenth off — the discount the design promises,
+ * Yearly is twelve months at a quarter off — the discount the design promises,
  * expressed once here so the saving on the toggle and the figure Stripe
  * charges cannot drift apart.
+ *
+ * A quarter is steep for an annual commitment, and deliberately so: a church
+ * budgets once a year, and a year paid up front removes twelve chances to
+ * churn. Note it also sets the twelve-month gift price, which is the same
+ * commitment and so takes the same discount.
  */
 export type BillingInterval = "month" | "year";
 
-export const YEARLY_DISCOUNT = 0.1;
+export const YEARLY_DISCOUNT = 0.25;
 
 /** What one church slot costs for a whole year, after the discount. */
 export function yearlySlotPriceUsd(): number {
@@ -159,6 +219,20 @@ export const TOP_UP_PACKS = [
   { hours: 14, label: "A season of events" },
 ] as const;
 
+/**
+ * How long bought hours last, in days from the moment they are PAID for.
+ *
+ * Thirty days from purchase, not to the end of the calendar month. The month
+ * rule was the original one and it quietly punished the people most likely to
+ * buy: a church topping up on the 28th for an unusually heavy Sunday got three
+ * days to use what it paid for, and the plan card had always promised thirty.
+ * Nobody reads "expires with the month" as "expires on Saturday".
+ *
+ * Measured from payment rather than from opening checkout, so an abandoned
+ * session resumed the next day does not start already spent.
+ */
+export const TOP_UP_VALID_DAYS = 30;
+
 /** Sizes offered on the custom top-up, beside a free-entry field. */
 export const TOP_UP_PRESET_HOURS = [5, 10, 25, 50] as const;
 
@@ -205,7 +279,7 @@ export const PLANS: Record<PlanId, Plan> = {
   free: {
     id: "free",
     name: "Free",
-    description: "One church, with enough hands-free Bible to see how it works.",
+    description: "Essential tools for a single church, and enough hands-free Bible to see how it works.",
     monthlyPrice: 0,
     includedSlots: 1,
     includedHours: FREE_HOURS,
@@ -213,10 +287,15 @@ export const PLANS: Record<PlanId, Plan> = {
     canBuySlots: false,
     features: [
       "One church",
-      "Songs, presentations and service planning",
-      "Bible search across six versions",
-      `${FREE_HOURS} hours of hands-free Bible a month`,
-      `${FREE_STORAGE_GB} GB of cloud storage`,
+      `${FREE_HOURS} hrs/month hands-free Scripture & transcription`,
+      `${FREE_STORAGE_GB} GB cloud storage`,
+      "Order of service builder",
+      "Hands-free Bible — KJV only",
+      "On-screen Bible search — KJV only",
+      "Song book and song builder — limited",
+      "Media assets — limited to My Media",
+      "Live projection — single window",
+      "Basic slide canvas builder",
     ],
   },
   standard: {
@@ -228,13 +307,19 @@ export const PLANS: Record<PlanId, Plan> = {
     includedHours: HOURS_PER_SLOT,
     includedStorageGb: STANDARD_STORAGE_GB,
     canBuySlots: true,
+    // Written as "everything in free, plus" — the screen renders this list
+    // under that heading, so nothing free already has is repeated here.
     features: [
-      `One church for $${SLOT_PRICE_USD} a month`,
-      `Add a branch for $${SLOT_PRICE_USD} a month each`,
-      `${HOURS_PER_SLOT} hands-free Bible hours for every church, kept to itself`,
-      "Branch churches under one account",
-      `${STANDARD_STORAGE_GB} GB of cloud storage per church`,
-      "Usage visible per branch",
+      `${HOURS_PER_SLOT} hrs/month for every church`,
+      "Every Bible version, hands-free and on-screen",
+      "Add multiple branches or campuses",
+      `${STANDARD_STORAGE_GB} GB of storage for every branch`,
+      "Rich slide canvas — text, elements, images, QR codes, layers",
+      "Q-worship sermons",
+      "Lower third builder & pre-built templates",
+      "Advanced cloud media collections",
+      "PowerPoint import & back-up",
+      "Usage visibility for every branch",
       "Priority support",
     ],
   },

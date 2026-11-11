@@ -83,6 +83,29 @@ export const requireProductAccess = async (req: Request, res: Response, next: Ne
  * `past_due` counts as access on purpose. A card that failed on a Saturday
  * must not take a church off the air on Sunday; Stripe retries, and only a
  * cancelled subscription actually revokes.
+ *
+ * FREE COUNTS AS ACCESS TOO, and that is a change. This used to return true
+ * only for `standard`, which made the free plan a synonym for locked out —
+ * a free account fell through to the legacy trial flags and ended on
+ * `402 TRIAL_EXPIRED`, so "continue with the free plan" led to a wall rather
+ * than to a working app. Free is now a real plan that people stay on, and
+ * what it withholds is decided per feature in capability.service.ts, not by
+ * refusing the product wholesale here.
+ *
+ * Note what this means: an account that EXISTS grants access, full stop.
+ * Not even `cancelled` refuses, and that resolves a contradiction rather
+ * than inventing a policy — `onSubscriptionEnded` already drops a cancelled
+ * subscription to `planId: "free"` and says in as many words that the free
+ * allowance applies immediately. Reading its `status: "cancelled"` as a
+ * lock-out would have made that comment a lie and left a church that simply
+ * stopped paying with less than a church that never started.
+ *
+ * `status` describes the SUBSCRIPTION, not the person's right to open the
+ * app. What a cancelled account loses is its premium capabilities, which
+ * capability.service.ts withholds by reading exactly this status.
+ *
+ * Genuine suspension is a different thing entirely and is handled upstream
+ * in `protect`, which refuses an inactive or unverified user outright.
  */
 async function accountGrantsAccess(req: Request): Promise<boolean> {
   try {
@@ -94,9 +117,7 @@ async function accountGrantsAccess(req: Request): Promise<boolean> {
     if (!accountId) return false;
 
     const account = await Account.findById(accountId).select('planId status').lean();
-    if (!account) return false;
-
-    return account.planId === 'standard' && account.status !== 'cancelled';
+    return Boolean(account);
   } catch {
     return false;
   }

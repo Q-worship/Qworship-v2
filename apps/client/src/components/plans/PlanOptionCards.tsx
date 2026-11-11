@@ -1,19 +1,23 @@
 import React from "react";
 import { Check } from "lucide-react";
 import {
-  FREE_HOURS, FREE_STORAGE_GB, HOURS_PER_SLOT, STANDARD_STORAGE_GB,
-  formatUsd, slotPriceFor, yearlySavingUsd,
+  PLANS, formatUsd, slotPriceFor, yearlySavingUsd,
 } from "@qworship/shared";
 import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 
 /**
  * The three plan columns.
  *
- * Every figure is read from the catalog rather than the design, on the usual
- * rule that `plans.ts` is the only place a price or an allowance is stated.
- * Where the two disagreed the catalog won: the design showed Free at 2 hours
- * (it is {FREE_HOURS}) and three Bible versions (it is six), and named the paid
- * tier "Cloud Pro" where the catalog calls it Standard.
+ * Every figure AND every bullet is read from the catalog rather than written
+ * here, on the usual rule that `plans.ts` is the only place a price or an
+ * allowance is stated. The lists used to be retyped in this file, which is how
+ * they came to claim six Bible versions and a storage figure the catalog had
+ * since changed.
+ *
+ * Lives in components/ rather than in the billing feature because the Live
+ * Console opens these same cards in a modal when somebody presses a locked
+ * control, and a feature may not import from another feature.
  *
  * Enterprise carries no price and no entitlement — it is a contact card, so it
  * can sit here honestly without a plan existing behind it.
@@ -34,18 +38,11 @@ export const PlanOptionCards: React.FC<Props> = ({
   <div className="grid gap-6 lg:grid-cols-3">
     <PlanColumn
       name="Free"
-      blurb="Essential tools for a single church, and enough hands-free Bible to see how it works."
+      blurb={PLANS.free.description}
       price="$0"
       cadence="/ month"
       note="Free forever · no card required"
-      features={[
-        "One church",
-        `${FREE_HOURS} hrs/month hands-free Scripture`,
-        `${FREE_STORAGE_GB} GB cloud storage`,
-        "Bible search across six versions",
-        "Songs, presentations and service planning",
-        "Media and assets",
-      ]}
+      features={PLANS.free.features}
       action={
         <Button
           variant="outline"
@@ -61,7 +58,7 @@ export const PlanOptionCards: React.FC<Props> = ({
 
     <PlanColumn
       name="Standard"
-      blurb="One church, and a slot for every branch you add."
+      blurb={PLANS.standard.description}
       price={formatUsd(slotPriceFor(interval))}
       cadence={interval === "year" ? "/ church / year" : "/ church / month"}
       note={
@@ -70,14 +67,7 @@ export const PlanOptionCards: React.FC<Props> = ({
           : "Billed monthly · cancel any time"
       }
       featuresHeading="Everything in Free, plus:"
-      features={[
-        `${HOURS_PER_SLOT} hrs/month for every church, kept to itself`,
-        `${STANDARD_STORAGE_GB} GB cloud storage per church`,
-        "Branch churches under one account",
-        "Usage visible per branch",
-        `Extra hours at ${formatUsd(1.99)} each when you need them`,
-        "Priority support",
-      ]}
+      features={PLANS.standard.features}
       action={
         <Button
           className="w-full bg-[#8356F3] text-white hover:bg-[#7245e2] disabled:opacity-40"
@@ -107,7 +97,10 @@ export const PlanOptionCards: React.FC<Props> = ({
           asChild
           className="w-full border-white/15 bg-transparent text-white hover:bg-white/5"
         >
-          <a href="mailto:sales@qworship.com?subject=Enterprise%20enquiry">Talk to sales</a>
+          {/* A form, not a mailto. A mailto assumes a configured mail client,
+            loses the enquiry if there is none, and leaves us nothing to
+            follow up from. The form records it and books a call. */}
+        <Link href="/enterprise-enquiry">Talk to sales</Link>
         </Button>
       }
     />
@@ -121,7 +114,7 @@ const PlanColumn: React.FC<{
   cadence: string;
   note: string;
   featuresHeading?: string;
-  features: string[];
+  features: readonly string[];
   action: React.ReactNode;
   current?: boolean;
 }> = ({ name, blurb, price, cadence, note, featuresHeading, features, action, current }) => (

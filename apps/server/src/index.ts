@@ -10,6 +10,7 @@ import { onboardingRouter } from "./modules/onboarding/onboarding.routes.js";
 import { usageRouter } from "./modules/usage/usage.routes.js";
 import { branchesRouter } from "./modules/organization/branches.routes.js";
 import { billingRouter } from "./modules/billing/billing.routes.js";
+import { enquiryRouter } from "./modules/billing/enquiry.routes.js";
 import { stripeWebhookRouter } from "./modules/billing/stripe.webhook.js";
 import { startScheduler } from "./core/scheduler.js";
 import { helpRouter } from "./modules/help/help.routes.js";
@@ -89,6 +90,7 @@ app.use("/api", onboardingRouter);
 app.use("/api", usageRouter);
 app.use("/api", branchesRouter);
 app.use("/api", billingRouter);
+app.use("/api", enquiryRouter);
 app.use("/api", serviceSectionsRouter);
 app.use("/api", mediaRouter);
 app.use("/api/help", helpRouter);
@@ -118,8 +120,8 @@ const startServer = async () => {
       void BibleService.initializeStore().catch((error) => {
         console.error("[BibleService] Background memory warm-up failed:", error);
       });
-      // Recurring work: gift expiry today, anything time-based later. Every
-      // job is idempotent, so running several instances is safe.
+      // Recurring work: gift expiry and trial expiry. Every job is
+      // idempotent, so running several instances is safe.
       startScheduler();
     });
   } catch (error) {

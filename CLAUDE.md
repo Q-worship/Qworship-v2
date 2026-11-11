@@ -39,25 +39,50 @@ the fill contrast against the purple page separates them. Do not reintroduce
 Prices and allowances live in **`packages/shared/src/plans.ts` only**. Never
 state a price in a component.
 
-- **$15.99 per church slot, per month.** Yearly is 12 months less 10%
-  ($172.69). USD is the base and settlement currency.
+- **$15.99 per church slot, per month.** Yearly is 12 months less 25%
+  ($143.91). USD is the base and settlement currency. Note the same discount
+  sets the twelve-month gift price.
 - **30 hours per church, per month — NOT pooled.** Each church owns its hours;
   no branch can spend another's. This was deliberately changed from a pooled
   model: pooling let one busy branch black out a sibling mid-service, and it
   converted breakage into provider cost. Any UI showing one hours figure for a
   whole network is wrong.
-- **Extra hours $1.99/hr**, bought for a *named church*, expiring with the
-  month. Hours are not transferable, so a purchase with no destination is not a
-  thing the system can carry out.
-- **Free: 1 church, 4 hours, 1 GB. Standard: 30 hours and 10 GB per church.**
+- **Extra hours $1.99/hr**, bought for a *named church*, valid **30 days from
+  payment** (`TOP_UP_VALID_DAYS`). It used to expire with the calendar month,
+  which gave a church buying on the 28th three days for what the card promised
+  as thirty. Rows written before `expiresAt` existed still follow the old
+  month rule — see `liveTopUpFilter` — so nobody loses hours they paid for.
+  Hours are not transferable, so a purchase with no destination is not a thing
+  the system can carry out.
+- **Top-ups sell hours, never features.** `capabilitiesForAccount` is handed
+  planId, status and trialEndsAt and has no hours field to be influenced by,
+  so buying time can never buy the feature set. Tested, because a later
+  "helpful" change could otherwise make $5.97 a way to rent Standard. The
+  economics agree: matching Standard's 30 hours via top-ups costs $55.72
+  against $15.99, and leaves you on KJV throughout.
+- **Free: 1 church, 2 hours, 1 GB. Standard: 30 hours and 10 GB per church.**
+  Free is a real, usable plan — not a synonym for locked out — and what it
+  withholds is decided per feature in `packages/shared/src/features.ts`, never
+  by refusing the product wholesale.
+- **Trial: the whole of Standard, free, for 30 days, with 2 hours.** The hours
+  are a budget for the WHOLE run, not per month, and are counted from
+  `trialStartedAt` rather than per calendar month — counting per month would
+  hand a trial straddling a month boundary a second full allowance. Expiry is
+  exact to the minute (`trialStartedAt + 30 x 24h`), a deliberate choice over
+  rounding to end of day. Running the hours out silences hands-free Bible
+  only; every other premium feature stays until the days are up. One trial per
+  account, forever, which is why `trialStartedAt` is never cleared.
 - **Gifts** are paid up front and produce a *code*; the sponsor usually does not
   know which account will redeem it. `expiresAt` is stamped at redemption, not
   purchase, so a code in an inbox does not burn down.
 
 ### Where the designs disagree with the catalog, the catalog wins
 
-The exports contain stale figures — "Cloud Pro", ₦15,000/node, Free at 2 hours,
-three Bible versions, and top-up packs implying $0.71–0.80/hr. All corrected.
+The exports contain stale figures — "Cloud Pro", ₦15,000/node, three Bible
+versions, and top-up packs implying $0.71–0.80/hr. All corrected. (Free at 2
+hours was once listed here as stale; it is now the decision, so the catalog and
+the design agree. The design's "14 Bible versions" is still wrong — we ship 13,
+so the plan card says "every Bible version" rather than a number that drifts.)
 The design also shows a branch lifecycle (Onboarding / Suspended / Archived)
 that does not exist; status is derived from real data instead — over allowance,
 active, or idle, read off the church's own numbers.
@@ -156,25 +181,43 @@ it once the legacy readers are gone.
 Roughly in the order worth doing. None is release-blocking; the two that were
 (entitlement reconciliation, and having any scheduler at all) are done.
 
-### 1. Gift stacking
+### 1. Two plan boundaries are undefined
+
+The design promises free a **"Basic Slide Canvas Builder"** and a **"Song book
+and Song builder — limited"**, but neither word is defined anywhere, and there
+is only one canvas editor and one songs module in the code. So `canvas.rich`
+and `songs.full` exist in `FEATURES` and are deliberately NOT gated: locking
+them wholesale would take from free something the plan card promises it. They
+need a product decision — which canvas tools are "basic", and what caps
+"limited" — before they can be enforced.
+
+`powerpoint.import` is also ungated: the conversion is client-side and there
+is no server route to refuse, so it can only ever be a UI lock.
+
+### 2. Gift stacking
 
 `redeemGift` refuses an account with a live Stripe subscription but not one with
 an already-redeemed gift, so a second code silently overwrites the first's
 `expiresAt`. Either refuse, or extend the existing expiry.
 
-### 2. Billing visibility
+### 3. Billing visibility
 
 Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 3. No trial on Standard
+### 4. Trial notices
 
-The design shows "30 Days Free Trial / 19 days left". Stripe supports
-`trial_period_days` on the subscription; nothing uses it, and there is no
-trial-days figure anywhere in the account model.
+The trial expires exactly 30x24h after signup, which can land mid-service on a
+Sunday. Nothing warns anybody first. In-app notices at 7 days, 1 day and
+day-of would both prevent the surprise and convert better, since a church that
+knows buys in advance. `notificationPreferences` already gates in-app notices.
 
-### 4. Dashboard configuration (not code)
+Stripe's own `trial_period_days` is still unused — our trial is ours, held on
+the Account, and does not require a card. That is deliberate; revisit only if
+card-up-front trials are wanted.
+
+### 5. Dashboard configuration (not code)
 
 - **Adaptive Pricing** must be switched on in the Stripe Dashboard — it is a
   setting, not an API call, and the whole currency approach depends on it. Note
@@ -183,7 +226,7 @@ trial-days figure anywhere in the account model.
 - **Production webhook endpoint** with the nine handled events, and its own
   signing secret. The CLI secret is local-only.
 
-### 5. Deferred features
+### 6. Deferred features
 
 - **Auto-refill / "Emergency Sunday Buffer"** from the design: buy hours
   automatically instead of stopping. Deliberately not built — it charges a card
@@ -197,8 +240,10 @@ trial-days figure anywhere in the account model.
 - **Email.** `notificationPreferences` now gates in-app notices only; no billing
   email is sent at all. `modules/auth/email.service.ts` has the transport.
 
-### 6. Known gaps in testing
+### 7. Known gaps in testing
 
+- `pnpm test:capabilities` covers the plan/feature matrix, trial eligibility,
+  trial expiry and the hours rules. Pure, so it needs no database or server.
 - `pnpm test:usage` covers range resolution for every option the usage screen
   offers (7/30/90 days, weekly, monthly, custom, Sunday-to-Sunday), and needs
   no database.

@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { UpgradeProvider } from "@/components/upgrade/UpgradeContext";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useBibleSync } from "@/hooks/useBibleSync";
@@ -55,6 +56,7 @@ const OrganizationDetailsPage = lazy(() => import("@/features/organization/pages
 const PreferencesPage = lazy(() => import("@/features/dashboard/profile/PreferencesPage"));
 const OrganizationProfilePage = lazy(() => import("@/features/organization/pages/OrganizationProfilePage"));
 const BillingPage = lazy(() => import("@/features/subscription/pages/BillingPage"));
+const EnterpriseEnquiryPage = lazy(() => import("@/features/subscription/pages/EnterpriseEnquiryPage"));
 const GiftPage = lazy(() => import("@/features/subscription/pages/GiftPage"));
 const HelpSupportPage = lazy(() => import("@/features/dashboard/pages/HelpSupportPage"));
 const SermonsPage = lazy(() => import("@/features/sermons/SermonsPage"));
@@ -211,6 +213,10 @@ export const AppRouter = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        {/* Mounted above the router so a locked control anywhere — the Live
+            Console, the media library, the canvas — opens one shared plan
+            modal without those features importing from one another. */}
+        <UpgradeProvider>
         <Toaster />
         <Suspense fallback={<div className="flex h-screen items-center justify-center bg-[#0d071d]"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div></div>}>
           <Switch>
@@ -220,6 +226,8 @@ export const AppRouter = () => {
           <Route path="/verify" component={Verify} />
           <Route path="/forgot-password" component={ForgotPassword} />
           <Route path="/reset-password" component={ResetPassword} />
+          {/* Public: an enterprise prospect may not have an account yet. */}
+          <Route path="/enterprise-enquiry" component={EnterpriseEnquiryPage} />
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/account" component={TrialExpiredPage} />
           <Route path="/project-selection">
@@ -319,6 +327,7 @@ export const AppRouter = () => {
           </Route>
         </Switch>
         </Suspense>
+        </UpgradeProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

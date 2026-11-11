@@ -1,11 +1,13 @@
 import mongoose from "mongoose";
 import { entitlementsFor, BYTES_PER_GB, PLANS, PlanId } from "@qworship/shared";
-import { Account, IAccount, accountSlots, hoursPerChurchOf } from "./account.model.js";
+import { Account, IAccount, accountSlots, hoursPerChurchOf, isTrialing } from "./account.model.js";
 import { Organization } from "./organization.model.js";
 import { BranchInvite } from "./branch-invite.model.js";
-import { UsageCounter, usagePeriod } from "../usage/usage.model.js";
-import { HourTopUp, purchasedHoursFor } from "./hour-topup.model.js";
+import { TranscriptionSession, UsageCounter, usagePeriod } from "../usage/usage.model.js";
+import { HourTopUp, liveTopUpFilter, purchasedHoursFor } from "./hour-topup.model.js";
 import { storageByOrganization } from "../usage/storage.service.js";
+import { User } from "../auth/auth.model.js";
+import { trialGrantFor } from "../billing/trial.service.js";
 
 /**
  * Slot accounting and plan state.
@@ -26,7 +28,18 @@ export async function ensureAccountFor(
   }
   // A church from before accounts existed: give it a free one in passing, so
   // this is not a migration everybody has to wait for.
+  //
+  // The trial is decided here too, and reading the owner's legacy flags is
+  // what makes that safe. A brand-new church gets the full thirty days; a
+  // church whose owner is part-way through the old user-level trial inherits
+  // whatever is left of it; one whose trial already lapsed starts on free.
+  // Granting unconditionally would hand a fresh trial to every existing
+  // account the first time it touched billing.
   const free = entitlementsFor("free");
+  const owner = await User.findById(ownerId)
+    .select("trialStatus trialStartDate trialEndDate subscriptionStatus")
+    .lean();
+  const trial = trialGrantFor(owner || {});
   const account = await Account.create({
     ownerId,
     planId: "free",
@@ -34,7 +47,7 @@ export async function ensureAccountFor(
     slots: free.slots,
     hoursPerChurch: free.hoursPerChurch,
     monthlyPrice: 0,
-    status: "active",
+    ...trial,
   });
   if (organization) {
     organization.accountId = account._id as any;
@@ -85,6 +98,42 @@ export interface HourUsage {
 }
 
 /**
+ * The start of the trial's usage window, or null if this is not a trial.
+ *
+ * Returns null for an account that is trialing but has no start date — a row
+ * that should not exist, and which falls back to ordinary monthly counting
+ * rather than to counting from the beginning of time.
+ */
+function trialUsageWindow(account: IAccount): Date | null {
+  if (!isTrialing(account)) return null;
+  return account.trialStartedAt ? new Date(account.trialStartedAt) : null;
+}
+
+/**
+ * Billable seconds one church has used since a given moment.
+ *
+ * Sums the per-session rows rather than the monthly counters, because the
+ * counters have no finer resolution than a calendar month and a trial window
+ * starts on an arbitrary day. Sessions carry `startedAt` and are indexed by
+ * (organizationId, startedAt), so this is the same shape of lookup the
+ * counters give, not a scan.
+ *
+ * A session that began before the window and ran into it counts as outside —
+ * it is at most one session, it was already measured against the period it
+ * started in, and counting it twice is worse than missing it.
+ */
+async function billableSecondsSince(
+  organizationId: mongoose.Types.ObjectId | string,
+  since: Date,
+): Promise<number> {
+  const [row] = await TranscriptionSession.aggregate([
+    { $match: { organizationId: new mongoose.Types.ObjectId(String(organizationId)), startedAt: { $gte: since } } },
+    { $group: { _id: null, seconds: { $sum: "$billableSeconds" } } },
+  ]);
+  return row?.seconds || 0;
+}
+
+/**
  * Transcription hours one church has spent this month, against its own.
  *
  * Scoped to a single organization on purpose. Hours do not pool: a branch
@@ -98,16 +147,28 @@ export async function hourUsage(
   organizationId: mongoose.Types.ObjectId | string,
 ): Promise<HourUsage> {
   const period = usagePeriod();
-  const counter = await UsageCounter.findOne({ organizationId, period }).lean();
-  const usedHours = (counter?.billableSeconds || 0) / 3600;
+
+  // A TRIAL IS NOT A MONTH. Its hours are a single budget for the whole
+  // thirty-day run, so they must be counted from the day the trial started
+  // and not from the first of the month. Counting a trial per calendar month
+  // would hand a trial that straddles a month boundary a second full
+  // allowance — double what it was granted, decided by nothing but the date
+  // somebody happened to sign up on.
+  const trialWindow = trialUsageWindow(account);
+  const usedSeconds = trialWindow
+    ? await billableSecondsSince(organizationId, trialWindow)
+    : (await UsageCounter.findOne({ organizationId, period }).lean())?.billableSeconds || 0;
+  const usedHours = usedSeconds / 3600;
 
   const includedHours = hoursPerChurchOf(account);
+  // Top-ups stay scoped to the calendar month even inside a trial: an hour
+  // bought is an hour bought, and it expires on the same rule for everybody.
   const purchasedHours = await purchasedHoursFor(organizationId, period);
   const allowance = includedHours + purchasedHours;
 
   return {
-    period,
-    usedSeconds: counter?.billableSeconds || 0,
+    period: trialWindow ? "trial" : period,
+    usedSeconds,
     includedHours,
     purchasedHours,
     allowance,
@@ -143,7 +204,7 @@ export async function networkHourUsage(account: IAccount): Promise<BranchHourUsa
 
   const [counters, topUps, storage] = await Promise.all([
     UsageCounter.find({ organizationId: { $in: ids }, period }).lean(),
-    HourTopUp.find({ organizationId: { $in: ids }, period, status: "paid" })
+    HourTopUp.find({ organizationId: { $in: ids }, ...liveTopUpFilter(period) })
       .select("organizationId hours")
       .lean(),
     storageByOrganization(ids),

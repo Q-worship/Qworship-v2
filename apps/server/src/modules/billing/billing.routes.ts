@@ -3,6 +3,8 @@ import { GIFT_DURATIONS, OVERAGE_PRICE_PER_HOUR_USD, giftPriceUsd } from "@qwors
 import { protect } from "../auth/auth.middleware.js";
 import { canWrite, resolveActiveOrganization } from "../organization/organization.service.js";
 import { ensureAccountFor } from "../organization/account.service.js";
+import { capabilitiesForAccount } from "./capability.service.js";
+import { settleToFree } from "./trial.service.js";
 import { billingOverview, listInvoices, topUpPriceUsd, usageTrend } from "./billing.service.js";
 import { isTestMode, stripeConfigured } from "./stripe.client.js";
 import {
@@ -53,6 +55,51 @@ billingRouter.get("/billing/overview", protect, async (req: any, res: any) => {
     res.json({ success: true, overview: await billingOverview(ctx.account), role: ctx.role });
   } catch (error) {
     console.error("Error building billing overview:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/**
+ * What this church's plan lets it do, for greying out controls.
+ *
+ * Readable by any member, not just an owner — every person using the Live
+ * Console needs to know which buttons to lock, and a volunteer who cannot
+ * read this would be shown a full product that then refuses them.
+ *
+ * It goes through `requireAccount`, which creates the account if there is
+ * none yet, so a brand-new church's trial starts on whichever screen it
+ * first opens rather than waiting for somebody to visit billing.
+ */
+billingRouter.get("/billing/capabilities", protect, async (req: any, res: any) => {
+  try {
+    const ctx = await requireAccount(req, res);
+    if (!ctx) return;
+    res.json({ success: true, capabilities: capabilitiesForAccount(ctx.account) });
+  } catch (error) {
+    console.error("Error reading capabilities:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/**
+ * "Continue with the free plan" — the choice offered when a trial ends.
+ *
+ * Settles the account onto free immediately rather than waiting for the
+ * hourly sweep to notice, so the screen that says the free plan is in place
+ * is telling the truth by the time it renders.
+ *
+ * Idempotent, and needs to be: this is a button somebody may press twice.
+ * It also grants nothing — it only ever moves an account DOWN to free, so it
+ * is safe for any member to call even though choosing a paid plan is not.
+ */
+billingRouter.post("/billing/continue-free", protect, async (req: any, res: any) => {
+  try {
+    const ctx = await requireAccount(req, res);
+    if (!ctx) return;
+    await settleToFree(ctx.account);
+    res.json({ success: true, capabilities: capabilitiesForAccount(ctx.account) });
+  } catch (error) {
+    console.error("Error settling account onto free:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });

@@ -19,6 +19,8 @@ import {
   purchaseGift,
   previewGift,
   redeemGift,
+  continueOnFreePlan,
+  CAPABILITIES_KEY,
 } from "@/lib/billingApi";
 
 /**
@@ -222,6 +224,24 @@ export function useRedeemGift() {
         description: error.message || "Check the code and try again.",
         variant: "destructive",
       });
+    },
+  });
+}
+
+/**
+ * "Continue with the free plan", from the trial-ended screen.
+ *
+ * Invalidates capabilities as well as the billing reads: the whole point of
+ * the change is that premium controls must now render locked, and a stale
+ * capability cache would leave them live until the next refetch.
+ */
+export function useContinueFree() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: continueOnFreePlan,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CAPABILITIES_KEY });
+      queryClient.invalidateQueries({ queryKey: BILLING_OVERVIEW_KEY });
     },
   });
 }

@@ -9,6 +9,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMicVolume } from "@/hooks/useRawAudioStream";
+import { bibleVersionNeedsPlan } from "@qworship/shared";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { useUpgradePrompt } from "@/components/upgrade/UpgradeContext";
+import { StandardTag } from "@/components/upgrade/Locked";
 import {
   Mic,
   SettingsIcon,
@@ -91,6 +95,11 @@ export const HandsfreeBibleWidget: React.FC<HandsfreeBibleWidgetProps> = ({
   const volume = volumeOverride ?? liveVolume;
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showAllVersions, setShowAllVersions] = useState(false);
+
+  // Which versions this church's plan actually includes. Free keeps KJV.
+  const { can } = useCapabilities();
+  const { openUpgrade } = useUpgradePrompt();
+  const canUseAllVersions = can("bible.allVersions");
 
   const currentVerseData = verseData?.[0];
   const currentVerseText = getVerseText(currentVerseData, selectedBibleVersion);
@@ -338,14 +347,28 @@ export const HandsfreeBibleWidget: React.FC<HandsfreeBibleWidgetProps> = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-[#1a0f2e] border border-gray-600">
               <div className="p-1">
-                {["KJV", "NKJV", "AMP", "MSG", "GN", "ESV"].map((version) => (
-                  <div
-                    key={version}
-                    onClick={() => setSelectedBibleVersion(version)}
-                    className="text-white text-sm py-1 px-2 hover:bg-gray-700 rounded cursor-pointer">
-                    {version}
-                  </div>
-                ))}
+                {/* Every version stays listed on the free plan, and the ones
+                    it does not include are marked rather than removed. A
+                    volunteer who cannot see NIV assumes the product lacks it;
+                    one who sees it locked knows what Standard buys. Choosing
+                    a locked version opens the plan modal instead of selecting
+                    it, so nothing silently falls back to KJV on screen. */}
+                {["KJV", "NKJV", "AMP", "MSG", "GN", "ESV"].map((version) => {
+                  const locked = bibleVersionNeedsPlan(version) && !canUseAllVersions;
+                  return (
+                    <div
+                      key={version}
+                      onClick={() =>
+                        locked ? openUpgrade("bible.allVersions") : setSelectedBibleVersion(version)
+                      }
+                      className={`text-sm py-1 px-2 rounded cursor-pointer flex items-center justify-between gap-3 ${
+                        locked ? "text-gray-500 hover:bg-gray-800" : "text-white hover:bg-gray-700"
+                      }`}>
+                      <span>{version}</span>
+                      {locked && <StandardTag />}
+                    </div>
+                  );
+                })}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

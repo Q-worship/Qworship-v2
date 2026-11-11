@@ -1,5 +1,6 @@
 import { get, post } from "@/lib/apiResult";
 import type { BranchHourUsage } from "@/lib/accountApi";
+import type { FeatureMap } from "@qworship/shared";
 
 /**
  * What the billing screens read, and the one thing they write.
@@ -230,4 +231,49 @@ export function cancelSubscription(): Promise<unknown> {
 /** A link into Stripe's portal for cards, cancellation and receipts. */
 export function openBillingPortal(): Promise<{ portalUrl: string }> {
   return post("/api/billing/portal");
+}
+
+/**
+ * What this church's plan lets it do.
+ *
+ * Mirrors the server's capability.service.ts, which reads the same shared
+ * FEATURES catalog — so a control greyed out here and a route refused there
+ * are two consequences of one definition rather than two lists that have to
+ * be kept in step by hand.
+ */
+export interface Capabilities {
+  planId: "free" | "standard";
+  trialing: boolean;
+  trialDaysLeft: number;
+  features: FeatureMap;
+}
+
+export const CAPABILITIES_KEY = ["/api/billing/capabilities"] as const;
+
+export function fetchCapabilities(): Promise<{ capabilities: Capabilities }> {
+  return get("/api/billing/capabilities");
+}
+
+/**
+ * Settle this account onto the free plan, ending any trial.
+ *
+ * Only ever moves DOWN a plan, which is why it needs no owner check. The
+ * server is idempotent, so a double press is harmless.
+ */
+export function continueOnFreePlan(): Promise<{ capabilities: Capabilities }> {
+  return post("/api/billing/continue-free", {});
+}
+
+export interface EnterpriseEnquiryInput {
+  name: string;
+  email: string;
+  organizationName: string;
+  churches?: string;
+  phone?: string;
+  message?: string;
+}
+
+/** Record an enterprise enquiry. Public: the prospect may have no account. */
+export function submitEnterpriseEnquiry(input: EnterpriseEnquiryInput): Promise<unknown> {
+  return post("/api/enterprise-enquiry", input);
 }

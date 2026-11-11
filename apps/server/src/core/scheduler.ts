@@ -70,6 +70,19 @@ export function startScheduler(): void {
     },
   });
 
+  schedule({
+    name: "expire-lapsed-trials",
+    // Hourly, for the same reason gifts are: `isTrialing` already checks the
+    // date, so the product treats a lapsed trial as lapsed the instant it
+    // lapses. This sweep only makes the stored row agree, which matters for
+    // reporting and the legacy mirror but not for enforcement.
+    everyMs: HOUR,
+    run: async () => {
+      const { expireLapsedTrials } = await import("../modules/billing/trial.service.js");
+      return expireLapsedTrials();
+    },
+  });
+
   console.log("[Scheduler] Started");
 }
 
