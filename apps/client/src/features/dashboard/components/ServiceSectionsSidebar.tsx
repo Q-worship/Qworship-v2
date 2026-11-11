@@ -1,4 +1,10 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
+import { AddFileIcon } from "@/features/dashboard/components/AddFileIcon";
+import {
+  AddItemModal,
+  type AddItemAnchor,
+  type AddItemMenuEntry,
+} from "@/features/dashboard/components/AddItemModal";
 import {
   CalendarIcon,
   ChevronLeftIcon,
@@ -14,6 +20,10 @@ import {
   Globe,
   PlusIcon,
 } from "lucide-react";
+import {
+  isImportedPresentationItem,
+  PowerPointGlyph,
+} from "@/features/dashboard/components/PowerPointGlyph";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -76,6 +86,10 @@ interface ServiceSectionsSidebarProps {
   setSelectedSlide: (slide: any) => void;
   editingContent: any;
   showDeleteConfirmation: (section: string, item: any) => void;
+
+  // The Insert Item menu entries (what the header's Insert Item menu adds), shown in the
+  // "Add item" modal; each one adds to the selected section
+  insertItemMenuItems: AddItemMenuEntry[];
 }
 
 export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
@@ -112,7 +126,12 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
   editingContent,
   showDeleteConfirmation,
   isSidebarCollapsed,
+  insertItemMenuItems,
 }) => {
+  // Where the "Add item" panel is open (beside the Add button that was clicked); null = closed
+  const [addMenuAnchor, setAddMenuAnchor] = useState<AddItemAnchor | null>(null);
+  const closeAddMenu = useCallback(() => setAddMenuAnchor(null), []);
+
   return (
     <aside
       className={`bg-[#12091c] flex flex-col h-full z-10 transition-all duration-300 ease-in-out border-[#ffffff20] ${
@@ -273,6 +292,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
 
               return (
                 <div key={section} className="border-b border-gray-700 pb-2">
+                  {/* The header row: the section button, and an Add button that shows when the
+                      row is hovered (always on touch screens, which cannot hover) */}
+                  <div className="group/header relative">
                   <button
                     onClick={() => {
                       setSelectedServiceSection(isSelected ? null : section);
@@ -311,7 +333,7 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                       </span>
 
                       {isSelected && (
-                        <div className="flex items-center space-x-1">
+                        <div className="flex items-center space-x-1 transition-opacity group-hover/header:opacity-0 group-focus-within/header:opacity-0 [@media(hover:none)]:hidden">
                           <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                           <span className="text-xs text-white/80">
                             {sectionItemCount > 0
@@ -322,6 +344,29 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                       )}
                     </div>
                   </button>
+
+                  <button
+                    type="button"
+                    aria-label={`Add an item to ${section}`}
+                    onClick={(event) => {
+                      // The item is added to this section, so this is the selected one
+                      if (selectedServiceSection !== section) {
+                        setSelectedServiceSection(section);
+                      }
+                      // The panel opens beside this button
+                      const box = event.currentTarget.getBoundingClientRect();
+                      setAddMenuAnchor({
+                        top: box.top,
+                        bottom: box.bottom,
+                        left: box.left,
+                        right: box.right,
+                      });
+                    }}
+                    className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded border border-[#00C3C7]/50 bg-[#00C3C7]/10 px-2.5 py-1 text-xs text-[#00C3C7] opacity-0 transition-opacity hover:bg-[#00C3C7]/20 focus-visible:opacity-100 focus-visible:outline-none group-hover/header:opacity-100 [@media(hover:none)]:opacity-100">
+                    <AddFileIcon className="h-4 w-4" />
+                    <span>Add</span>
+                  </button>
+                  </div>
 
                   {/* Default message when section is selected - always show if selected */}
                   {isSelected && (
@@ -401,7 +446,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                               className="flex items-center space-x-3">
                               <div
                                 className={`w-8 h-8 rounded flex items-center justify-center ${
-                                  item.type === "song"
+                                  isImportedPresentationItem(item)
+                                    ? "bg-[#3a3147] border border-[#8356F3]/30"
+                                    : item.type === "song"
                                     ? "bg-pink-500/20 border border-pink-500/30"
                                     : item.type === "bible"
                                       ? "bg-blue-500/20 border border-blue-500/30"
@@ -413,7 +460,9 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
                                             ? "bg-green-500/20 border border-green-500/30"
                                             : "bg-gray-500/20 border border-gray-500/30"
                                 }`}>
-                                {item.type === "song" ? (
+                                {isImportedPresentationItem(item) ? (
+                                  <PowerPointGlyph className="w-5 h-5" />
+                                ) : item.type === "song" ? (
                                   <Music className="w-4 h-4 text-pink-300" />
                                 ) : item.type === "bible" ? (
                                   <BookOpen className="w-4 h-4 text-blue-300" />
@@ -484,6 +533,12 @@ export const ServiceSectionsSidebar: React.FC<ServiceSectionsSidebarProps> = ({
           </div>
         )}
       </div>
+
+      <AddItemModal
+        anchor={addMenuAnchor}
+        onClose={closeAddMenu}
+        items={insertItemMenuItems}
+      />
     </aside>
   );
 };

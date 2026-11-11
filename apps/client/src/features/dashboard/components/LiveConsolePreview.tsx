@@ -5,6 +5,7 @@ import instagramIcon from "@assets/1658586823instagram-logo-transparent_17567334
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "@/features/dashboard/components/SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 
 
 export interface LiveConsolePreviewProps {
@@ -130,17 +131,18 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
           previewProjectionType === "song" &&
           previewSongProjection && (
             <div className="text-center w-full">
-              <div className="text-purple-300 text-[7px] font-semibold mb-0.5">
-                {previewSongProjection.title}
-              </div>
-              <div className="text-white/70 text-[6px] uppercase tracking-wider mb-1">
-                {previewSongProjection.sectionTitle}
-              </div>
+              {/* Mirrors the live screen: lyrics only, with the song's saved formatting */}
               <div
                 className="text-white font-medium leading-relaxed text-[9px] whitespace-pre-line"
                 style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
               >
-                {previewSongProjection.lyrics}
+                <SongLyricsBody
+                  slide={{
+                    content: previewSongProjection.lyrics,
+                    lyricStyle: (previewSongProjection as any).lyricStyle,
+                    lyricHtml: (previewSongProjection as any).lyricHtml,
+                  }}
+                />
               </div>
             </div>
           )}
@@ -248,18 +250,12 @@ export function LiveConsolePreview(props: LiveConsolePreviewProps) {
             <div className="text-center w-full px-2 bg-black/40 rounded-lg p-2">
               {currentSlideData.type === "verse" || currentSlideData.type === "chorus" ? (
                 <>
-                  <div className="text-purple-300 text-[7px] font-semibold mb-0.5">
-                    {currentSlideData.songTitle || currentSlideData.title}
-                  </div>
-                  <div className="text-white/70 text-[6px] uppercase tracking-wider mb-1">
-                    {currentSlideData.sectionLabel ||
-                      (currentSlideData.type === "verse" ? "VERSE" : "CHORUS")}
-                  </div>
+                  {/* Mirrors the live screen: lyrics only, no title or section label */}
                   <div
                     className="text-white font-medium leading-relaxed text-[8px] whitespace-pre-line"
                     style={{ textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
                   >
-                    {currentSlideData.content}
+                    <SongLyricsBody slide={currentSlideData} />
                   </div>
                 </>
               ) : currentSlideData.type === "bible" ? (

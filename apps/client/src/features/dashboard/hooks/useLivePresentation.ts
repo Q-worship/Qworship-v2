@@ -290,6 +290,10 @@ export const useLivePresentation = ({
           title: s.title,
           type: s.type,
           sectionLabel: s.sectionLabel,
+          // Song formatting (bold / italic / colour): without this a formatting-only
+          // edit would not be re-sent to the live window
+          lyricStyle: s.lyricStyle,
+          lyricHtml: s.lyricHtml,
           itemId: s.itemId,
           location: s.location,
           eventDate: s.eventDate,

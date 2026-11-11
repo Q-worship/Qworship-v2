@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
 import { getServiceSectionKey } from "./useHistoryManager";
+import { songSlideFormatting } from "@/features/songs/songSlides";
 
 interface UseServiceItemManagerProps {
   selectedServiceSection: string | null;
@@ -142,6 +143,9 @@ export function useServiceItemManager({
           content: (lyrics as string).trim(),
           sectionLabel: label,
           songTitle: song.title,
+          // The section's name (to match later edits) and the formatting chosen for it in
+          // the Song editor: its base style, and inline formatting on selected words / lines
+          ...songSlideFormatting(song, sectionName, (lyrics as string).trim()),
         });
 
         slideNumber++;
@@ -341,6 +345,8 @@ export function useServiceItemManager({
         content: section.content,
         songId: item.songId,
         sectionLabel: section.label,
+        // The song's formatting for this section (item carries sectionStyles / sectionHtml)
+        ...songSlideFormatting(item, section.label, String(section.content ?? "").trim()),
       }));
     }
 

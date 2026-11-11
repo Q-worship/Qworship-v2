@@ -1,10 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, LayoutGrid, List, Plus, Check, X } from "lucide-react";
+import {
+  Upload,
+  LayoutGrid,
+  List,
+  Plus,
+  Check,
+  X,
+  AlertTriangle,
+} from "lucide-react";
 import {
   parsePptx,
   type ParsedPresentation,
   type ParsedSlide,
 } from "@/lib/pptxParser";
+import { PowerPointGlyph } from "@/features/dashboard/components/PowerPointGlyph";
 
 export interface SlideAllocation {
   slide: ParsedSlide;
@@ -32,26 +41,6 @@ const SERVICE_SECTION_OPTIONS = [
 
 const sectionLabel = (key: string) =>
   SERVICE_SECTION_OPTIONS.find((option) => option.key === key)?.label ?? key;
-
-const PowerPointGlyph: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
-    <rect x="17" y="6" width="27" height="36" rx="3" fill="#CDBBF7" />
-    <rect x="23" y="14" width="15" height="3" rx="1.5" fill="#7A52D8" opacity="0.55" />
-    <rect x="23" y="21" width="15" height="3" rx="1.5" fill="#7A52D8" opacity="0.55" />
-    <rect x="23" y="28" width="15" height="3" rx="1.5" fill="#7A52D8" opacity="0.55" />
-    <rect x="3" y="12" width="26" height="26" rx="4" fill="#6D3FD1" />
-    <text
-      x="16"
-      y="31"
-      textAnchor="middle"
-      fontSize="18"
-      fontWeight="700"
-      fill="#FFFFFF"
-      fontFamily="Arial, Helvetica, sans-serif">
-      P
-    </text>
-  </svg>
-);
 
 const AllocateChip: React.FC<{ section?: string; className?: string }> = ({
   section,
@@ -81,7 +70,7 @@ export const ImportPresentationModal: React.FC<
   const [allocations, setAllocations] = useState<Record<number, string>>({});
   const [allocatingSlide, setAllocatingSlide] = useState<number | null>(null);
   const [pendingSection, setPendingSection] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -97,7 +86,7 @@ export const ImportPresentationModal: React.FC<
     setAllocations({});
     setAllocatingSlide(null);
     setPendingSection(null);
-    setViewMode("grid");
+    setViewMode("list");
     setIsParsing(false);
     setIsImporting(false);
     setIsDragOver(false);
@@ -168,7 +157,8 @@ export const ImportPresentationModal: React.FC<
   };
 
   const openAllocation = (slideNumber: number) => {
-    setPendingSection(allocations[slideNumber] ?? SERVICE_SECTION_OPTIONS[0].key);
+    // Nothing is pre-selected for a new slide; a slide already allocated shows its section
+    setPendingSection(allocations[slideNumber] ?? null);
     setAllocatingSlide(slideNumber);
   };
 
@@ -340,6 +330,18 @@ export const ImportPresentationModal: React.FC<
   /* ---------- Step 3: allocate slides to service sections ---------- */
   const total = presentation.slides.length;
 
+  // Health check: which slides come across exactly as authored, which have caveats
+  const warningsOf = (slide: ParsedSlide) =>
+    slide.health.notes.filter((note) => note.level === "warning");
+  const slidesWithWarnings = presentation.slides.filter(
+    (slide) => slide.health.status !== "ready" && warningsOf(slide).length > 0,
+  ).length;
+  const tooltipFor = (slide: ParsedSlide) =>
+    [
+      slide.title || `Slide ${slide.number}`,
+      ...warningsOf(slide).map((note) => `⚠ ${note.message}`),
+    ].join("\n");
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]">
       <div className="relative bg-[#2a1f3d] border border-[#8356F3]/30 rounded-xl shadow-2xl w-full max-w-6xl max-h-[92vh] mx-4 flex flex-col">
@@ -362,6 +364,14 @@ export const ImportPresentationModal: React.FC<
             </span>{" "}
             . You can allocate the slides below to the respective service items.
           </p>
+          {/* Only shown when something can't be reproduced exactly; all-good is silent */}
+          {slidesWithWarnings > 0 && (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Health check: {total - slidesWithWarnings} of {total} slides import
+              exactly. Hover the warning on a slide to see what differs.
+            </p>
+          )}
 
           <div className="flex items-start justify-between mt-14">
             <div>
@@ -404,15 +414,21 @@ export const ImportPresentationModal: React.FC<
                 return (
                   <div
                     key={slide.number}
-                    title={slide.title || `Slide ${slide.number}`}
+                    title={tooltipFor(slide)}
                     onClick={() => openAllocation(slide.number)}
                     className={`group cursor-pointer rounded-lg border p-1 transition-colors ${
                       section
                         ? "border-[#8356F3]/70"
                         : "border-transparent hover:border-[#8356F3]/70"
                     }`}>
-                    <div className="h-20 rounded-md bg-[#3a3147] flex items-center justify-center">
+                    <div className="relative h-20 rounded-md bg-[#3a3147] flex items-center justify-center">
                       <PowerPointGlyph className="w-9 h-9" />
+                      {warningsOf(slide).length > 0 && (
+                        <AlertTriangle
+                          aria-label="Some of this slide can't be reproduced exactly"
+                          className="absolute top-1.5 right-1.5 w-3.5 h-3.5 text-amber-300"
+                        />
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-1 mt-2 px-0.5">
                       <span className="text-sm font-medium text-gray-200">
@@ -456,6 +472,14 @@ export const ImportPresentationModal: React.FC<
                       {slide.title && (
                         <div className="text-xs text-gray-400 truncate">
                           {slide.title}
+                        </div>
+                      )}
+                      {warningsOf(slide).length > 0 && (
+                        <div
+                          className="flex items-center gap-1 text-[11px] text-amber-300 truncate"
+                          title={tooltipFor(slide)}>
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          {warningsOf(slide)[0].message}
                         </div>
                       )}
                     </div>

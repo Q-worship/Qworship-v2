@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Item as ServiceItem, Slide } from "@/types";
 import { useWysiwygEditor } from "@/features/dashboard/hooks/useWysiwygEditor";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { FONT_OPTIONS } from "@/features/dashboard/lib/fontOptions";
 
@@ -663,29 +664,8 @@ export const SlideEditorPanel: React.FC<SlideEditorPanelProps> = ({
                     ) : selectedSlide.slide.type === "verse" ||
                       selectedSlide.slide.type === "chorus" ? (
                       <>
-                        <h1
-                          className="text-white text-3xl font-bold mb-6"
-                          style={{
-                            fontFamily:
-                              titleEditorState.selectedFont || "Lufgord",
-                            fontSize: titleEditorState.fontSize || "18px",
-                            color: titleEditorState.textColor || "#ffffff",
-                            textAlign:
-                              (titleEditorState.textAlign as any) || "center",
-                            fontWeight: titleEditorState.isBold
-                              ? "bold"
-                              : "normal",
-                            fontStyle: titleEditorState.isItalic
-                              ? "italic"
-                              : "normal",
-                            textDecoration:
-                              `${titleEditorState.isUnderline ? "underline" : ""} ${titleEditorState.isStrikethrough ? "line-through" : ""}`.trim() ||
-                              "none",
-                          }}
-                        >
-                          {selectedSlide.slide.songTitle ||
-                            selectedSlide.slide.title}
-                        </h1>
+                        {/* A song slide shows only its lyrics: no song title and no
+                            verse / chorus label */}
                         {/* Show author's name when enabled */}
                         {showAuthorOnScreen &&
                           editingContent?.content?.authors &&
@@ -694,14 +674,8 @@ export const SlideEditorPanel: React.FC<SlideEditorPanelProps> = ({
                               By: {editingContent.content.authors.join(", ")}
                             </div>
                           )}
-                        <div className="text-purple-400 text-lg font-medium mb-4">
-                          {selectedSlide.slide.sectionLabel ||
-                            (selectedSlide.slide.type === "verse"
-                              ? "VERSE"
-                              : "CHORUS")}
-                        </div>
                         <div
-                          className="text-gray-300 text-xl leading-relaxed space-y-2"
+                          className="text-gray-300 text-xl leading-relaxed space-y-2 whitespace-pre-line"
                           style={{
                             fontFamily:
                               editorState.styleFontFamily ||
@@ -726,14 +700,8 @@ export const SlideEditorPanel: React.FC<SlideEditorPanelProps> = ({
                               (editorState.styleTextTransform as any) || "",
                           }}
                         >
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html: selectedSlide.slide.content.replace(
-                                /\n/g,
-                                "<br/>",
-                              ),
-                            }}
-                          />
+                          {/* The song's saved formatting; text is shown as text, never as HTML */}
+                          <SongLyricsBody slide={selectedSlide.slide} />
                         </div>
                       </>
                     ) : (

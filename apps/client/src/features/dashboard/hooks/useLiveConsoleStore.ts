@@ -78,7 +78,7 @@ interface LiveConsoleStore {
   // Preview Prejections
   previewProjectionType: 'song' | 'bible' | null;
   setPreviewProjectionType: (type: 'song' | 'bible' | null) => void;
-  previewSongProjection: { title: string; sectionTitle: string; lyrics: string; background?: any; itemId?: string; } | null;
+  previewSongProjection: { title: string; sectionTitle: string; lyrics: string; background?: any; itemId?: string; lyricStyle?: any; lyricHtml?: string; } | null;
   setPreviewSongProjection: (proj: any) => void;
   previewBibleProjection: { reference: string; text: string; version: string; background?: any; } | null;
   setPreviewBibleProjection: (proj: any) => void;

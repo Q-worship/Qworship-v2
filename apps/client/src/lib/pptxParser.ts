@@ -1,6 +1,38 @@
-// Minimal in-browser .pptx reader. A .pptx is a ZIP of XML parts, so we read the
-// ZIP central directory ourselves and inflate entries with the native
-// DecompressionStream instead of pulling in a dependency.
+// In-browser .pptx reader used by Import Presentation. It lists the slides (for the
+// slide picker), scans each one for anything that can't be reproduced exactly (the
+// "health check"), and builds the full-fidelity design of a slide on demand.
+
+import {
+  byLocalName,
+  directoryOf,
+  IMAGE_MIME_BY_EXTENSION,
+  INVALID_FILE_MESSAGE,
+  NS_RELATIONSHIPS,
+  openPptxPackage,
+  parseRelationships,
+  parseXml,
+  resolvePath,
+  type PptxPackage,
+} from "./pptxPackage";
+import {
+  buildSlideDesign,
+  estimateMeasurer,
+  loadPresentationSource,
+  type DesignNote,
+  type FidelityMeasurer,
+  type ImageNeed,
+  type PresentationSource,
+  type SlideDesign,
+  type SlideSource,
+} from "./pptxSlideDesign";
+
+export type { DesignNote, ImageNeed, SlideDesign } from "./pptxSlideDesign";
+
+export interface SlideHealth {
+  /** "ready": reproduced as authored; "notes": reproduced with the caveats listed */
+  status: "ready" | "notes" | "simplified";
+  notes: DesignNote[];
+}
 
 export interface ParsedSlide {
   /** 1-based position in the presentation */
@@ -14,6 +46,8 @@ export interface ParsedSlide {
   imageCount: number;
   /** True when the slide has a picture background */
   hasBackground: boolean;
+  /** What the import can and can't reproduce for this slide */
+  health: SlideHealth;
 }
 
 /** A decoded, downscaled picture ready to upload */
@@ -32,130 +66,17 @@ export interface SlideImages {
 export interface ParsedPresentation {
   fileName: string;
   slides: ParsedSlide[];
-  /** Decodes the slide's pictures (downscaled); pictures that can't be decoded are skipped */
+  /** Builds the slide with its real background, shapes, text and pictures */
+  buildDesign: (slideNumber: number, measure: FidelityMeasurer) => SlideDesign;
+  /** Renders one picture (cropped, flipped, sized); null when it can't be decoded */
+  renderImage: (need: ImageNeed) => Promise<SlideImage | null>;
+  /** Plain pictures of a slide, used by the simplified fallback layout */
   loadSlideImages: (slideNumber: number) => Promise<SlideImages>;
 }
-
-interface ZipEntry {
-  method: number;
-  compressedSize: number;
-  localOffset: number;
-}
-
-const NS_RELATIONSHIPS =
-  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-
-const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  bmp: "image/bmp",
-};
 
 const MAX_IMAGE_EDGE = 1600;
 const TITLE_PLACEHOLDERS = new Set(["title", "ctrTitle"]);
 const SKIPPED_PLACEHOLDERS = new Set(["sldNum", "ftr", "dt"]);
-
-const LEGACY_PPT_MESSAGE =
-  "Legacy .ppt files can't be read in the browser. Open it in PowerPoint, choose Save As → .pptx, and import that file instead.";
-const INVALID_FILE_MESSAGE =
-  "This doesn't look like a valid PowerPoint file. Please choose a .pptx file.";
-
-const readZipEntries = (buffer: ArrayBuffer): Map<string, ZipEntry> => {
-  const view = new DataView(buffer);
-
-  // End-of-central-directory record: 22 bytes plus an optional comment (max 64KB)
-  let eocd = -1;
-  const lowest = Math.max(0, buffer.byteLength - 22 - 0xffff);
-  for (let i = buffer.byteLength - 22; i >= lowest; i--) {
-    if (view.getUint32(i, true) === 0x06054b50) {
-      eocd = i;
-      break;
-    }
-  }
-  if (eocd < 0) throw new Error(INVALID_FILE_MESSAGE);
-
-  const entryCount = view.getUint16(eocd + 10, true);
-  let cursor = view.getUint32(eocd + 16, true);
-  const decoder = new TextDecoder();
-  const entries = new Map<string, ZipEntry>();
-
-  for (let n = 0; n < entryCount; n++) {
-    if (view.getUint32(cursor, true) !== 0x02014b50) break;
-    const nameLength = view.getUint16(cursor + 28, true);
-    const extraLength = view.getUint16(cursor + 30, true);
-    const commentLength = view.getUint16(cursor + 32, true);
-    const name = decoder.decode(new Uint8Array(buffer, cursor + 46, nameLength));
-    entries.set(name, {
-      method: view.getUint16(cursor + 10, true),
-      compressedSize: view.getUint32(cursor + 20, true),
-      localOffset: view.getUint32(cursor + 42, true),
-    });
-    cursor += 46 + nameLength + extraLength + commentLength;
-  }
-
-  return entries;
-};
-
-const inflateEntry = async (
-  buffer: ArrayBuffer,
-  entry: ZipEntry,
-): Promise<Uint8Array> => {
-  const view = new DataView(buffer);
-  const nameLength = view.getUint16(entry.localOffset + 26, true);
-  const extraLength = view.getUint16(entry.localOffset + 28, true);
-  const start = entry.localOffset + 30 + nameLength + extraLength;
-  const raw = new Uint8Array(buffer, start, entry.compressedSize);
-
-  if (entry.method === 0) return raw;
-  if (entry.method !== 8) throw new Error(INVALID_FILE_MESSAGE);
-  if (typeof DecompressionStream === "undefined") {
-    throw new Error(
-      "Your browser is too old to read PowerPoint files. Please update it and try again.",
-    );
-  }
-
-  const stream = new Blob([raw])
-    .stream()
-    .pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-};
-
-const parseXml = (xml: string): Document =>
-  new DOMParser().parseFromString(xml, "application/xml");
-
-const byLocalName = (root: Document | Element, name: string): Element[] =>
-  Array.from(root.getElementsByTagNameNS("*", name));
-
-const parseRelationships = (doc: Document): Map<string, string> => {
-  const relationships = new Map<string, string>();
-  byLocalName(doc, "Relationship").forEach((rel) => {
-    const id = rel.getAttribute("Id");
-    const target = rel.getAttribute("Target");
-    if (id && target) relationships.set(id, target);
-  });
-  return relationships;
-};
-
-const resolvePath = (baseDir: string, target: string): string => {
-  if (target.startsWith("/")) return target.slice(1);
-  const parts = baseDir.split("/").filter(Boolean);
-  target.split("/").forEach((segment) => {
-    if (segment === "..") parts.pop();
-    else if (segment !== ".") parts.push(segment);
-  });
-  return parts.join("/");
-};
-
-const directoryOf = (path: string): string =>
-  path.slice(0, Math.max(0, path.lastIndexOf("/")));
-
-const relsPathFor = (partPath: string): string => {
-  const slash = partPath.lastIndexOf("/");
-  return `${partPath.slice(0, slash)}/_rels/${partPath.slice(slash + 1)}.rels`;
-};
 
 const paragraphText = (paragraph: Element): string => {
   let text = "";
@@ -235,38 +156,61 @@ const hasTransparency = (canvas: HTMLCanvasElement): boolean => {
   return false;
 };
 
-// Downscales a picture and re-encodes it (PNG only when it has transparency, JPEG
-// otherwise) so uploads stay small. Returns null for pictures the browser can't decode.
-const decodeSlideImage = async (
+interface RenderSpec {
+  crop: { l: number; t: number; r: number; b: number };
+  flipH: boolean;
+  flipV: boolean;
+  outWidth: number | null;
+  outHeight: number | null;
+}
+
+// Draws the wanted part of a picture at the wanted size and re-encodes it (PNG only
+// when it has transparency, JPEG otherwise) so uploads stay small. Returns null for
+// pictures the browser can't decode.
+const renderPicture = async (
   bytes: Uint8Array,
   mime: string,
   baseName: string,
+  spec: RenderSpec,
 ): Promise<SlideImage | null> => {
   try {
-    const bitmap = await createImageBitmap(
-      new Blob([bytes as BlobPart], { type: mime }),
-    );
-    const scale = Math.min(
-      1,
-      MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height),
-    );
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }));
+    const sourceX = bitmap.width * spec.crop.l;
+    const sourceY = bitmap.height * spec.crop.t;
+    const sourceW = Math.max(1, bitmap.width * (1 - spec.crop.l - spec.crop.r));
+    const sourceH = Math.max(1, bitmap.height * (1 - spec.crop.t - spec.crop.b));
+
+    let width: number;
+    let height: number;
+    if (spec.outWidth != null && spec.outHeight != null) {
+      // Drawn at the box's own aspect (so it fills the box exactly), but never
+      // enlarged beyond the picture's own pixels
+      const natural = Math.min(1, Math.max(sourceW / spec.outWidth, sourceH / spec.outHeight));
+      width = Math.max(1, Math.round(spec.outWidth * natural));
+      height = Math.max(1, Math.round(spec.outHeight * natural));
+    } else {
+      const edge = Math.min(1, MAX_IMAGE_EDGE / Math.max(sourceW, sourceH));
+      width = Math.max(1, Math.round(sourceW * edge));
+      height = Math.max(1, Math.round(sourceH * edge));
+    }
+
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) return null;
-    context.drawImage(bitmap, 0, 0, width, height);
+    context.save();
+    if (spec.flipH || spec.flipV) {
+      context.translate(spec.flipH ? width : 0, spec.flipV ? height : 0);
+      context.scale(spec.flipH ? -1 : 1, spec.flipV ? -1 : 1);
+    }
+    context.drawImage(bitmap, sourceX, sourceY, sourceW, sourceH, 0, 0, width, height);
+    context.restore();
     bitmap.close();
 
     const keepAlpha =
       mime !== "image/jpeg" && mime !== "image/bmp" && hasTransparency(canvas);
-    const blob = await canvasToBlob(
-      canvas,
-      keepAlpha ? "image/png" : "image/jpeg",
-      0.85,
-    );
+    const blob = await canvasToBlob(canvas, keepAlpha ? "image/png" : "image/jpeg", 0.82);
     if (!blob) return null;
     return {
       blob,
@@ -279,84 +223,58 @@ const decodeSlideImage = async (
   }
 };
 
-export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
-  const buffer = await file.arrayBuffer();
-  const header = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
-
-  // Legacy binary .ppt files are OLE2 containers, not ZIPs
-  if (
-    header[0] === 0xd0 &&
-    header[1] === 0xcf &&
-    header[2] === 0x11 &&
-    header[3] === 0xe0
-  ) {
-    throw new Error(LEGACY_PPT_MESSAGE);
-  }
-  if (header[0] !== 0x50 || header[1] !== 0x4b) {
-    throw new Error(INVALID_FILE_MESSAGE);
-  }
-
-  const entries = readZipEntries(buffer);
-
-  const readText = async (path: string): Promise<string | null> => {
-    const entry = entries.get(path);
-    if (!entry) return null;
-    return new TextDecoder().decode(await inflateEntry(buffer, entry));
-  };
-
-  const presentationXml = await readText("ppt/presentation.xml");
+const slidePathsOf = async (pkg: PptxPackage): Promise<string[]> => {
+  const presentationXml = await pkg.readText("ppt/presentation.xml");
   if (!presentationXml) throw new Error(INVALID_FILE_MESSAGE);
 
   // Slide order lives in presentation.xml (sldIdLst) and resolves through its rels
-  const presentationRelsXml = await readText("ppt/_rels/presentation.xml.rels");
+  const presentationRelsXml = await pkg.readText("ppt/_rels/presentation.xml.rels");
   const presentationRels = presentationRelsXml
     ? parseRelationships(parseXml(presentationRelsXml))
-    : new Map<string, string>();
+    : new Map<string, { target: string; type: string }>();
 
   let slidePaths = byLocalName(parseXml(presentationXml), "sldId")
-    .map((el) => presentationRels.get(el.getAttributeNS(NS_RELATIONSHIPS, "id") ?? ""))
+    .map((el) => presentationRels.get(el.getAttributeNS(NS_RELATIONSHIPS, "id") ?? "")?.target)
     .filter((target): target is string => Boolean(target))
     .map((target) => resolvePath("ppt", target));
 
   if (slidePaths.length === 0) {
-    slidePaths = Array.from(entries.keys())
+    slidePaths = pkg
+      .names()
       .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
       .sort(
         (a, b) =>
-          Number(a.match(/(\d+)\.xml$/)?.[1]) -
-          Number(b.match(/(\d+)\.xml$/)?.[1]),
+          Number(a.match(/(\d+)\.xml$/)?.[1]) - Number(b.match(/(\d+)\.xml$/)?.[1]),
       );
   }
+  return slidePaths;
+};
+
+export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
+  const pkg = await openPptxPackage(file);
+  const slidePaths = await slidePathsOf(pkg);
+  const source: PresentationSource = await loadPresentationSource(pkg, slidePaths);
 
   interface SlidePictures {
     background: string | null;
     pictures: string[];
   }
   const picturesBySlide = new Map<number, SlidePictures>();
+  const sourceBySlide = new Map<number, SlideSource>();
   const slides: ParsedSlide[] = [];
 
-  for (let index = 0; index < slidePaths.length; index++) {
-    const slidePath = slidePaths[index];
-    const slideXml = await readText(slidePath);
-    if (!slideXml) continue;
-
-    const slideDoc = parseXml(slideXml);
-    const { title, hasTitleShape, lines } = extractSlideText(slideDoc);
-
-    const relsXml = await readText(relsPathFor(slidePath));
-    const rels = relsXml
-      ? parseRelationships(parseXml(relsXml))
-      : new Map<string, string>();
+  source.slides.forEach((slideSource) => {
+    const { title, hasTitleShape, lines } = extractSlideText(slideSource.doc);
 
     // Every usable picture on the slide, in document order, each media part once
     const found: SlidePictures = { background: null, pictures: [] };
-    for (const blip of byLocalName(slideDoc, "blip")) {
+    for (const blip of byLocalName(slideSource.doc, "blip")) {
       const kind = classifyBlip(blip);
-      const target = rels.get(blip.getAttributeNS(NS_RELATIONSHIPS, "embed") ?? "");
-      if (!kind || !target) continue;
-      const candidate = resolvePath(directoryOf(slidePath), target);
+      const rel = slideSource.rels.get(blip.getAttributeNS(NS_RELATIONSHIPS, "embed") ?? "");
+      if (!kind || !rel) continue;
+      const candidate = resolvePath(directoryOf(slideSource.path), rel.target);
       const extension = candidate.split(".").pop()?.toLowerCase() ?? "";
-      if (!IMAGE_MIME_BY_EXTENSION[extension] || !entries.has(candidate)) continue;
+      if (!IMAGE_MIME_BY_EXTENSION[extension] || !pkg.has(candidate)) continue;
 
       if (kind === "background") {
         found.background ??= candidate;
@@ -367,6 +285,29 @@ export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
 
     const number = slides.length + 1;
     picturesBySlide.set(number, found);
+    sourceBySlide.set(number, slideSource);
+
+    // Health check: a quick design pass shows what can't be reproduced exactly
+    let health: SlideHealth;
+    try {
+      const notes = buildSlideDesign(source, slideSource, estimateMeasurer).notes;
+      health = {
+        status: notes.some((entry) => entry.level === "warning") ? "notes" : "ready",
+        notes,
+      };
+    } catch (error) {
+      console.error(`Could not scan slide ${number}:`, error);
+      health = {
+        status: "simplified",
+        notes: [
+          {
+            level: "warning",
+            message: "This slide's design couldn't be read, so a simplified layout is used",
+          },
+        ],
+      };
+    }
+
     slides.push({
       number,
       title,
@@ -374,25 +315,50 @@ export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
       lines,
       imageCount: found.pictures.length,
       hasBackground: Boolean(found.background),
+      health,
     });
-  }
+  });
 
-  const decodePart = async (
+  let renderCounter = 0;
+  const rendered = new Map<string, Promise<SlideImage | null>>();
+
+  const renderPart = async (
     path: string,
     baseName: string,
+    spec: RenderSpec,
   ): Promise<SlideImage | null> => {
-    const entry = entries.get(path);
-    if (!entry) return null;
     const extension = path.split(".").pop()?.toLowerCase() ?? "";
+    const mime = IMAGE_MIME_BY_EXTENSION[extension];
+    if (!mime) return null;
     try {
-      return await decodeSlideImage(
-        await inflateEntry(buffer, entry),
-        IMAGE_MIME_BY_EXTENSION[extension],
-        baseName,
-      );
+      const bytes = await pkg.readBytes(path);
+      return bytes ? await renderPicture(bytes, mime, baseName, spec) : null;
     } catch {
       return null;
     }
+  };
+
+  const renderImage = (need: ImageNeed): Promise<SlideImage | null> => {
+    const cached = rendered.get(need.key);
+    if (cached) return cached;
+    renderCounter += 1;
+    const pending = renderPart(need.part, `slide-picture-${renderCounter}`, {
+      crop: need.crop,
+      flipH: need.flipH,
+      flipV: need.flipV,
+      outWidth: need.outWidth,
+      outHeight: need.outHeight,
+    });
+    rendered.set(need.key, pending);
+    return pending;
+  };
+
+  const plainSpec: RenderSpec = {
+    crop: { l: 0, t: 0, r: 0, b: 0 },
+    flipH: false,
+    flipV: false,
+    outWidth: null,
+    outHeight: null,
   };
 
   const loadSlideImages = async (slideNumber: number): Promise<SlideImages> => {
@@ -400,18 +366,25 @@ export const parsePptx = async (file: File): Promise<ParsedPresentation> => {
     if (!found) return { background: null, pictures: [] };
 
     const background = found.background
-      ? await decodePart(found.background, `slide-${slideNumber}-background`)
+      ? await renderPart(found.background, `slide-${slideNumber}-background`, plainSpec)
       : null;
     const pictures: SlideImage[] = [];
     for (let i = 0; i < found.pictures.length; i++) {
-      const decoded = await decodePart(
+      const decoded = await renderPart(
         found.pictures[i],
         `slide-${slideNumber}-picture-${i + 1}`,
+        plainSpec,
       );
       if (decoded) pictures.push(decoded);
     }
     return { background, pictures };
   };
 
-  return { fileName: file.name, slides, loadSlideImages };
+  const buildDesign = (slideNumber: number, measure: FidelityMeasurer): SlideDesign => {
+    const slideSource = sourceBySlide.get(slideNumber);
+    if (!slideSource) throw new Error(`Slide ${slideNumber} was not found`);
+    return buildSlideDesign(source, slideSource, measure);
+  };
+
+  return { fileName: file.name, slides, buildDesign, renderImage, loadSlideImages };
 };

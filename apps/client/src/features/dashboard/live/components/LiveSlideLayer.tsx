@@ -2,6 +2,8 @@ import React, { useRef } from "react";
 import { useLivePresentationState, TEXT_SIZE_MAX_REM } from "../useLivePresentationState";
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "../../components/SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { lyricStyleToCss } from "@/features/songs/songFormatting";
 import { useAutoFitTextSize } from "@/hooks/useAutoFitTextSize";
 
 export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState>> = (props) => {
@@ -159,6 +161,42 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
     ],
   );
 
+  // Song slides (verse / chorus): shrink the lyrics until the whole verse fits the box, so a
+  // long verse is never cut off at the bottom. At the normal size nothing changes: the size
+  // the live settings give is kept, and only scaled down when the text would not fit.
+  const deckSongMeasureRef = useRef<HTMLDivElement>(null);
+  const deckSongContentRef = useRef<HTMLDivElement>(null);
+  useAutoFitTextSize(
+    deckBibleBoxRef,
+    deckSongMeasureRef,
+    (factor) => {
+      const el = deckSongContentRef.current;
+      if (!el) return;
+      const clamp = /text-\[(clamp\([^\]]+\))\]/.exec(getTextSizeClass() || "")?.[1];
+      el.style.fontSize =
+        factor >= 1
+          ? ""
+          : clamp
+            ? `calc(${clamp} * ${factor})`
+            : `${songBibleBaseRem * factor}rem`;
+    },
+    [
+      currentDeckSlide?.id,
+      currentDeckSlide?.content,
+      currentDeckSlide?.type,
+      currentDeckSlide?.lyricHtml,
+      currentDeckSlide?.lyricStyle,
+      slideTextSize,
+      songBibleBaseRem,
+      contentFixedArea,
+      slidesTransparent,
+      editorState.styleFontFamily,
+      editorState.selectedFont,
+      editorState.isBold,
+      editorState.isItalic,
+    ],
+  );
+
   // editorState arrives via postMessage sync and starts as `{}` in a
   // freshly-opened live window until the first EDITOR_STATE_SYNC lands, so
   // referenceStyle must never be read without a fallback here - doing so
@@ -240,19 +278,9 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                   : {}
               }>
               <div ref={songBibleMeasureRef} className="flex flex-col items-center">
-                {/* Title and section - for songs, show section below title; for Bible, show only the reference */}
-                {projectionType === "bible" ? (
-                  !referenceIsBottom && songBibleReferenceGroupEl
-                ) : (
-                  <div className="mb-6" style={{ textAlign: slideAlignment }}>
-                    <h2 ref={songBibleReferenceRef} className="text-white mb-2 font-bold">
-                      {currentSongProjection.title}
-                    </h2>
-                    <h3 className={`text-blue-300 font-medium ${getTextSizeClass()}`}>
-                      {currentSongProjection.sectionTitle}
-                    </h3>
-                  </div>
-                )}
+                {/* Scripture shows its reference; songs show only the lyrics (no song title,
+                    no verse / chorus label) */}
+                {projectionType === "bible" && !referenceIsBottom && songBibleReferenceGroupEl}
                 {/* Content text (lyrics or scripture) */}
                 <div
                   ref={songBibleContentRef}
@@ -277,22 +305,35 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                     textAlign: slideAlignment,
                   }}>
                   {projectionType === "song" && pacingLineIdx >= 0 ? (
-                    currentSongProjection.lyrics.split("\n").map((line, lineIdx) => (
-                      <div
-                        key={lineIdx}
-                        style={{
-                          color: line.trim() === ""
-                            ? "transparent"
-                            : lineIdx <= pacingLineIdx
-                              ? "#fbbf24" // Amber highlight color
-                              : (editorState.styleColor || editorState.textColor || liveConsoleFontColor),
-                          minHeight: "1.2em",
-                          transition: "color 0.15s ease",
-                        }}
-                      >
-                        {line || "\u00A0"}
-                      </div>
-                    ))
+                    // Line-by-line pacing highlight: the song's base style applies, but not its
+                    // inline formatting (each line is coloured on its own here)
+                    <div style={lyricStyleToCss(currentSongProjection.lyricStyle)}>
+                      {currentSongProjection.lyrics.split("\n").map((line, lineIdx) => (
+                        <div
+                          key={lineIdx}
+                          style={{
+                            color: line.trim() === ""
+                              ? "transparent"
+                              : lineIdx <= pacingLineIdx
+                                ? "#fbbf24" // Amber highlight color
+                                : undefined,
+                            minHeight: "1.2em",
+                            transition: "color 0.15s ease",
+                          }}
+                        >
+                          {line || "\u00A0"}
+                        </div>
+                      ))}
+                    </div>
+                  ) : projectionType === "song" ? (
+                    // The song's saved formatting (base style + inline) on top of live settings
+                    <SongLyricsBody
+                      slide={{
+                        content: currentSongProjection.lyrics,
+                        lyricStyle: currentSongProjection.lyricStyle,
+                        lyricHtml: currentSongProjection.lyricHtml,
+                      }}
+                    />
                   ) : (
                     currentSongProjection.lyrics
                   )}
@@ -424,38 +465,22 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
             ) : (
             /* Non-media slides use the normal padded container */
             <div
-              ref={slides[currentSlide - 1].type === "bible" ? deckBibleBoxRef : undefined}
+              ref={
+                slides[currentSlide - 1].type === "bible" ||
+                slides[currentSlide - 1].type === "verse" ||
+                slides[currentSlide - 1].type === "chorus"
+                  ? deckBibleBoxRef
+                  : undefined
+              }
               key={`slide-${currentSlide}-${animationKey}`}
               className={`${slidesTransparent ? "" : "bg-black/40 backdrop-blur-sm"} rounded-3xl p-16 ${slidesTransparent ? "" : "border border-white/20 shadow-2xl"} ${getSlideTransitionClass()} overflow-hidden flex flex-col justify-center ${slidesTransparent ? "max-h-[92vh]" : contentFixedArea ? "max-h-[75vh]" : "max-h-[85vh]"}`}>
               {slides[currentSlide - 1].type === "verse" ||
               slides[currentSlide - 1].type === "chorus" ? (
-                <>
-                  <h1
-                    className={`text-white mb-6 ${getTextSizeClass()}`}
-                    style={{
-                      fontFamily: titleEditorState.selectedFont || liveConsoleFontFamily,
-                      color: titleEditorState.textColor || liveConsoleFontColor,
-                      textAlign: slideAlignment,
-                      fontWeight: (titleEditorState.isBold ?? liveConsoleBold) ? "bold" : "normal",
-                      fontStyle: (titleEditorState.isItalic ?? liveConsoleItalic)
-                        ? "italic"
-                        : "normal",
-                      textDecoration:
-                        `${titleEditorState.isUnderline ? "underline" : ""} ${titleEditorState.isStrikethrough ? "line-through" : ""}`.trim() ||
-                        "none",
-                    }}>
-                    {slides[currentSlide - 1].songTitle ||
-                      slides[currentSlide - 1].title}
-                  </h1>
+                <div ref={deckSongMeasureRef}>
+                  {/* Songs show only the lyrics on the live screen: no song title and
+                      no verse / chorus label */}
                   <div
-                    className={`text-purple-400 font-medium mb-6 ${getTextSizeClass()}`}
-                    style={{ textAlign: slideAlignment }}>
-                    {slides[currentSlide - 1].sectionLabel ||
-                      (slides[currentSlide - 1].type === "verse"
-                        ? "VERSE"
-                        : "CHORUS")}
-                  </div>
-                  <div
+                    ref={deckSongContentRef}
                     className={`text-white whitespace-pre-line leading-relaxed font-light tracking-wide ${getTextSizeClass()}`}
                     style={{
                       fontFamily:
@@ -476,14 +501,12 @@ export const LiveSlideLayer: React.FC<ReturnType<typeof useLivePresentationState
                       textTransform:
                         (editorState.styleTextTransform as any) || "",
                       textAlign: slideAlignment,
-                      ...(contentFixedArea && {
-                        maxHeight: "60vh",
-                        overflow: "hidden",
-                      }),
                     }}>
-                    {slides[currentSlide - 1].content}
+                    {/* The song's own formatting from the Song editor sits on top of
+                        these live settings */}
+                    <SongLyricsBody slide={slides[currentSlide - 1]} />
                   </div>
-                </>
+                </div>
               ) : slides[currentSlide - 1].type === "bible" ? (
                 <div ref={deckBibleMeasureRef} className="flex flex-col items-center">
                   {!referenceIsBottom && deckBibleReferenceEl}

@@ -45,11 +45,26 @@ import { SongbookModal } from "@/features/dashboard/components/SongbookModal";
 import { SongSearchModal } from "@/features/dashboard/components/SongSearchModal";
 import { useDebounce } from "@/hooks/use-debounce";
 import { SongEditorModal } from "@/features/dashboard/components/SongEditorModal";
+import { applySongToSlides } from "@/features/songs/songFormatting";
+import { syncSongSlides } from "@/features/songs/songSlideSync";
+import { lyricHtmlForSection } from "@/features/songs/songRichText";
+import { songSlideFormatting } from "@/features/songs/songSlides";
+import {
+  isItemOfSong,
+  refreshItemFromSavedSong,
+  songOfItem,
+} from "@/features/songs/songBuildPanel";
 import { ImportFilesModal } from "@/features/dashboard/components/modals/ImportFilesModal";
 import type { SlideAllocation } from "@/features/dashboard/components/modals/ImportPresentationModal";
+import {
+  ImportHealthReportModal,
+  reportNeedsAttention,
+  type ImportHealthReport,
+} from "@/features/dashboard/components/modals/ImportHealthReportModal";
 import type {
+  ImageNeed,
   ParsedPresentation,
-  SlideImage,
+  SlideDesign,
   SlideImages,
 } from "@/lib/pptxParser";
 import {
@@ -57,7 +72,12 @@ import {
   createTextMeasurer,
   type SlideMedia,
 } from "@/lib/pptxSlideLayout";
-import { uploadSlideImages, type SlideImageUpload } from "@/lib/pptxSlideMedia";
+import {
+  createFidelityMeasurer,
+  finalizeSlideDesign,
+  type DesignNote,
+} from "@/lib/pptxSlideDesign";
+import { uploadSlideImages, type SlideImageUploadItem } from "@/lib/pptxSlideMedia";
 import { StylesDropdown } from "@/features/dashboard/components/StylesDropdown";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 import { useDisplayModeStore } from "@/stores/useDisplayModeStore";
@@ -350,6 +370,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
   // Slide Editor State (selectedSlide migrated)
   // Modal hooks migrated to Context
+  const [importReport, setImportReport] = useState<ImportHealthReport | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date(2025, 4, 25)); // May 25, 2025 (Sunday)
   const [currentMonth, setCurrentMonth] = useState(new Date(2025, 4, 1)); // May 2025
   const [selectedBibleMode, setSelectedBibleMode] = useState(
@@ -1153,10 +1174,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         ltProjectScripture(content, reference, version, currentUserId);
       if (mpEnabled) mpProjectScripture(content, reference, version, mpUserId);
     } else if (type === "verse" || type === "chorus" || type === "song") {
-      const label: string = slide.sectionLabel ?? slide.title ?? "";
-      const songTitle: string = slide.songTitle ?? "";
-      if (ltEnabled) ltProjectLyric(content, label, songTitle, currentUserId);
-      if (mpEnabled) mpProjectLyric(content, label, songTitle, mpUserId);
+      // Every screen shows the lyrics only: no verse / chorus label and no song title, on the
+      // lower-third overlay as well as the audience / NDI screen
+      if (ltEnabled) ltProjectLyric(content, "", "", currentUserId);
+      if (mpEnabled) mpProjectLyric(content, "", "", mpUserId);
     } else if (type === "announcement") {
       const category: string = slide.category ?? slide.title ?? "";
       const subtitle: string = slide.subtitle ?? "";
@@ -1255,6 +1276,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           title: s.title,
           type: s.type,
           sectionLabel: s.sectionLabel,
+          // Song formatting (bold / italic / colour) must trigger a re-send to the live window
+          lyricStyle: s.lyricStyle,
+          lyricHtml: s.lyricHtml,
           itemId: s.itemId,
           subtype: s.subtype,
         })),
@@ -2087,7 +2111,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       submenuItems: [
         {
           name: "PowerPoint Presentation",
-          action: () => console.log("Import PowerPoint"),
+          // Opens the Import Presentation modal, where each slide is given its section
+          action: () => handleImportPresentation(),
         },
         { name: "Media Files", action: () => console.log("Import Media") },
         { name: "Song Database", action: () => console.log("Import Songs") },
@@ -2675,6 +2700,9 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           content: (lyrics as string).trim(),
           sectionLabel: label,
           songTitle: song.title, // Store song title separately for display
+          // The section's name (to match later edits) and the formatting chosen for it in
+          // the Song editor: its base style, and inline formatting on selected words / lines
+          ...songSlideFormatting(song, sectionName, (lyrics as string).trim()),
         });
 
         slideNumber++;
@@ -2696,6 +2724,120 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     }
 
     return slides;
+  };
+
+  // The item open in Edit & Preparation, readable from a callback that was created earlier
+  // (a save finishes seconds after it started)
+  const editingContentRef = useRef<any>(null);
+  editingContentRef.current = editingContent;
+
+  // Edit & Preparation shows the song of the item that is open. Opening a different song (from
+  // the service list, a slide, the songbook or a search) loads ITS lyrics, whichever shape the
+  // item has - before, only some routes did, and the others kept showing the previous song.
+  // Typing never changes which item is open, so it is not disturbed.
+  const loadedSongItemRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editingContent || editingContent.type !== "song") {
+      loadedSongItemRef.current = null;
+      return;
+    }
+    if (loadedSongItemRef.current === editingContent.id) return;
+    loadedSongItemRef.current = editingContent.id;
+
+    const song = songOfItem(editingContent);
+    if (!song) {
+      // A song item with no words yet: nothing of an earlier song should be shown for it
+      setParsedLyrics({});
+      setSongEditorContent("");
+      return;
+    }
+
+    const sections = parseLyricsIntoSections(song.lyrics);
+    setSongEditorContent(song.lyrics);
+    setParsedLyrics(sections);
+    setSongArrangement(Object.keys(sections));
+    setCurrentSongTitle(
+      editingContent.title === "Song" ? "" : editingContent.title || "",
+    );
+
+    // A songbook item keeps its sections as a list; from here on the item holds the song
+    // itself (id, lyrics, formatting), so editing it keeps its slides linked to the song
+    if (!editingContent.content || Array.isArray(editingContent.content) || typeof editingContent.content !== "object") {
+      setEditingContent((prev: any) =>
+        prev && prev.id === editingContent.id ? { ...prev, content: song } : prev,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingContent?.id, editingContent?.type]);
+
+  // Copies a saved song's text and formatting (section styles and inline formatting) onto the
+  // song's items that are already in the service: the item itself (so Edit & Preparation shows
+  // the edit), its slides (so the live screen shows it) and the slide on the dashboard's live
+  // view. Slides are matched to sections by section name; slides added before section names
+  // were recorded fall back to their order in the song. `previousTitle` is the song's title
+  // before this save, so an item still showing it follows a renamed song.
+  const applySongFormattingToService = (song: any, previousTitle?: string) => {
+    if (!song?.id) return;
+    const styles: Record<string, any> = song.sectionStyles || {};
+    const sections = Object.entries(parseLyricsIntoSections(song.lyrics || "")).map(
+      ([name, content]) => ({ name, content: String(content).trim() }),
+    );
+    const htmlFor = (name: string, content: string) =>
+      lyricHtmlForSection(song, name, content);
+
+    const patchItem = (item: any) => {
+      const refreshed = refreshItemFromSavedSong(item, song, previousTitle);
+      return Array.isArray(refreshed?.slides)
+        ? {
+            ...refreshed,
+            // text and formatting updated, a slide added for a new section, the slide of a
+            // deleted section removed
+            slides: syncSongSlides(
+              refreshed.slides,
+              song.id,
+              sections,
+              styles,
+              htmlFor,
+              String(refreshed.id),
+            ),
+          }
+        : refreshed;
+    };
+    const patchItems = (items: any[]) => items.map(patchItem);
+
+    setServiceItems((current: any[]) => patchItems(current));
+    setSectionItems((current: any) =>
+      Object.fromEntries(
+        Object.entries(current || {}).map(([section, items]) => [
+          section,
+          Array.isArray(items) ? patchItems(items) : items,
+        ]),
+      ),
+    );
+    setInsertedItems((current: any[]) => patchItems(current));
+
+    // The slide the dashboard's live view is showing is a copy, so it is refreshed too
+    setCurrentlyDisplayedSlide((current: any) =>
+      current?.songId === song.id
+        ? applySongToSlides([current], song.id, sections, styles, htmlFor)[0]
+        : current,
+    );
+
+    // The song open in Edit & Preparation shows the new words and formatting right away
+    const open = editingContentRef.current;
+    if (open && isItemOfSong(open, String(song.id))) {
+      const patched = patchItem(open);
+      const parsed = parseLyricsIntoSections(song.lyrics || "");
+      setEditingContent((current: any) =>
+        current && isItemOfSong(current, String(song.id)) ? patchItem(current) : current,
+      );
+      setSongEditorContent(song.lyrics || "");
+      setParsedLyrics(parsed);
+      setSongArrangement(Object.keys(parsed));
+      if (patched.title !== open.title) {
+        setCurrentSongTitle(patched.title === "Song" ? "" : patched.title || "");
+      }
+    }
   };
 
   const insertImage = () => {
@@ -2906,6 +3048,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
         content: section.content,
         songId: item.songId,
         sectionLabel: section.label,
+        // The song's formatting for this section (item carries sectionStyles / sectionHtml)
+        ...songSlideFormatting(item, section.label, String(section.content ?? "").trim()),
       }));
     } else if (item.type === "announcement") {
       // For announcement items, create a slide with announcement type
@@ -2957,34 +3101,35 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
   // Function to add song to multiple service sections (from Song Viewer)
   const addSongToServiceSections = (songItem: any, sectionIds: string[]) => {
-    sectionIds.forEach((sectionId) => {
-      // Create unique item for each section
-      const itemWithUniqueId = {
+    // One item per section, created once: the same item (and id) is what is recorded for
+    // undo, stored in the section, opened for editing and used to build its slides. Before,
+    // each step made its own copy with its own id, so the item opened for editing was not
+    // the one stored in the service and typing in it changed nothing there.
+    const stamp = Date.now();
+    const createdItems = sectionIds.map((sectionId, index) => ({
+      sectionId,
+      item: {
         ...songItem,
-        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
-      };
+        id: `song-${songItem.songId}-${sectionId}-${stamp}-${index}`,
+      },
+    }));
 
+    createdItems.forEach(({ sectionId, item }) => {
       // Record the addition action for undo/redo
       recordAction({
         type: "ADD_ITEM",
-        itemId: itemWithUniqueId.id,
+        itemId: item.id,
         sectionName: sectionId,
-        item: itemWithUniqueId,
+        item,
         description: `Add song "${songItem.title}" to ${sectionId}`,
       });
     });
 
-    sectionIds.forEach((sectionId) => {
-      // Create unique item for each section
-      const itemWithUniqueId = {
-        ...songItem,
-        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
-      };
-
+    createdItems.forEach(({ sectionId, item }) => {
       // Add item to the section
       setSectionItems((prev) => ({
         ...prev,
-        [sectionId]: [...(prev[sectionId] || []), itemWithUniqueId],
+        [sectionId]: [...(prev[sectionId] || []), item],
       }));
 
       // Auto-expand the section to show the added item
@@ -2994,16 +3139,17 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       }));
     });
 
-    // Add to global inserted items (only add one instance)
-    setInsertedItems((prev) => [...prev, songItem]);
+    // The first created item is the one opened for editing (and the one in the upper list)
+    const primaryItem = createdItems[0]?.item ?? songItem;
+    setInsertedItems((prev) => [...prev, primaryItem]);
     setSelectedContentType(songItem.type);
-    setEditingContent(songItem);
+    setEditingContent(primaryItem);
 
     // Initialize song title for immediate editing
     setCurrentSongTitle(songItem.title === "Song" ? "" : songItem.title || "");
 
     // Initialize editor history when starting to edit a song
-    const initialContent = songItem.content?.lyrics || "";
+    const initialContent = songOfItem(primaryItem)?.lyrics || "";
     setSongEditorContent(initialContent);
     setEditorHistory([initialContent]);
     setHistoryIndex(0);
@@ -3015,15 +3161,8 @@ export const QworshipHomeV2Base = (): JSX.Element => {
 
     // Manually compute next section items to pipeline into rebuild
     const nextSectionItems = { ...sectionItems };
-    sectionIds.forEach((sectionId) => {
-      const itemWithUniqueId = {
-        ...songItem,
-        id: `song-${songItem.songId}-${sectionId}-${Date.now()}`,
-      };
-      nextSectionItems[sectionId] = [
-        ...(nextSectionItems[sectionId] || []),
-        itemWithUniqueId,
-      ];
+    createdItems.forEach(({ sectionId, item }) => {
+      nextSectionItems[sectionId] = [...(nextSectionItems[sectionId] || []), item];
     });
 
     // Rebuild slides to append new song slides using explicit state mapping
@@ -3124,6 +3263,12 @@ export const QworshipHomeV2Base = (): JSX.Element => {
               songId: item.songId,
               sectionLabel:
                 section.label || section.type || `Section ${index + 1}`,
+              // The song's formatting for this section (item carries sectionStyles / sectionHtml)
+              ...songSlideFormatting(
+                item,
+                section.label || section.type || `Section ${index + 1}`,
+                String(section.content || section.text || "").trim(),
+              ),
             };
           });
           allSlides.push(...songSlides); // Append to existing slides
@@ -3536,34 +3681,75 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   ) => {
     const stamp = Date.now();
     const newEntries: { item: any; section: string }[] = [];
-    const measure = createTextMeasurer();
+    const healthSlides: ImportHealthReport["slides"] = [];
+    const measure = createFidelityMeasurer();
+    const simpleMeasure = createTextMeasurer();
 
-    // Decode the pictures of the chosen slides, then upload them all up front
-    const decoded = new Map<number, SlideImages>();
-    const uploads: SlideImageUpload[] = [];
+    // 1. Lay each chosen slide out as it appears in PowerPoint: its real background,
+    //    shapes, text and pictures, including what lives on the layout and master.
+    //    A slide that can't be read falls back to a simple text layout instead of
+    //    failing the whole import.
+    const designs = new Map<number, SlideDesign>();
     for (const { slide } of allocations) {
+      try {
+        designs.set(slide.number, presentation.buildDesign(slide.number, measure));
+      } catch (error) {
+        console.error(`Could not lay out slide ${slide.number}:`, error);
+      }
+    }
+
+    // 2. Render every distinct picture once (a logo on the master is shared by all
+    //    slides) and upload them to the media library
+    const needs = new Map<string, ImageNeed>();
+    designs.forEach((design) =>
+      design.images.forEach((need) => needs.set(need.key, need)),
+    );
+
+    // Pictures are rendered and uploaded several at a time, so rendering one overlaps
+    // uploading another instead of waiting for each in turn
+    const uploads: (SlideImageUploadItem & { key: string })[] = [];
+    needs.forEach((need) => {
+      uploads.push({
+        key: need.key,
+        title: `${presentation.fileName} – picture ${uploads.length + 1}`,
+        load: () => presentation.renderImage(need),
+      });
+    });
+
+    const fallbackImages = new Map<number, SlideImages>();
+    for (const { slide } of allocations) {
+      if (designs.has(slide.number)) continue;
       if (slide.imageCount === 0 && !slide.hasBackground) continue;
       const images = await presentation.loadSlideImages(slide.number);
-      decoded.set(slide.number, images);
-      [images.background, ...images.pictures].forEach((image) => {
-        if (image) {
-          uploads.push({ image, title: `${presentation.fileName} – Slide ${slide.number}` });
-        }
+      fallbackImages.set(slide.number, images);
+      const title = `${presentation.fileName} – Slide ${slide.number}`;
+      if (images.background) {
+        const background = images.background;
+        uploads.push({
+          key: `fallback-${slide.number}-background`,
+          title,
+          load: async () => background,
+        });
+      }
+      images.pictures.forEach((picture, index) => {
+        uploads.push({
+          key: `fallback-${slide.number}-${index}`,
+          title,
+          load: async () => picture,
+        });
       });
     }
 
-    const urlByImage = new Map<SlideImage, string>();
-    let failedPictures = 0;
+    const urlByKey = new Map<string, string>();
     let failureReason = "";
+    let failedPictures = 0;
     if (uploads.length > 0) {
-      try {
-        const urls = await uploadSlideImages(uploads);
-        uploads.forEach(({ image }, index) => urlByImage.set(image, urls[index]));
-      } catch (error) {
-        console.error("Failed to upload imported slide pictures:", error);
-        failedPictures = uploads.length;
-        failureReason = error instanceof Error ? error.message : "";
-      }
+      const result = await uploadSlideImages(uploads);
+      failureReason = result.failureReason;
+      result.urls.forEach((url, index) => {
+        if (url) urlByKey.set(uploads[index].key, url);
+        else failedPictures += 1;
+      });
     }
 
     for (const { slide, section } of allocations) {
@@ -3573,19 +3759,42 @@ export const QworshipHomeV2Base = (): JSX.Element => {
       const heading = slide.title.length > 40 ? `${slide.title.slice(0, 40)}…` : slide.title;
       const title = heading ? `Slide ${slide.number} – ${heading}` : `Slide ${slide.number}`;
 
-      const images = decoded.get(slide.number);
-      const media: SlideMedia = {
-        background:
-          (images?.background && urlByImage.get(images.background)) || null,
-        pictures: (images?.pictures ?? []).flatMap((picture) => {
-          const url = urlByImage.get(picture);
-          return url ? [{ url, width: picture.width, height: picture.height }] : [];
-        }),
-      };
+      // Canvas slides are drawn by every viewer (thumbnails, preview, live, OBS/NDI)
+      let canvas: { elements: any[]; canvasBackground: { type: string; value: string } };
+      let notes: DesignNote[];
+      const design = designs.get(slide.number);
+      if (design) {
+        const finished = finalizeSlideDesign(design, urlByKey);
+        canvas = { elements: finished.elements, canvasBackground: finished.canvasBackground };
+        notes = finished.notes;
+      } else {
+        const images = fallbackImages.get(slide.number);
+        const media: SlideMedia = {
+          background: urlByKey.get(`fallback-${slide.number}-background`) ?? null,
+          pictures: (images?.pictures ?? []).flatMap((picture, index) => {
+            const url = urlByKey.get(`fallback-${slide.number}-${index}`);
+            return url ? [{ url, width: picture.width, height: picture.height }] : [];
+          }),
+        };
+        canvas = buildSlideCanvas(slide, media, simpleMeasure);
+        notes = [
+          {
+            level: "warning",
+            message: "This slide's design couldn't be read, so a simplified layout was used",
+          },
+        ];
+      }
+      healthSlides.push({
+        number: slide.number,
+        title: slide.title,
+        status: design
+          ? notes.some((note) => note.level === "warning")
+            ? "notes"
+            : "ready"
+          : "simplified",
+        notes,
+      });
 
-      // Canvas slides are drawn by every viewer (thumbnails, preview, live, OBS) with
-      // text already sized and centered inside the frame
-      const canvas = buildSlideCanvas(slide, media, measure);
       const item = {
         id,
         type: "media",
@@ -3651,10 +3860,14 @@ export const QworshipHomeV2Base = (): JSX.Element => {
     if (failedPictures > 0) {
       toast({
         title: "Pictures not imported",
-        description: `${failedPictures} ${failedPictures === 1 ? "picture" : "pictures"} could not be uploaded${failureReason ? ` (${failureReason})` : ""}, so those slides were imported with their text only.`,
+        description: `${failedPictures} ${failedPictures === 1 ? "picture" : "pictures"} could not be imported${failureReason ? ` (${failureReason})` : ""}. The rest of each slide was imported.`,
         variant: "destructive",
       });
     }
+
+    // Health report: opens by itself when something couldn't be reproduced exactly
+    const report: ImportHealthReport = { fileName: presentation.fileName, slides: healthSlides };
+    if (reportNeedsAttention(report)) setImportReport(report);
   };
 
   const handleExitApplication = () => {
@@ -5037,6 +5250,7 @@ export const QworshipHomeV2Base = (): JSX.Element => {
                 showDeleteConfirmation={showDeleteConfirmation}
                 isAddItemVisible={isAddItemVisible}
                 setIsAddItemVisible={setIsAddItemVisible}
+                insertItemMenuItems={insertItemMenuItems}
               />
 
               {/* Warning Notification */}
@@ -5459,8 +5673,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           initialData={importedSongData}
           onSave={(songData) => {
             console.log("Song saved:", songData);
-            // No need to manually update state, as the song is already saved to the database
-            // The query will automatically refresh to show the new song
+            // The song is already saved to the database and the song list refreshes by
+            // itself. Slides of this song that are already in the service (and so on the
+            // live screen) pick up its new formatting here.
+            if (songData?.song) applySongFormattingToService(songData.song, importedSongData?.title);
             setIsSongEditorOpen(false);
             setImportedSongData(null);
           }}
@@ -6120,6 +6336,10 @@ export const QworshipHomeV2Base = (): JSX.Element => {
           toggleHandsfreeBible={toggleHandsfreeBible}
           setIsSongbookOpen={setIsSongbookOpen}
           setIsBackgroundAssetsModalOpen={setIsBackgroundAssetsModalOpen}
+        />
+        <ImportHealthReportModal
+          report={importReport}
+          onClose={() => setImportReport(null)}
         />
       </div>
     </HandsfreeBibleProvider>

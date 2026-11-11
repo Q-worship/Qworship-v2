@@ -2,6 +2,8 @@ import React from "react";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
 import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { FitLyricsBox } from "@/features/songs/FitLyricsBox";
 
 export const SlideGridRenderer = (props: any) => {
   const { 
@@ -431,7 +433,7 @@ export const SlideGridRenderer = (props: any) => {
                                        </div>
                                     ) : (
                                     <div
-                                      className="px-4 pt-8 pb-6 h-full relative bg-[#000000]"
+                                      className={`${slide.type === "verse" || slide.type === "chorus" ? "px-2 pt-6 pb-1" : "px-4 pt-8 pb-6"} h-full relative bg-[#000000]`}
                                       style={(() => {
                                         // Find the service item that contains this slide
                                         const parentItem = serviceItems.find(
@@ -487,54 +489,66 @@ export const SlideGridRenderer = (props: any) => {
                                       })()}
                                     >
                                       {/* Content Preview - Even smaller text for cleaner appearance */}
-                                      <div className="text-white text-[10px] leading-relaxed overflow-hidden">
+                                      <div
+                                        className={`text-white text-[10px] leading-relaxed overflow-hidden ${slide.type === "verse" || slide.type === "chorus" ? "h-full" : ""}`}>
                                         {slide.type === "verse" ||
                                         slide.type === "chorus" ? (
-                                          <div className="space-y-0">
+                                          <div className="h-full">
                                             {slide.content ? (
-                                              <div
-                                                className="text-[10px] leading-tight"
-                                                style={{
-                                                  fontFamily:
-                                                    editorState.styleFontFamily ||
-                                                    editorState.selectedFont ||
-                                                    "Lufgord",
-                                                  color:
-                                                    editorState.styleColor ||
-                                                    "#ffffff",
-                                                  fontWeight: editorState.isBold
-                                                    ? "bold"
-                                                    : "normal",
-                                                  fontStyle:
-                                                    editorState.isItalic
-                                                      ? "italic"
-                                                      : "normal",
-                                                  textDecoration:
-                                                    `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
-                                                    "none",
-                                                  textShadow:
-                                                    editorState.styleTextShadow ||
-                                                    "",
-                                                  letterSpacing:
-                                                    editorState.styleLetterSpacing ||
-                                                    "",
-                                                  textTransform:
-                                                    (editorState.styleTextTransform as any) ||
-                                                    "",
-                                                }}
-                                                dangerouslySetInnerHTML={{
-                                                  __html:
-                                                    typeof slide.content ===
-                                                    "string"
-                                                      ? slide.content
-                                                          .split("\n")
-                                                          .slice(0, 6)
-                                                          .join("<br/>")
-                                                      : (slide as any).content
-                                                          ?.content ||
-                                                        "Song lyrics",
-                                                }}
-                                              />
+                                              /* The whole text, shrunk to fit the card (a long
+                                                 verse is never cut off), with the saved song
+                                                 formatting as text (not raw HTML) */
+                                              <FitLyricsBox
+                                                baseSize="10px"
+                                                deps={[
+                                                  slide.content,
+                                                  (slide as any).lyricHtml,
+                                                  (slide as any).lyricStyle,
+                                                  editorState.selectedFont,
+                                                  editorState.styleFontFamily,
+                                                  editorState.isBold,
+                                                  editorState.isItalic,
+                                                ]}>
+                                                {(contentRef) => (
+                                                  <div
+                                                    ref={contentRef}
+                                                    className="w-full whitespace-pre-line leading-tight"
+                                                    style={{
+                                                      fontFamily:
+                                                        editorState.styleFontFamily ||
+                                                        editorState.selectedFont ||
+                                                        "Lufgord",
+                                                      color:
+                                                        editorState.styleColor ||
+                                                        "#ffffff",
+                                                      fontWeight: editorState.isBold
+                                                        ? "bold"
+                                                        : "normal",
+                                                      fontStyle: editorState.isItalic
+                                                        ? "italic"
+                                                        : "normal",
+                                                      textDecoration:
+                                                        `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() ||
+                                                        "none",
+                                                      textShadow:
+                                                        editorState.styleTextShadow ||
+                                                        "",
+                                                      letterSpacing:
+                                                        editorState.styleLetterSpacing ||
+                                                        "",
+                                                      textTransform:
+                                                        (editorState.styleTextTransform as any) ||
+                                                        "",
+                                                    }}>
+                                                    {typeof slide.content === "string" ? (
+                                                      <SongLyricsBody slide={slide} />
+                                                    ) : (
+                                                      (slide as any).content?.content ||
+                                                      "Song lyrics"
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </FitLyricsBox>
                                             ) : (
                                               <div className="text-[10px]">
                                                 No lyrics available

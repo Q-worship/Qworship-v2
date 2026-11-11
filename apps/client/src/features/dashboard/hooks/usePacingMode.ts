@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { SongSection } from './useInlineSongBrowser';
+import { sectionFormat, type SectionFormat } from '@/features/songs/songSlides';
 
 export const PACING_COLOUR = '#fbbf24'; // amber-400
 
@@ -9,7 +10,7 @@ interface UsePacingModeProps {
   setActiveSongSectionIdx: (idx: number) => void;
   liveWindow: Window | null;
   /** Called when pacing auto-advances to the next section */
-  onProjectNextSection: (title: string, sectionTitle: string, lyrics: string, fullSongData?: any, pacingLineIdx?: number) => void;
+  onProjectNextSection: (title: string, sectionTitle: string, lyrics: string, fullSongData?: any, pacingLineIdx?: number, format?: SectionFormat) => void;
   currentSongDataRef: React.MutableRefObject<any>;
 }
 
@@ -84,7 +85,14 @@ export function usePacingMode({
           const nextSection = currentSongSections[nextIdx];
           const songData = currentSongDataRef.current;
           if (songData) {
-            onProjectRef.current(songData.title, nextSection.title, nextSection.content, undefined, 0);
+            onProjectRef.current(
+              songData.title,
+              nextSection.title,
+              nextSection.content,
+              undefined,
+              0,
+              sectionFormat(songData, nextSection.title, nextSection.content),
+            );
           }
           setActiveSongSectionIdx(nextIdx);
         }

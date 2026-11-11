@@ -1,6 +1,18 @@
 import React, { useRef, useEffect, useState } from "react";
 import { resolveMediaUrl } from "@/lib/queryClient";
 
+// Imported presentations carry per-run formatting (colours, bold, bullets ...) in
+// `richText`. It is only used while it still matches `content`, so text edited in the
+// slide editor (which changes `content` alone) is shown as edited.
+const hasRichText = (el: any): boolean =>
+  Array.isArray(el?.richText) &&
+  el.richText.length > 0 &&
+  el.richText
+    .map((para: any) =>
+      Array.isArray(para?.runs) ? para.runs.map((run: any) => run?.text ?? "").join("") : "",
+    )
+    .join("\n") === el.content;
+
 export const SlideCanvasRenderer = ({
   content,
   background,
@@ -925,18 +937,99 @@ export const SlideCanvasRenderer = ({
                   width: `${el.width}px`,
                   height: `${el.height}px`,
                   backgroundColor: el.type === 'rect' ? el.color : 'transparent',
+                  // Imported presentations: gradient fills, outlines and rounded / shaped boxes
+                  backgroundImage: el.type === 'rect' && typeof el.gradient === 'string' ? el.gradient : undefined,
+                  border:
+                    el.borderWidth && el.borderColor
+                      ? `${el.borderWidth}px solid ${el.borderColor}`
+                      : undefined,
+                  boxSizing: 'border-box',
+                  overflow:
+                    el.type === 'image' && (el.borderRadius != null || typeof el.clipPath === 'string')
+                      ? 'hidden'
+                      : undefined,
                   opacity: el.opacity / 100,
                   transform: `rotate(${el.rotation}deg)`,
                   display: 'flex',
                   alignItems: el.alignVertical === 'top' ? 'flex-start' : el.alignVertical === 'bottom' ? 'flex-end' : 'center',
                   justifyContent: 'center',
                   userSelect: 'none',
-                  borderRadius: el.backgroundShape ? '50%' : '0',
-                  clipPath: el.shapeType === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : el.shapeType === 'star' ? 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' : 'none',
+                  borderRadius:
+                    el.borderRadius != null
+                      ? typeof el.borderRadius === 'number'
+                        ? `${el.borderRadius}px`
+                        : el.borderRadius
+                      : el.backgroundShape
+                        ? '50%'
+                        : '0',
+                  clipPath:
+                    typeof el.clipPath === 'string'
+                      ? el.clipPath
+                      : el.shapeType === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : el.shapeType === 'star' ? 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' : 'none',
                 }}
               >
-                 {el.type === 'text' && (
-                    <div 
+                 {el.type === 'text' && hasRichText(el) && (
+                    <div className="w-full break-words" style={{ textShadow }}>
+                      {el.richText.map((para: any, paraIndex: number) => {
+                        const runs: any[] = Array.isArray(para.runs) ? para.runs : [];
+                        const paraSize = Math.max(1, ...runs.map((run) => run.fontSize || 0));
+                        const hanging = para.indent < 0 ? -para.indent : 0;
+                        return (
+                          <div
+                            key={paraIndex}
+                            style={{
+                              textAlign: para.align || "left",
+                              lineHeight: para.lineHeight || 1.2,
+                              fontSize: `${paraSize}px`,
+                              fontFamily: runs[0]?.fontFamily || el.fontFamily || "Inter",
+                              paddingLeft: `${para.marginLeft || 0}px`,
+                              textIndent: `${para.indent || 0}px`,
+                              marginTop: paraIndex > 0 ? `${para.spaceBefore || 0}px` : 0,
+                              marginBottom: `${para.spaceAfter || 0}px`,
+                              whiteSpace: el.noWrap ? "pre" : "pre-wrap",
+                            }}
+                          >
+                            {para.bullet && (
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  minWidth: hanging ? `${hanging}px` : undefined,
+                                  textIndent: 0,
+                                  color: runs[0]?.color,
+                                  fontSize: `${runs[0]?.fontSize || paraSize}px`,
+                                }}
+                              >
+                                {hanging ? para.bullet : `${para.bullet} `}
+                              </span>
+                            )}
+                            {runs.map((run, runIndex) => (
+                              <span
+                                key={runIndex}
+                                style={{
+                                  color: run.color,
+                                  fontSize: `${run.fontSize}px`,
+                                  fontFamily: run.fontFamily,
+                                  fontWeight: run.bold ? 700 : 400,
+                                  fontStyle: run.italic ? "italic" : "normal",
+                                  textDecoration:
+                                    [run.underline ? "underline" : "", run.strike ? "line-through" : ""]
+                                      .filter(Boolean)
+                                      .join(" ") || "none",
+                                  letterSpacing: run.letterSpacing ? `${run.letterSpacing}px` : undefined,
+                                  textTransform: run.upper ? "uppercase" : undefined,
+                                }}
+                              >
+                                {run.text || "​"}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                 )}
+
+                 {el.type === 'text' && !hasRichText(el) && (
+                    <div
                       className="w-full break-words"
                       style={{
                          fontFamily: el.fontFamily || "Inter",

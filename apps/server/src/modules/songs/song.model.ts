@@ -18,6 +18,15 @@ export interface ISong extends Document {
   ccliNumber?: string;
   tags?: string[];
   sections: ISongSection[];
+  /** Base formatting per section (font, size, bold, colour ...), keyed by the section label
+   *  (labels are stored with "." and a leading "$" encoded, see songs.controller) */
+  sectionStyles?: Record<string, Record<string, unknown>>;
+  /** Inline formatting per section (HTML for selected words / lines), keyed like sectionStyles */
+  sectionHtml?: Record<string, string>;
+  alternativeTitles?: string[];
+  authors?: string[];
+  topics?: string[];
+  copyright?: string;
   organizationId: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
   isActive: boolean;
@@ -44,6 +53,12 @@ const SongSchema = new Schema<ISong>(
     ccliNumber: String,
     tags: [String],
     sections: [SongSectionSchema], // Embedded subdocument arrays
+    sectionStyles: { type: Schema.Types.Mixed, default: {} },
+    sectionHtml: { type: Schema.Types.Mixed, default: {} },
+    alternativeTitles: [String],
+    authors: [String],
+    topics: [String],
+    copyright: String,
     organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     isActive: { type: Boolean, default: true },

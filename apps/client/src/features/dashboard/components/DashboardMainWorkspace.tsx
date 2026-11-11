@@ -22,6 +22,17 @@ import { SidebarOpen, SidebarClose } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { WebPageEditor } from "@/features/dashboard/components/WebPageEditor";
 import { SlideCanvasRenderer } from "./SlideCanvasRenderer";
+import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
+import { FitLyricsBox } from "@/features/songs/FitLyricsBox";
+import { AutoGrowTextarea } from "@/features/songs/AutoGrowTextarea";
+import { lyricStyleToCss } from "@/features/songs/songFormatting";
+import { sectionFormat } from "@/features/songs/songSlides";
+import {
+  joinSectionsAsLyrics,
+  orderedSectionCards,
+  sectionCardLabel,
+  songOfItem,
+} from "@/features/songs/songBuildPanel";
 import { SlideCanvasEditor } from "./SlideCanvasEditor";
 
 import { buildUrl, resolveMediaUrl } from "@/lib/queryClient";
@@ -1825,6 +1836,15 @@ export const DashboardMainWorkspace = (props: any) => {
                                                               (
                                                                 slide: Slide,
                                                               ) => {
+                                                                // A song's slides remember the name of the
+                                                                // section they show: the surest match
+                                                                if (
+                                                                  (slide as any)
+                                                                    .sectionName ===
+                                                                  sectionKey
+                                                                )
+                                                                  return true;
+
                                                                 // Direct match first
                                                                 if (
                                                                   slide.sectionLabel ===
@@ -1991,80 +2011,75 @@ export const DashboardMainWorkspace = (props: any) => {
                                 </div>
                               </div>
 
-                              {/* Individual Verse Sections - WYSIWYG Editing */}
+                              {/* Individual Verse Sections - WYSIWYG Editing. A card for every
+                                  section of the song, each as tall as its text so a long verse is
+                                  always shown whole. */}
                               <div className="space-y-4">
-                                {songArrangement.map(
-                                  (arrangementSection: any, index: number) => {
-                                    // Find the corresponding lyrics for this arrangement section
-                                    const lyricEntry = Object.entries(
-                                      parsedLyrics,
-                                    ).find(([sectionName]) => {
-                                      const normalizedSectionName =
-                                        sectionName.toLowerCase();
-                                      const normalizedArrangement =
-                                        arrangementSection.toLowerCase();
-                                      return (
-                                        normalizedSectionName.includes(
-                                          normalizedArrangement,
-                                        ) ||
-                                        (arrangementSection === "V1" &&
-                                          (normalizedSectionName.includes(
-                                            "verse 1",
-                                          ) ||
-                                            normalizedSectionName.includes(
-                                              "v1",
-                                            ))) ||
-                                        (arrangementSection === "V2" &&
-                                          (normalizedSectionName.includes(
-                                            "verse 2",
-                                          ) ||
-                                            normalizedSectionName.includes(
-                                              "v2",
-                                            ))) ||
-                                        (arrangementSection === "C" &&
-                                          (normalizedSectionName.includes(
-                                            "chorus",
-                                          ) ||
-                                            normalizedSectionName.includes(
-                                              "c",
-                                            )))
+                                {(() => {
+                                  // The song being edited, with the formatting saved with it
+                                  const songBeingEdited = songOfItem(editingContent);
+
+                                  // Typing in a section: rebuild the song's lyrics from all its
+                                  // sections, and carry the new text to the song's slides
+                                  const commitSectionEdit = (
+                                    sectionName: string,
+                                    newLyrics: string,
+                                  ) => {
+                                    const updatedLyrics = {
+                                      ...parsedLyrics,
+                                      [sectionName]: newLyrics,
+                                    };
+                                    const fullLyricsText =
+                                      joinSectionsAsLyrics(updatedLyrics);
+
+                                    setParsedLyrics(updatedLyrics);
+                                    setSongEditorContent(fullLyricsText);
+
+                                    if (
+                                      editingContent &&
+                                      editingContent.type === "song"
+                                    ) {
+                                      const updatedSong = {
+                                        ...(songBeingEdited ||
+                                          editingContent.content),
+                                        lyrics: fullLyricsText,
+                                      };
+                                      updateItemContent(
+                                        editingContent.id,
+                                        editingContent.title,
+                                        updatedSong,
+                                        createSlidesFromSong(
+                                          updatedSong,
+                                          editingContent.id,
+                                        ),
                                       );
-                                    });
+                                    }
+                                  };
 
-                                    if (!lyricEntry) return null;
+                                  return orderedSectionCards(
+                                    songArrangement,
+                                    parsedLyrics,
+                                  ).map(([sectionName, lyrics], index) => {
+                                    // What was saved for this section in the Song editor
+                                    const format = sectionFormat(
+                                      songBeingEdited,
+                                      sectionName,
+                                      String(lyrics).trim(),
+                                    );
+                                    const { fontSize: _savedSize, ...savedCss } =
+                                      lyricStyleToCss(format.lyricStyle);
 
-                                    const [sectionName, lyrics] =
-                                      lyricEntry;
                                     return (
                                       <div
                                         key={sectionName}
                                         className="bg-[#1a0f2e] rounded-xl border border-gray-600 p-6"
-                                        data-section={sectionName}
+                                        data-section-card={sectionName}
                                       >
                                         <h4 className="text-lg font-semibold text-white mb-4">
-                                          {sectionName.includes("V1") ||
-                                            sectionName
-                                              .toLowerCase()
-                                              .includes("verse 1")
-                                            ? "Verse 1"
-                                            : sectionName.includes(
-                                              "V2",
-                                            ) ||
-                                              sectionName
-                                                .toLowerCase()
-                                                .includes("verse 2")
-                                              ? "Verse 2"
-                                              : sectionName.includes(
-                                                "C",
-                                              ) ||
-                                                sectionName
-                                                  .toLowerCase()
-                                                  .includes("chorus")
-                                                ? "Chorus"
-                                                : sectionName}
+                                          {sectionCardLabel(sectionName)}
                                         </h4>
                                         <div className="bg-[#0f0624] rounded-lg border border-gray-700 p-4 min-h-fit">
-                                          <textarea
+                                          <AutoGrowTextarea
                                             ref={
                                               index === 0
                                                 ? textAreaRef
@@ -2075,139 +2090,20 @@ export const DashboardMainWorkspace = (props: any) => {
                                               // Set this textarea as the active target for WYSIWYG formatting
                                               const textarea =
                                                 e.target as HTMLTextAreaElement;
-                                              setActiveTextarea(
-                                                textarea,
-                                              );
+                                              setActiveTextarea(textarea);
 
                                               // Apply current formatting styles to make it WYSIWYG
                                               applyStylesToTextarea(
                                                 textarea,
                                                 editorState,
                                               );
-
-                                              // Auto-resize textarea to fit content
-                                              textarea.style.height =
-                                                "auto";
-                                              textarea.style.overflow =
-                                                "hidden";
-                                              const computedHeight =
-                                                Math.max(
-                                                  128,
-                                                  textarea.scrollHeight +
-                                                  16,
-                                                );
-                                              textarea.style.height =
-                                                computedHeight + "px";
-                                              if (
-                                                textarea.scrollHeight >
-                                                computedHeight
-                                              ) {
-                                                textarea.style.height =
-                                                  textarea.scrollHeight +
-                                                  20 +
-                                                  "px";
-                                              }
                                             }}
-                                            onChange={(e) => {
-                                              const newLyrics =
-                                                e.target.value;
-                                              const textarea =
-                                                e.target as HTMLTextAreaElement;
-
-                                              // Auto-resize textarea to fit content as user types
-                                              textarea.style.height =
-                                                "auto";
-                                              textarea.style.overflow =
-                                                "hidden";
-                                              const computedHeight =
-                                                Math.max(
-                                                  128,
-                                                  textarea.scrollHeight +
-                                                  16,
-                                                );
-                                              textarea.style.height =
-                                                computedHeight + "px";
-                                              if (
-                                                textarea.scrollHeight >
-                                                computedHeight
-                                              ) {
-                                                textarea.style.height =
-                                                  textarea.scrollHeight +
-                                                  20 +
-                                                  "px";
-                                              }
-
-                                              // Update ONLY this specific section to prevent cross-contamination
-                                              setParsedLyrics(
-                                                (prevLyrics: Record<string, string>) => {
-                                                  const updatedSection =
-                                                  {
-                                                    [sectionName]:
-                                                      newLyrics,
-                                                  };
-                                                  const updatedLyrics =
-                                                  {
-                                                    ...prevLyrics,
-                                                    ...updatedSection,
-                                                  };
-
-                                                  // Rebuild full lyrics from isolated section updates
-                                                  const fullLyricsText =
-                                                    Object.entries(
-                                                      updatedLyrics,
-                                                    )
-                                                      .map(
-                                                        ([
-                                                          section,
-                                                          text,
-                                                        ]) =>
-                                                          `[${section}]\nimport { Input } from "@/components/ui/input";
-import { XIcon, UndoIcon, RedoIcon, LinkIcon, ChevronDownIcon, ChevronRightIcon, Book, SearchIcon, Music, ChevronLeftIcon } from "lucide-react";
-import { OnScreenBibleEditor } from "@/features/dashboard/components/OnScreenBibleEditor";
-import { toast } from "@/hooks/use-toast";
-import qworshipLogoEdit from "@assets/Frame 2085662258_1754172975921.png";
-import qworshipLogo from "@assets/Group 1_1754122708985.png";
-import type { Slide } from "@/types";\n${text}`,
-                                                      )
-                                                      .join("\n\n");
-
-                                                  // Update editor content immediately
-                                                  setSongEditorContent(
-                                                    fullLyricsText,
-                                                  );
-
-                                                  // Update song content in state systems
-                                                  if (
-                                                    editingContent &&
-                                                    editingContent.type ===
-                                                    "song"
-                                                  ) {
-                                                    const updatedSong =
-                                                    {
-                                                      ...editingContent.content,
-                                                      lyrics:
-                                                        fullLyricsText,
-                                                    };
-
-                                                    // Create new slides from updated song
-                                                    const newSlides =
-                                                      createSlidesFromSong(
-                                                        updatedSong,
-                                                        editingContent.id
-                                                      );
-
-                                                    updateItemContent(
-                                                      editingContent.id,
-                                                      editingContent.title,
-                                                      updatedSong,
-                                                      newSlides,
-                                                    );
-                                                  }
-
-                                                  return updatedLyrics;
-                                                },
-                                              );
-                                            }}
+                                            onChange={(e) =>
+                                              commitSectionEdit(
+                                                sectionName,
+                                                e.target.value,
+                                              )
+                                            }
                                             className="w-full min-h-32 text-gray-200 text-sm bg-transparent border-none outline-none resize-none whitespace-pre-wrap leading-relaxed"
                                             data-section={sectionName}
                                             style={{
@@ -2234,14 +2130,36 @@ import type { Slide } from "@/types";\n${text}`,
                                               textDecoration:
                                                 `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""}`.trim() ||
                                                 "none",
+                                              // The section's saved style shows here too
+                                              ...savedCss,
                                             }}
                                             placeholder="Enter lyrics for this section..."
                                           />
                                         </div>
+
+                                        {/* The section as the screen shows it, with the
+                                            formatting saved in the Song editor (including
+                                            words that were formatted one by one) */}
+                                        {(format.lyricStyle ||
+                                          format.lyricHtml) && (
+                                          <div className="mt-3">
+                                            <p className="mb-1 text-xs uppercase tracking-wide text-gray-400">
+                                              On screen
+                                            </p>
+                                            <div className="rounded-lg border border-gray-700 bg-black/40 p-4 text-white whitespace-pre-line leading-relaxed">
+                                              <SongLyricsBody
+                                                slide={{
+                                                  content: String(lyrics),
+                                                  ...format,
+                                                }}
+                                              />
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     );
-                                  },
-                                )}
+                                  });
+                                })()}
                               </div>
                             </div>
                             {/* Custom Progress Bar for Edit & Preparation Scroller */}
@@ -3977,33 +3895,8 @@ import type { Slide } from "@/types";\n${text}`,
                     ) : selectedSlide.slide.type === "verse" ||
                       selectedSlide.slide.type === "chorus" ? (
                       <>
-                        <h1
-                          className="text-white text-3xl font-bold mb-6"
-                          style={{
-                            fontFamily:
-                              titleEditorState.selectedFont ||
-                              "Lufgord",
-                            fontSize:
-                              titleEditorState.fontSize || "18px",
-                            color:
-                              titleEditorState.textColor || "#ffffff",
-                            textAlign:
-                              (titleEditorState.textAlign as any) ||
-                              "center",
-                            fontWeight: titleEditorState.isBold
-                              ? "bold"
-                              : "normal",
-                            fontStyle: titleEditorState.isItalic
-                              ? "italic"
-                              : "normal",
-                            textDecoration:
-                              `${titleEditorState.isUnderline ? "underline" : ""} ${titleEditorState.isStrikethrough ? "line-through" : ""}`.trim() ||
-                              "none",
-                          }}
-                        >
-                          {selectedSlide.slide.songTitle ||
-                            selectedSlide.slide.title}
-                        </h1>
+                        {/* A song slide shows only its lyrics: no song title and no
+                            verse / chorus label */}
                         {/* Show author's name when enabled */}
                         {showAuthorOnScreen &&
                           editingContent?.content?.authors &&
@@ -4015,15 +3908,9 @@ import type { Slide } from "@/types";\n${text}`,
                               )}
                             </div>
                           )}
-                        <div className="text-purple-400 text-lg font-medium mb-4">
-                          {selectedSlide.slide.sectionLabel ||
-                            (selectedSlide.slide.type === "verse"
-                              ? "VERSE"
-                              : "CHORUS")}
-                        </div>
                         <div
                           key={`preview-song-content-${JSON.stringify(editorState)}`}
-                          className="text-gray-300 text-xl leading-relaxed space-y-2"
+                          className="text-gray-300 text-xl leading-relaxed space-y-2 whitespace-pre-line"
                           style={{
                             fontFamily:
                               editorState.styleFontFamily ||
@@ -4054,15 +3941,8 @@ import type { Slide } from "@/types";\n${text}`,
                               "",
                           }}
                         >
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html:
-                                selectedSlide.slide.content.replace(
-                                  /\n/g,
-                                  "<br/>",
-                                ),
-                            }}
-                          />
+                          {/* The song's saved formatting; text is shown as text, never as HTML */}
+                          <SongLyricsBody slide={selectedSlide.slide} />
                         </div>
                       </>
                     ) : selectedSlide.slide.type === "announcement" ? (
@@ -4380,7 +4260,30 @@ import type { Slide } from "@/types";\n${text}`,
                                   "none",
                               }}
                             >
-                              {slide.content || "No content available"}
+                              {/* The words with the formatting saved in the Song editor
+                                  (base style and formatted words), so this shows the edits */}
+                              {slide.content ? (
+                                <SongLyricsBody
+                                  slide={
+                                    slide.lyricStyle ||
+                                    slide.lyricHtml ||
+                                    slide.sectionName == null
+                                      ? slide
+                                      : {
+                                          // A slide made before formatting was saved with it:
+                                          // take the song's saved formatting for its section
+                                          ...slide,
+                                          ...sectionFormat(
+                                            songOfItem(editingContent),
+                                            slide.sectionName,
+                                            String(slide.content).trim(),
+                                          ),
+                                        }
+                                  }
+                                />
+                              ) : (
+                                "No content available"
+                              )}
                             </div>
                           </div>
                         ),
@@ -5024,6 +4927,45 @@ import type { Slide } from "@/types";\n${text}`,
                         {currentlyDisplayedSlide.content}
                       </div>
                     </div>
+                  ) : currentlyDisplayedSlide.type === "verse" ||
+                    currentlyDisplayedSlide.type === "chorus" ? (
+                    // A song shows only its lyrics (no song title, no verse / chorus label),
+                    // with the song's saved formatting, and the whole verse always fits
+                    <FitLyricsBox
+                      baseSize="3rem"
+                      deps={[
+                        currentlyDisplayedSlide.id,
+                        currentlyDisplayedSlide.content,
+                        currentlyDisplayedSlide.lyricHtml,
+                        currentlyDisplayedSlide.lyricStyle,
+                        editorState.styleFontFamily,
+                        editorState.selectedFont,
+                        editorState.isBold,
+                        editorState.isItalic,
+                      ]}
+                    >
+                      {(contentRef) => (
+                        <div
+                          ref={contentRef}
+                          className="text-white text-center max-w-4xl mx-auto px-8 whitespace-pre-line"
+                          style={{
+                            fontFamily: editorState.styleFontFamily || editorState.selectedFont || "Lufgord",
+                            fontSize: "3rem",
+                            color: editorState.styleColor || editorState.textColor || "#ffffff",
+                            textAlign: (editorState.textAlign as any) || "center",
+                            fontWeight: editorState.isBold ? "bold" : "normal",
+                            fontStyle: editorState.isItalic ? "italic" : "normal",
+                            textDecoration: `${editorState.isUnderline ? "underline" : ""} ${editorState.isStrikethrough ? "line-through" : ""} ${editorState.styleTextDecoration || ""}`.trim() || "none",
+                            textShadow: editorState.styleTextShadow || "",
+                            letterSpacing: editorState.styleLetterSpacing || "",
+                            textTransform: (editorState.styleTextTransform as any) || "",
+                            lineHeight: "1.2",
+                          }}
+                        >
+                          <SongLyricsBody slide={currentlyDisplayedSlide} />
+                        </div>
+                      )}
+                    </FitLyricsBox>
                   ) : (
                     <div className="text-center z-10 w-full flex flex-col items-center">
                       <h1
