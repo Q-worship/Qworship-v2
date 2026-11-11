@@ -94,6 +94,9 @@ import { Input } from "@/components/ui/input";
 // import { Switch } from "@/components/ui/switch";
 import { Switch } from "@/components/ui/switch";
 import { HandsfreeBibleWidget } from "@/features/dashboard/components/HandsfreeBibleWidget";
+import { bibleVersionNeedsPlan } from "@qworship/shared";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { useUpgradePrompt } from "@/components/upgrade/UpgradeContext";
 import { OnScreenBibleEditor } from "@/features/dashboard/components/OnScreenBibleEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useAudioDevices } from "@/hooks/use-audio-devices";
@@ -139,6 +142,12 @@ import { DashboardMainWorkspace } from "@/features/dashboard/components/Dashboar
 // CloudMediaTab, MyMediaTab, and MediaBrowserContent are imported from ../components/
 
 export const QworshipHomeV2Base = (): JSX.Element => {
+  // Which Bible versions this church's plan includes. Free keeps KJV; the
+  // rest are Standard and render locked rather than failing on click.
+  const { can: canUseFeature } = useCapabilities();
+  const canUseAllVersions = canUseFeature("bible.allVersions");
+  const { openUpgrade } = useUpgradePrompt();
+
   // Fetch current user data for profile display with error handling
   const {
     data: currentUserResponse,
@@ -5532,25 +5541,40 @@ export const QworshipHomeV2Base = (): JSX.Element => {
                       </button>
                     </div>
 
-                    {/* Bible Version Tabs */}
+                    {/* Bible Version Tabs. Versions beyond KJV are Standard:
+                        shown, dimmed, and opening the plan modal rather than
+                        selecting — the server refuses them anyway, and a tab
+                        that looks ready and then 402s mid-service is the one
+                        thing this must not do. */}
                     <div className="bg-[#444444] rounded-lg p-1 flex space-x-1 no-drag">
                       {["KJV", "NKJV", "NIV", "AMP", "GN", "MSG", "ESV"].map(
-                        (version) => (
-                          <button
-                            key={version}
-                            onClick={() => {
-                              setSelectedBibleVersion(version);
-                              setZustandBibleVersion(version.toLowerCase());
-                            }}
-                            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                              selectedBibleVersion === version
-                                ? "bg-[#8356F3] text-white"
-                                : "text-gray-300 hover:text-white hover:bg-gray-600"
-                            }`}
-                          >
-                            {version}
-                          </button>
-                        ),
+                        (version) => {
+                          const locked =
+                            bibleVersionNeedsPlan(version) && !canUseAllVersions;
+                          return (
+                            <button
+                              key={version}
+                              title={locked ? "Every Bible version comes with Standard" : undefined}
+                              onClick={() => {
+                                if (locked) {
+                                  openUpgrade("bible.allVersions");
+                                  return;
+                                }
+                                setSelectedBibleVersion(version);
+                                setZustandBibleVersion(version.toLowerCase());
+                              }}
+                              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                                locked
+                                  ? "text-gray-500 hover:bg-gray-700"
+                                  : selectedBibleVersion === version
+                                    ? "bg-[#8356F3] text-white"
+                                    : "text-gray-300 hover:text-white hover:bg-gray-600"
+                              }`}
+                            >
+                              {version}
+                            </button>
+                          );
+                        },
                       )}
                     </div>
 

@@ -29,9 +29,13 @@ export const BillingOverviewTab: React.FC = () => {
   }
 
   const runningLow = overview.branches.filter((b) => b.percentUsed >= 80).length;
+  // Read off the account's own status rather than the capability map: this is
+  // a question about how to LABEL a number, and the number came from here.
+  const trialing = overview.status === "trialing";
 
   return (
     <div className="space-y-[53px]">
+      {/* Trial hours are a one-off budget, not a monthly allowance. */}
       <div className="grid gap-[38px] sm:grid-cols-2 lg:grid-cols-3">
         <StatTile
           icon={<Church className="h-[15px] w-[15px]" />}
@@ -41,9 +45,14 @@ export const BillingOverviewTab: React.FC = () => {
         />
         <StatTile
           icon={<Clock className="h-[15px] w-[15px]" />}
-          label="Hours each church"
+          // A TRIAL'S HOURS ARE NOT MONTHLY. They are one budget for the whole
+          // thirty-day run, counted from the day it started — so calling them
+          // "per month" promises a refill on the 1st that never comes, and
+          // "kept to itself" describes a per-church rule that a single-church
+          // trial has no use for.
+          label={trialing ? "Hands-free Bible hours" : "Hours each church"}
           value={formatHours(overview.hoursPerChurch)}
-          caption="per month, kept to itself"
+          caption={trialing ? "for your whole trial" : "per month, kept to itself"}
         />
         <StatTile
           icon={<Wallet className="h-[15px] w-[15px]" />}

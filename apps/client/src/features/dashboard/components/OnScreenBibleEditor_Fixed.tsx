@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { SearchIcon, InfoIcon, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, Undo2, Redo2, ChevronDown, Palette } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from "@/lib/api";
+import { bibleVersionNeedsPlan } from '@qworship/shared';
+import { useCapabilities } from '@/hooks/useCapabilities';
+import { useUpgradePrompt } from '@/components/upgrade/UpgradeContext';
 
 interface OnScreenBibleEditorProps {
   content: any;
@@ -26,6 +29,11 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
 
   // Bible versions from your requirements
   const bibleVersions = ['KJV', 'NKJV', 'NIV', 'MSG', 'AMP'];
+
+  // Free keeps KJV; the rest come with Standard.
+  const { can: canUseFeature } = useCapabilities();
+  const canUseAllVersions = canUseFeature('bible.allVersions');
+  const { openUpgrade } = useUpgradePrompt();
 
   // Display options
   const [showBibleReference, setShowBibleReference] = useState<string>(content?.referenceDisplay || 'every-slide');
@@ -216,19 +224,31 @@ export const OnScreenBibleEditor: React.FC<OnScreenBibleEditorProps> = ({
           {/* Bible Version Selector */}
           <div className="flex items-center ml-auto">
             <div className="flex space-x-1">
-              {bibleVersions.map((version) => (
-                <button
-                  key={version}
-                  onClick={() => handleVersionChange(version)}
-                  className={`px-3 py-1 text-xs rounded ${
-                    activeVersion === version
-                      ? 'bg-[#8356F3] text-white'
-                      : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                  }`}
-                >
-                  {version}
-                </button>
-              ))}
+              {/* Beyond KJV is Standard. Locked rather than hidden, and
+                  opening the plan modal rather than selecting — the server
+                  refuses these versions anyway, so a button that looks ready
+                  would simply fail in front of a congregation. */}
+              {bibleVersions.map((version) => {
+                const locked = bibleVersionNeedsPlan(version) && !canUseAllVersions;
+                return (
+                  <button
+                    key={version}
+                    title={locked ? 'Every Bible version comes with Standard' : undefined}
+                    onClick={() =>
+                      locked ? openUpgrade('bible.allVersions') : handleVersionChange(version)
+                    }
+                    className={`px-3 py-1 text-xs rounded ${
+                      locked
+                        ? 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                        : activeVersion === version
+                          ? 'bg-[#8356F3] text-white'
+                          : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                    }`}
+                  >
+                    {version}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

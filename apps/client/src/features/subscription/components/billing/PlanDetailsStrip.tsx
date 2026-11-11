@@ -47,7 +47,13 @@ export const PlanDetailsStrip: React.FC<{ overview: BillingOverview }> = ({ over
               <span className="text-[28px] font-semibold leading-none text-white">
                 {formatHours(tightest.usedHours)}
               </span>
-              <span className="text-xs text-gray-500">/ {tightest.allowance} per church</span>
+              {/* "per church" describes the monthly per-church rule, which a
+                  trial does not follow: its hours are one budget for the whole
+                  run. Saying "per church" there invites a trialist to expect
+                  another two hours for every branch they add. */}
+              <span className="text-xs text-gray-500">
+                / {tightest.allowance}{overview.status === "trialing" ? " this trial" : " per church"}
+              </span>
             </div>
             <div className="mt-3">
               <Meter percent={tightest.percentUsed} warn={tightest.percentUsed >= 80} />
