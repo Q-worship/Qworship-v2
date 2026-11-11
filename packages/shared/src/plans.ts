@@ -129,7 +129,7 @@ export const TRIAL_DAYS = 30;
  *
  * Two, the same as free, which looks odd until you see what it is for. The
  * trial does not sell HOURS, it sells FEATURES — every Bible version, lower
- * thirds, sermons, the cloud media collections — and those cost us nothing to
+ * thirds, sermons, the cloud collections — and those cost us nothing to
  * hand out. Transcription is the one thing that bills a provider by the
  * minute, so it is the one thing the trial is tight with. Giving thirty
  * trial hours would spend ~$13.80 of Deepgram on an account that may never
@@ -311,10 +311,11 @@ export const PLANS: Record<PlanId, Plan> = {
       "Order of service builder",
       "Hands-free Bible — KJV only",
       "On-screen Bible search — KJV only",
-      "Song book and song builder — limited",
+      `Song book and song builder — up to ${FREE_SONG_LIMIT} songs`,
       "Media assets — limited to My Media",
       "Live projection — single window",
       "Slide canvas builder — text, shapes, images, layers, QR codes",
+      "PowerPoint import & back-up",
     ],
   },
   standard: {
@@ -336,7 +337,6 @@ export const PLANS: Record<PlanId, Plan> = {
       "Q-worship sermons",
       "Lower third builder & pre-built templates",
       "Advanced cloud media collections",
-      "PowerPoint import & back-up",
       "Usage visibility for every branch",
       "Priority support",
     ],

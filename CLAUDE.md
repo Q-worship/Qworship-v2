@@ -185,20 +185,24 @@ it once the legacy readers are gone.
 Roughly in the order worth doing. None is release-blocking; the two that were
 (entitlement reconciliation, and having any scheduler at all) are done.
 
-### 1. PowerPoint import is advertised but unenforceable
+### 1. Multi-window projection is the last unenforceable claim
 
-`powerpoint.import` is in `FEATURES` and listed on the Standard card, but the
-conversion happens entirely in the browser (`lib/pptxParser.ts`) and no server
-route sees the file. It can only ever be a UI lock.
+**The rule, now settled:** we do not advertise a line we cannot hold. A
+capability that only a greyed-out button enforces is a promise to paying
+customers that the product quietly breaks, and an invitation to anyone who
+opens devtools. If it cannot be gated on the server, it does not belong in
+`FEATURES` at all.
 
-That is the same situation the slide canvas was in, and the canvas was
-resolved by making it **wholly free** — we do not advertise a line we cannot
-hold. The same reasoning applies here and the decision has not been taken.
-Either drop it to free, or accept it as a UI-only lock and say so.
+The slide canvas and PowerPoint import were both resolved this way — both run
+entirely in the browser, so both are now **wholly free** and their ids are
+removed from the catalog rather than left ungated. A test pins this.
 
-Note the canvas resolution is now load-bearing: every canvas tool (text,
-shapes, images, layers, QR codes, effects) is free, and `canvas.rich` has been
-removed from the catalog rather than left ungated.
+`projection.multiWindow` is the same shape and has NOT been resolved: the
+desktop console opens its own windows and the server never sees it, yet free
+is still sold "Live projection — single window". Either drop it to free like
+the other two, or accept it as a desktop-side honour-system limit and say so
+plainly. `support.priority` is NOT in this category — it is a promise about
+people, not a software gate, so there is nothing to enforce.
 
 ### 2. Gift stacking
 

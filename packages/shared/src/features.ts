@@ -28,19 +28,25 @@ import type { PlanId } from "./plans.js";
  * they experience "I can't put a name on the screen". Fine-grained ids would
  * also make the plan cards and the lock badges disagree with each other.
  *
- * NOT HERE, AND DELIBERATELY: the slide canvas. Every one of its tools —
- * text, shapes, images, layers, QR codes, effects — is free, because the
- * editor is entirely client-side and saves its slides as JSON. The only way
- * to enforce a split would be to reject a save, which loses somebody's work
- * mid-build: a far worse failure than a free church getting a drop shadow.
- * We do not advertise a line we cannot hold, so there is no line.
+ * NOT HERE, AND DELIBERATELY: the slide canvas and PowerPoint import. Both
+ * happen entirely in the browser — the canvas saves slides as JSON, and
+ * `lib/pptxParser.ts` reads a .pptx without the server ever seeing the file
+ * — so neither can be refused anywhere that matters. The only "enforcement"
+ * available is rejecting a save, which loses somebody's work mid-build: a
+ * far worse failure than a free church getting a drop shadow.
+ *
+ * So both are free, in full. The rule this follows is worth keeping: WE DO
+ * NOT ADVERTISE A LINE WE CANNOT HOLD. A capability listed here that only a
+ * greyed-out button enforces is a promise to paying customers that the
+ * product quietly breaks, and an invitation to anyone who opens devtools.
+ * If something cannot be gated on the server, it does not belong in this
+ * list at all.
  */
 export type FeatureId =
   | "bible.allVersions"
   | "sermons"
   | "lowerThird.builder"
   | "media.cloudCollections"
-  | "powerpoint.import"
   | "projection.multiWindow"
   | "songs.full"
   | "branches"
@@ -93,12 +99,6 @@ export const FEATURES: Record<FeatureId, Feature> = {
     id: "media.cloudCollections",
     label: "Cloud media collections",
     blurb: "Standard adds the shared cloud collections. Free keeps My Media.",
-    enforceable: true,
-  },
-  "powerpoint.import": {
-    id: "powerpoint.import",
-    label: "PowerPoint import",
-    blurb: "Bring PowerPoint decks in, and keep a backup, on Standard.",
     enforceable: true,
   },
   "projection.multiWindow": {

@@ -1,6 +1,6 @@
 import {
   FEATURE_IDS, FREE_HOURS, FREE_SONG_LIMIT, TRIAL_DAYS, TRIAL_HOURS,
-  bibleVersionNeedsPlan, featureMapFor, featuresFor, hasFeature,
+  FEATURES, bibleVersionNeedsPlan, featureMapFor, featuresFor, hasFeature,
 } from '@qworship/shared';
 import { capabilitiesForAccount } from '../src/modules/billing/capability.service.js';
 import { trialGrantFor } from '../src/modules/billing/trial.service.js';
@@ -138,6 +138,17 @@ check(
   'the canvas is not a gated capability at all',
   !FEATURE_IDS.includes('canvas.rich' as never),
   'client-side only, so there is no line we could hold — we do not sell one',
+);
+check(
+  'PowerPoint import is not a gated capability either',
+  !FEATURE_IDS.includes('powerpoint.import' as never),
+  'parsed in the browser; the server never sees the file',
+);
+check(
+  'every gated capability the server can actually refuse is enforceable',
+  FEATURE_IDS.filter((id) => !FEATURES[id].enforceable)
+    .every((id) => id === 'projection.multiWindow' || id === 'support.priority'),
+  'anything else unenforceable in this list is a promise we cannot keep',
 );
 
 // ── Songs ──────────────────────────────────────────────────────────────────
