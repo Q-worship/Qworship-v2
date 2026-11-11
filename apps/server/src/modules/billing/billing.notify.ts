@@ -48,6 +48,50 @@ async function recipient(account: IAccount, kind: NoticeKind) {
   return owner;
 }
 
+/**
+ * The trial is running out, with the count of days left.
+ *
+ * Sent at 7 days, 1 day, and on the day itself. The trial expires exactly
+ * thirty times twenty-four hours after sign-up, to the minute, which can land
+ * mid-service on a Sunday morning — so the point of these is that nobody is
+ * ever surprised by it. A church that knows buys on Friday; a church that
+ * does not discovers it when the lower thirds stop working.
+ *
+ * Note what this does NOT say: it never threatens. Nothing is deleted when a
+ * trial ends, the free plan carries on working, and saying otherwise to sell
+ * a subscription would be a lie we would have to keep telling.
+ */
+export async function notifyTrialEnding(
+  account: IAccount,
+  daysLeft: number,
+): Promise<void> {
+  try {
+    const owner = await recipient(account, "trial");
+    if (!owner) return;
+
+    const when =
+      daysLeft === 0 ? "today" : daysLeft === 1 ? "tomorrow" : `in ${daysLeft} days`;
+
+    await createNotification({
+      userId: owner._id as any,
+      type: "trial_ending",
+      category: "subscription",
+      title:
+        daysLeft === 0
+          ? "Your free trial ends today"
+          : `Your free trial ends ${when}`,
+      message:
+        `Your trial of the full product ends ${when}. Upgrade to keep every Bible version, ` +
+        `lower thirds, sermons and the cloud collections — or carry on free, which keeps your ` +
+        `work and your KJV hands-free Bible.`,
+      icon: "Clock",
+      actionUrl: "/dashboard-subscription/plans",
+    });
+  } catch (error) {
+    console.error("[Billing] Could not notify trial ending:", error);
+  }
+}
+
 /** A card was declined. Stripe will retry; the owner should know regardless. */
 export async function notifyPaymentFailed(account: IAccount): Promise<void> {
   try {

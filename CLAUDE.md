@@ -213,12 +213,19 @@ Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 4. Trial notices
+### 4. Trial notices reach the app only, never an inbox
 
-The trial expires exactly 30x24h after signup, which can land mid-service on a
-Sunday. Nothing warns anybody first. In-app notices at 7 days, 1 day and
-day-of would both prevent the surprise and convert better, since a church that
-knows buys in advance. `notificationPreferences` already gates in-app notices.
+In-app notices now go out at **7 days, 1 day and the day itself**
+(`sendTrialEndingNotices`, hourly). Each milestone is claimed with a
+conditional `$addToSet` on `trialNoticesSent` before sending, so several app
+instances send one notice rather than one each, and a milestone that was
+overtaken is marked settled so a "7 days left" can never arrive after a
+"1 day left".
+
+**The gap: a church that does not open Q-worship between Monday and Sunday
+still gets no warning at all.** No billing email is sent anywhere in this
+product; `modules/auth/email.service.ts` has the transport and nothing in
+billing uses it. That is the remaining half of this feature.
 
 Stripe's own `trial_period_days` is still unused — our trial is ours, held on
 the Account, and does not require a card. That is deliberate; revisit only if

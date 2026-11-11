@@ -83,6 +83,20 @@ export function startScheduler(): void {
     },
   });
 
+  schedule({
+    name: "trial-ending-notices",
+    // Hourly, which is the right resolution for a notice measured in days:
+    // the day-of notice fires within three hours of the end, and nobody is
+    // helped by learning at 09:00 rather than 09:40. Each milestone is
+    // claimed with a conditional write, so running on several instances
+    // sends one notice, not one per instance.
+    everyMs: HOUR,
+    run: async () => {
+      const { sendTrialEndingNotices } = await import("../modules/billing/trial.service.js");
+      return sendTrialEndingNotices();
+    },
+  });
+
   console.log("[Scheduler] Started");
 }
 

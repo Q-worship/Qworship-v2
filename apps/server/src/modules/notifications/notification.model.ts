@@ -43,6 +43,13 @@ const NotificationSchema = new Schema<INotification>(
         'storage_low',
         'stream_peak',
         'buffer_prompt',
+        // The trial ending, at 7 days / 1 day / the day itself. A type
+        // missing from this list does not error anywhere a human will see —
+        // createNotification catches the validation failure — so the notice
+        // simply never arrives. That is how the billing notices above spent
+        // a release in silence; do not add a notify* function without adding
+        // its type here.
+        'trial_ending',
         // Admin-triggered
         'admin_feature',
         'admin_bible',

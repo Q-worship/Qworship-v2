@@ -1,6 +1,7 @@
 import { TRIAL_DAYS, TRIAL_HOURS, entitlementsFor } from "@qworship/shared";
 import { Account, type IAccount } from "../organization/account.model.js";
 import { syncLegacyEntitlement } from "./entitlement.service.js";
+import { notifyTrialEnding } from "./billing.notify.js";
 
 /**
  * The free trial: the whole product, for thirty days, once per account.
@@ -127,6 +128,86 @@ export async function settleToFree(account: IAccount): Promise<boolean> {
   await account.save();
   await syncLegacyEntitlement(account);
   return true;
+}
+
+/**
+ * When a trial-ending notice goes out, and what it says it is.
+ *
+ * Measured in HOURS because "one day left" and "it ends today" are only a few
+ * hours apart and `trialDaysRemaining` rounds up — it cannot tell them apart.
+ * Ordered least urgent first; the sweep below picks the LAST one whose
+ * threshold is met, so an account always gets the most urgent notice it has
+ * earned rather than a stale one.
+ */
+const TRIAL_NOTICES = [
+  { daysLeft: 7, withinHours: 7 * 24 },
+  { daysLeft: 1, withinHours: 24 },
+  { daysLeft: 0, withinHours: 3 },
+] as const;
+
+/**
+ * The most urgent notice an account with this many hours left has earned.
+ *
+ * Pure, and exported so the thresholds can be tested without a database —
+ * off-by-one here means a church is told its trial ends "tomorrow" on the
+ * wrong day, which is worse than not telling them.
+ */
+export function trialNoticeDue(hoursLeft: number): number | null {
+  if (hoursLeft <= 0) return null;
+  const due = [...TRIAL_NOTICES].reverse().find((n) => hoursLeft <= n.withinHours);
+  return due ? due.daysLeft : null;
+}
+
+/** Markers settled when `daysLeft` is sent: itself, plus any it overtook. */
+export function noticesSettledBy(daysLeft: number): number[] {
+  return TRIAL_NOTICES.filter((n) => n.daysLeft >= daysLeft).map((n) => n.daysLeft);
+}
+
+/**
+ * Tells owners their trial is running out, once per milestone.
+ *
+ * The trial expires exactly thirty times twenty-four hours after sign-up, to
+ * the minute, which can land in the middle of a Sunday service. Nothing is
+ * deleted when it does — the free plan carries on — but a church discovering
+ * it mid-sermon is the worst possible moment to ask for money. These exist so
+ * that nobody is surprised: a church that knows buys on Friday.
+ *
+ * IDEMPOTENT BY CLAIM, not by checking first. The marker is added with a
+ * conditional update that only matches an account which has not got it, so of
+ * two app instances sweeping the same row exactly one update modifies
+ * anything and exactly one notice is sent. Checking-then-sending would let
+ * both pass the check before either wrote.
+ */
+export async function sendTrialEndingNotices(): Promise<number> {
+  const now = Date.now();
+  const horizon = new Date(now + TRIAL_NOTICES[0].withinHours * 60 * 60 * 1000);
+
+  const ending = await Account.find({
+    status: "trialing",
+    trialEndsAt: { $gt: new Date(now), $lte: horizon },
+  });
+
+  let sent = 0;
+  for (const account of ending) {
+    const hoursLeft = (new Date(account.trialEndsAt!).getTime() - now) / (60 * 60 * 1000);
+
+    // The most urgent milestone this account has reached.
+    const due = trialNoticeDue(hoursLeft);
+    if (due === null) continue;
+
+    // Everything at or above this urgency is settled in one write: the one
+    // being sent, and any gentler ones it overtook. A "7 days left" notice
+    // arriving after a "1 day left" one would be worse than silence.
+    const claim = await Account.updateOne(
+      { _id: account._id, trialNoticesSent: { $ne: due } },
+      { $addToSet: { trialNoticesSent: { $each: noticesSettledBy(due) } } },
+    );
+    if (claim.modifiedCount !== 1) continue;
+
+    await notifyTrialEnding(account, due);
+    sent += 1;
+  }
+  return sent;
 }
 
 /**

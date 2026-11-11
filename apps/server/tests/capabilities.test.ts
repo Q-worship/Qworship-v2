@@ -3,7 +3,7 @@ import {
   FEATURES, bibleVersionNeedsPlan, featureMapFor, featuresFor, hasFeature,
 } from '@qworship/shared';
 import { capabilitiesForAccount } from '../src/modules/billing/capability.service.js';
-import { trialGrantFor } from '../src/modules/billing/trial.service.js';
+import { noticesSettledBy, trialGrantFor, trialNoticeDue } from '../src/modules/billing/trial.service.js';
 import { hoursPerChurchOf, isTrialing, trialDaysRemaining } from '../src/modules/organization/account.model.js';
 
 /**
@@ -203,6 +203,36 @@ check(
 check(
   'an actively subscribed user is not put on a trial',
   trialGrantFor({ subscriptionStatus: 'active' }).status === 'active',
+);
+
+// ── Trial-ending notices ───────────────────────────────────────────────────
+
+check('a trial with 10 days left earns no notice yet', trialNoticeDue(10 * 24) === null);
+check('7 days left earns the 7-day notice', trialNoticeDue(7 * 24) === 7);
+check('4 days left still sits on the 7-day notice', trialNoticeDue(4 * 24) === 7);
+check(
+  '25 hours left is still "7 days", not "tomorrow"',
+  trialNoticeDue(25) === 7,
+  'the 1-day notice starts at 24 hours, not before',
+);
+check('24 hours left earns the 1-day notice', trialNoticeDue(24) === 1);
+check('4 hours left still says tomorrow', trialNoticeDue(4) === 1);
+check('3 hours left earns the day-of notice', trialNoticeDue(3) === 0);
+check(
+  'an already-expired trial earns nothing',
+  trialNoticeDue(0) === null && trialNoticeDue(-5) === null,
+  'a "your trial ends today" after it ended is worse than silence',
+);
+
+check(
+  'sending the day-of notice also settles the ones it overtook',
+  JSON.stringify(noticesSettledBy(0)) === JSON.stringify([7, 1, 0]),
+  'so a 7-day notice cannot arrive after the trial has ended',
+);
+check(
+  'sending the 7-day notice settles only itself',
+  JSON.stringify(noticesSettledBy(7)) === JSON.stringify([7]),
+  'the later notices must still be free to fire',
 );
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

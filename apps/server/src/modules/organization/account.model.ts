@@ -77,6 +77,21 @@ export interface IAccount extends Document {
    * is in the middle of.
    */
   trialHours?: number;
+  /**
+   * Which trial-ending notices have already gone out, by days-left marker.
+   *
+   * A list rather than a flag because there are three (7 days, 1 day, and the
+   * day itself) and each must be sent exactly once. The scheduler claims a
+   * marker with a conditional `$addToSet` before sending, so two app
+   * instances sweeping the same account cannot both notify: whichever update
+   * matches first owns it, and the other modifies nothing.
+   *
+   * Markers that were overtaken are recorded as sent too. An account that
+   * first comes into view with two hours left gets the day-of notice, and 7
+   * and 1 are marked so they cannot fire afterwards — a "7 days left" notice
+   * arriving after the trial ended is worse than none.
+   */
+  trialNoticesSent?: number[];
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   /** Extra slots granted by an admin, outside the plan. */
@@ -109,6 +124,7 @@ const AccountSchema = new Schema<IAccount>(
     // Indexed because the scheduler sweeps for lapsed trials on it hourly.
     trialEndsAt: { type: Date, index: true },
     trialHours: { type: Number },
+    trialNoticesSent: { type: [Number], default: undefined },
     stripeCustomerId: { type: String },
     stripeSubscriptionId: { type: String },
     bonusSlots: { type: Number, default: 0 },
