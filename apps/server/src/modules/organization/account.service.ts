@@ -19,19 +19,30 @@ import { trialGrantFor } from "../billing/trial.service.js";
 /**
  * Which of an owner's accounts a new church should join.
  *
- * Pure, and exported so the rule can be tested: a paid account wins over an
- * unpaid one, and otherwise the first (oldest) wins. Of two candidates the
- * one carrying the Stripe subscription is the one a renewal will touch, and
- * attaching a church to the other would leave it quietly outside the thing
- * being paid for — visible to nobody until the bill arrives.
+ * Pure, and exported so the rule can be tested. In order: a live PAID
+ * account, then the oldest live one, then anything at all. Of two candidates
+ * the one carrying the Stripe subscription is the one a renewal will touch,
+ * and attaching a church to the other would leave it quietly outside the
+ * thing being paid for — visible to nobody until the bill arrives.
+ *
+ * Cancelled accounts are skipped while any live one exists. Duplicates found
+ * in production are retired by cancelling them rather than deleting them, so
+ * without this a new church could join a retired shell.
  *
  * Expects the list already ordered oldest-first.
  */
 export function pickOwnersAccount<T extends { planId?: string; status?: string }>(
   accounts: T[],
 ): T | undefined {
+  const live = accounts.filter((a) => a.status !== "cancelled");
   return (
-    accounts.find((a) => a.planId === "standard" && a.status !== "cancelled") ??
+    // A live paid account first: it is the one a renewal will touch.
+    live.find((a) => a.planId === "standard") ??
+    // Then the oldest live one. A CANCELLED account is never chosen while a
+    // live one exists — retired duplicates are left cancelled rather than
+    // deleted, and a new church joining one of those shells would be
+    // invisible to its owner and outside anything they later pay for.
+    live[0] ??
     accounts[0]
   );
 }

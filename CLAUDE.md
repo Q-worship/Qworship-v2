@@ -195,24 +195,31 @@ pressed repeatedly, and was capped by hand to 30. Nothing stops that
 recurring if a long `trialEndDate` is ever written again — the cap was a
 one-off script, not a rule. `pnpm audit:trials` is how you would notice.
 
-### 2. Two owners hold more than one account
+### 2. One account per owner, enforced at creation only
 
-`pnpm --filter @qworship/server audit:trials` lists trials and flags this.
 An Account owns the subscription and Organizations consume its slots, so a
-second account for the same person is a second free plan, a second slot and a
-second trial.
+second account for the same person is a second free plan, slot and trial.
 
-**The cause is fixed**: `ensureAccountFor` looked only at
-`organization.accountId`, so an owner creating a second church outside the
-branch-invite flow got a whole new account. It now joins the owner's existing
-one — paid first, then oldest, a rule `pickOwnersAccount` holds and tests
-cover. No new duplicates can appear.
+**Cause fixed**: `ensureAccountFor` looked only at `organization.accountId`,
+so an owner creating a second church outside the branch-invite flow got a
+whole new account. It now joins the owner's existing one — live paid first,
+then oldest live, never a cancelled shell. `pickOwnersAccount` holds that
+rule and tests cover it.
 
-**The existing two are deliberately left alone.** Merging them means
-re-pointing an Organization at the other Account, which takes the owner over
-their slot count on a plan they are already using. That is a conversation
-with a real church, not a script, and the same judgement `charge.refunded`
-makes about an already-redeemed gift.
+**The two found in production are cleared.** Both duplicates were empty — no
+churches, invites or bought hours — so `merge:duplicate-accounts` retired
+them by marking them `cancelled`, never deleting. `audit:trials` now reports
+"No owner holds more than one live account."
+
+That script deliberately refuses to move anything: a duplicate still holding
+a church is reported and left alone, because re-pointing it takes the owner
+over their slot count on a plan already in use. That is a conversation with a
+real church, the same judgement `charge.refunded` makes about a gift already
+redeemed.
+
+**Nothing enforces this below creation.** Onboarding can still create
+organizations without consulting slots, so an owner can hold more churches
+than their plan allows; the slot check only guards the branch-invite path.
 
 ### 3. Gift stacking
 

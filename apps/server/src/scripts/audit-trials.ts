@@ -33,8 +33,14 @@ async function run() {
 
   const now = Date.now();
   console.log(`\n${accounts.length} accounts carry trial dates.\n`);
+  // Count LIVE accounts only. A retired duplicate is already dealt with —
+  // merge:duplicate-accounts cancels rather than deletes them — and flagging
+  // it forever would train everybody to ignore this column.
   const byOwner = new Map<string, number>();
-  for (const a of accounts) byOwner.set(String(a.ownerId), (byOwner.get(String(a.ownerId)) ?? 0) + 1);
+  for (const a of accounts) {
+    if (a.status === 'cancelled') continue;
+    byOwner.set(String(a.ownerId), (byOwner.get(String(a.ownerId)) ?? 0) + 1);
+  }
   console.log('ACCOUNT                   OWNER                      STATUS     STARTED     ENDS        RAN   LEFT');
 
   for (const a of accounts) {
@@ -48,18 +54,22 @@ async function run() {
       `${String(a.status).padEnd(10)} ${started ? started.toISOString().slice(0,10) : '?'.padEnd(10)}  ` +
       `${ends.toISOString().slice(0,10)}  ${String(ran).padStart(4)}d ${String(left).padStart(5)}d` +
       `${left > 30 ? '   <-- over a month left' : ''}` +
-      `${(byOwner.get(String(a.ownerId)) ?? 0) > 1 ? '   <-- owner has several accounts' : ''}`,
+      `${a.status === 'cancelled' ? '   (retired duplicate)' : ''}` +
+      `${(byOwner.get(String(a.ownerId)) ?? 0) > 1 ? '   <-- owner has several LIVE accounts' : ''}`,
     );
   }
 
   const duplicated = [...byOwner.values()].filter((n) => n > 1).length;
   if (duplicated > 0) {
     console.log(
-      `\n${duplicated} owner(s) hold more than one account. An Account owns the ` +
-      `subscription and Organizations consume its slots, so a second account is a ` +
-      `second free plan. ensureAccountFor no longer creates these; existing ones ` +
-      `need a decision, not a script.`,
+      `\n${duplicated} owner(s) hold more than one LIVE account. An Account owns ` +
+      `the subscription and Organizations consume its slots, so a second account ` +
+      `is a second free plan. ensureAccountFor no longer creates these; clear up ` +
+      `existing ones with merge:duplicate-accounts (which only retires EMPTY ` +
+      `duplicates, and reports any that still hold a church).`,
     );
+  } else {
+    console.log('\nNo owner holds more than one live account.');
   }
   process.exit(0);
 }

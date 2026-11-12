@@ -274,6 +274,18 @@ check(
   'a failed card is not a reason to move a church off the plan it belongs to',
 );
 check(
+  'a cancelled account is skipped while a live one exists',
+  pickOwnersAccount([
+    { planId: 'free', status: 'cancelled', tag: 'retired' },
+    { planId: 'free', status: 'active', tag: 'live' },
+  ])?.tag === 'live',
+  'retired duplicates are cancelled, not deleted — a church must not join one',
+);
+check(
+  'a cancelled account is still returned when it is all there is',
+  pickOwnersAccount([{ planId: 'free', status: 'cancelled', tag: 'only' }])?.tag === 'only',
+);
+check(
   'among equals the oldest wins',
   pickOwnersAccount([
     { planId: 'free', status: 'active', tag: 'older' },
