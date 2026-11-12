@@ -195,45 +195,53 @@ pressed repeatedly, and was capped by hand to 30. Nothing stops that
 recurring if a long `trialEndDate` is ever written again — the cap was a
 one-off script, not a rule. `pnpm audit:trials` is how you would notice.
 
-### 2. One account per owner, enforced at creation only
+### 2. One account per owner
 
 An Account owns the subscription and Organizations consume its slots, so a
 second account for the same person is a second free plan, slot and trial.
 
-**Cause fixed**: `ensureAccountFor` looked only at `organization.accountId`,
-so an owner creating a second church outside the branch-invite flow got a
-whole new account. It now joins the owner's existing one — live paid first,
-then oldest live, never a cancelled shell. `pickOwnersAccount` holds that
-rule and tests cover it.
+**The cause was a RACE, not a missing check.** Two requests landing together
+on a church with no account — the billing overview and the capability lookup
+fired by one page load — both read `accountId` as empty and both created one.
+The two duplicates found in production were **six and nine milliseconds
+apart**, and each owner held a single church. Onboarding had nothing to do
+with it; gating onboarding would not have prevented either.
 
-**The two found in production are cleared.** Both duplicates were empty — no
-churches, invites or bought hours — so `merge:duplicate-accounts` retired
-them by marking them `cancelled`, never deleting. `audit:trials` now reports
-"No owner holds more than one live account."
+`ensureAccountFor` now decides the winner with one conditional write that
+only matches a church still without an account, so exactly one caller can
+match it. The loser retires the account it had just made and returns the
+winner's. Reading the owner's existing accounts first still happens, but it
+narrows the window rather than closing it — two concurrent calls can both
+find nothing there too — so the claim is what actually holds.
 
-That script deliberately refuses to move anything: a duplicate still holding
-a church is reported and left alone, because re-pointing it takes the owner
-over their slot count on a plan already in use. That is a conversation with a
-real church, the same judgement `charge.refunded` makes about a gift already
-redeemed.
+**The two found in production are cleared.** Both duplicates were empty, so
+`merge:duplicate-accounts` retired them by marking them `cancelled`, never
+deleting. `audit:trials` reports "No owner holds more than one live account."
 
-**Nothing enforces this below creation.** Onboarding can still create
-organizations without consulting slots, so an owner can hold more churches
-than their plan allows; the slot check only guards the branch-invite path.
+A hard unique index on `ownerId` would be the belt-and-braces version, and is
+deliberately NOT added: removing a branch from a network (`DELETE /branches/:id`)
+creates a fresh free account for that branch's owner, who may already hold a
+live one of their own. A unique index would refuse that removal.
 
-### 3. Gift stacking
+### 3. Onboarding does not check slots
+
+Separate from the above, and still open. `saveOrganization` creates a church
+without consulting `slotUsage`, so an owner can hold more churches than their
+plan allows. The slot check only guards the branch-invite path.
+
+### 4. Gift stacking
 
 `redeemGift` refuses an account with a live Stripe subscription but not one with
 an already-redeemed gift, so a second code silently overwrites the first's
 `expiresAt`. Either refuse, or extend the existing expiry.
 
-### 4. Billing visibility
+### 5. Billing visibility
 
 Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 5. Trial notices reach the app only, never an inbox
+### 6. Trial notices reach the app only, never an inbox
 
 In-app notices now go out at **7 days, 1 day and the day itself**
 (`sendTrialEndingNotices`, hourly). Each milestone is claimed with a
@@ -251,7 +259,7 @@ Stripe's own `trial_period_days` is still unused — our trial is ours, held on
 the Account, and does not require a card. That is deliberate; revisit only if
 card-up-front trials are wanted.
 
-### 6. Dashboard configuration (not code)
+### 7. Dashboard configuration (not code)
 
 - **Adaptive Pricing** must be switched on in the Stripe Dashboard — it is a
   setting, not an API call, and the whole currency approach depends on it. Note
@@ -261,7 +269,7 @@ card-up-front trials are wanted.
   signing secret. DONE — configured on the production host. The CLI secret
   remains local-only.
 
-### 7. Deferred features
+### 8. Deferred features
 
 - **Auto-refill / "Emergency Sunday Buffer"** from the design: buy hours
   automatically instead of stopping. Deliberately not built — it charges a card
@@ -275,7 +283,7 @@ card-up-front trials are wanted.
 - **Email.** `notificationPreferences` now gates in-app notices only; no billing
   email is sent at all. `modules/auth/email.service.ts` has the transport.
 
-### 8. Known gaps in testing
+### 9. Known gaps in testing
 
 - `pnpm test:capabilities` covers the plan/feature matrix, trial eligibility,
   trial expiry, the hours rules, the trial-notice thresholds and the

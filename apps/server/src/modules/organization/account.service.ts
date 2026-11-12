@@ -110,11 +110,43 @@ export async function ensureAccountFor(
     monthlyPrice: 0,
     ...trial,
   });
-  if (organization) {
-    organization.accountId = account._id as any;
-    await organization.save();
-  }
-  return account;
+
+  if (!organization) return account;
+
+  /*
+   * CLAIM THE CHURCH, DO NOT JUST ASSIGN IT.
+   *
+   * This is where duplicate accounts actually came from, and it is a race,
+   * not a missing check. Two requests landing together on a church with no
+   * account — the billing overview and the capability lookup, say, fired by
+   * one page load — both read `accountId` as empty, both fell through, and
+   * both created one. The two duplicates found in production were SIX and
+   * NINE MILLISECONDS apart, each owner holding a single church.
+   *
+   * Reading the owner's accounts first (above) narrows the window but cannot
+   * close it: two concurrent calls can both find nothing there too. So the
+   * winner is decided by one conditional write that only matches a church
+   * still without an account. Exactly one caller can match it.
+   */
+  const claimed = await Organization.findOneAndUpdate(
+    { _id: organization._id, $or: [{ accountId: { $exists: false } }, { accountId: null }] },
+    { $set: { accountId: account._id } },
+    { new: true },
+  );
+
+  if (claimed) return account;
+
+  // Somebody else claimed it in the meantime. Use THEIR account and retire
+  // the one just made, so the loser of the race does not leave a spare free
+  // plan behind. Cancelled rather than deleted: `pickOwnersAccount` skips a
+  // cancelled account, so nothing will ever join this shell, and the row
+  // stays for anyone asking later where it came from.
+  account.status = "cancelled";
+  await account.save();
+
+  const current = await Organization.findById(organization._id).select("accountId").lean();
+  const winner = current?.accountId ? await Account.findById(current.accountId) : null;
+  return winner ?? account;
 }
 
 export interface SlotUsage {
