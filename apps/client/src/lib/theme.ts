@@ -3,6 +3,7 @@ import {
   SLOT_PRICE_USD,
   HOURS_PER_SLOT,
   FREE_HOURS,
+  FREE_SONG_LIMIT,
   OVERAGE_PRICE_PER_HOUR_USD,
   formatUsd,
 } from '@qworship/shared'
@@ -483,9 +484,18 @@ const liveConsolePlans: PricingPlan[] = [
       'Online Voice Bible Search (KJV only)',
       'Complete Offline Voice Bible Search (KJV only)',
       'On-screen Bible - KJV only',
-      'Live projection - Single Screen',
+      // Projection, the slide canvas and PowerPoint import are all FREE now:
+      // each runs entirely in the browser or the desktop client, so none can
+      // be refused on the server, and we do not advertise a line we cannot
+      // hold. See packages/shared/src/features.ts.
+      'Live projection',
+      'Slide canvas builder - text, shapes, images, layers, QR codes',
+      'PowerPoint import & back-up',
       'Media Assets - limited to my media',
-      'Lower Third builder - Limited',
+      // NOT lower thirds. Free has none at all — every lower-third route is
+      // gated to Standard, so promising a "limited" builder here would be a
+      // control that 402s when a volunteer presses it.
+      `Song book and song builder - up to ${FREE_SONG_LIMIT} songs`,
       'NDI Connectivity',
       `${FREE_HOURS} hours of hands-free Bible a month`,
       'Community Support',
@@ -507,8 +517,9 @@ const liveConsolePlans: PricingPlan[] = [
       `Extra hours ${formatUsd(OVERAGE_PRICE_PER_HOUR_USD)} each`,
       'Online and offline Voice Bible Search (all translations)',
       'On-screen Bible - all translations',
-      'Live projection - Multiple Screens',
-      'Complete Songbook with import from DOCX and PDF',
+      // Projection is no longer a differentiator — free has it in full.
+      'Unlimited songs, with import from DOCX and PDF',
+      'Q-worship sermons',
       'Full Lower Third Builder',
       'Full Cloud media library access',
       'Usage visible per branch',
@@ -523,7 +534,7 @@ const liveConsoleIncludedFeatures: PricingIncludedFeature[] = [
   {
     title: 'Hands-Free Bible',
     description:
-      'Search 31,408 verses across 6 translations using only your voice. No typing, no clicking.',
+      'Search tens of thousands of verses across every translation we carry, using only your voice. No typing, no clicking.',
     icon: 'mic',
   },
   {

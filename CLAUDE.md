@@ -223,11 +223,22 @@ deliberately NOT added: removing a branch from a network (`DELETE /branches/:id`
 creates a fresh free account for that branch's owner, who may already hold a
 live one of their own. A unique index would refuse that removal.
 
-### 3. Onboarding does not check slots
+### 3. Signup never asks for a card, deliberately
 
-Separate from the above, and still open. `saveOrganization` creates a church
-without consulting `slotUsage`, so an owner can hold more churches than their
-plan allows. The slot check only guards the branch-invite path.
+`PlanSelectionOverlay` takes an `onProceedToCheckout` prop that is NEVER
+CALLED. Its plan buttons only set local selection state; the one live control
+is "Start free Trial", and `OnboardingFlow` points both props at the same
+handler. Choosing Standard during signup is cosmetic — everybody lands on a
+trial.
+
+That is the right behaviour and should stay: the trial is thirty days with no
+card, so a checkout at signup would ask for one before anybody has seen the
+product. The honest conversion moment is the trial-ended screen. The DEFECT
+is the dead prop, which implies a path that does not exist — delete it, or
+wire it only if card-up-front signup is actually wanted.
+
+Onboarding now DOES check slots: a second church costs one, the first never
+does, and an owner with no account yet always passes.
 
 ### 4. Gift stacking
 

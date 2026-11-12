@@ -3,6 +3,7 @@ import { Organization } from '../organization/organization.model.js';
 import { User } from '../auth/auth.model.js';
 import { Campaign } from '../referral/campaign.model.js';
 import { grantMembership, resolveActiveOrganization } from '../organization/organization.service.js';
+import { ensureAccountFor, slotUsage } from '../organization/account.service.js';
 import { notifyReferralNewOrganization } from '../notifications/notification.service.js';
 
 const TRIAL_DAYS = 30;
@@ -51,6 +52,40 @@ export async function saveOrganization(req: Request, res: Response) {
         { new: true, runValidators: true },
       );
     } else {
+      /*
+       * A SECOND church costs a slot. The first never does.
+       *
+       * This path created churches without consulting the plan at all, so an
+       * owner could hold more than they were entitled to and the slot model
+       * only really applied to the branch-invite flow. It is checked here
+       * rather than trusted to the client, which is where the plan modal
+       * lives but not where the rule can be enforced.
+       *
+       * Somebody with no account yet is signing up: let them through. There
+       * is nothing to count, and refusing a person their first church
+       * because billing has not caught up would be absurd.
+       */
+      const owned = await Organization.countDocuments({ ownerId: user._id });
+      if (owned > 0) {
+        const account = await ensureAccountFor(
+          (await Organization.findOne({ ownerId: user._id }).select('_id').lean())!._id as any,
+          user._id,
+        );
+        const slots = await slotUsage(account);
+        if (slots.available < 1) {
+          return res.status(402).json({
+            success: false,
+            message:
+              `Your plan covers ${slots.total} ${slots.total === 1 ? 'church' : 'churches'} and ` +
+              `you are using ${slots.used}. Standard adds a slot for every branch you add.`,
+            errorType: 'FEATURE_NOT_IN_PLAN',
+            feature: 'branches',
+            featureLabel: 'Branches and campuses',
+            slots,
+          });
+        }
+      }
+
       organization = await Organization.create({ ...details, ownerId: user._id });
       await grantMembership(user._id, organization._id as any, 'owner');
       user.activeOrganizationId = organization._id;
