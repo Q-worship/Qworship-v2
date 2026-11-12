@@ -16,6 +16,26 @@ import { trialGrantFor } from "../billing/trial.service.js";
  * so an owner cannot blanket-invite past their plan and sort it out later.
  */
 
+/**
+ * Which of an owner's accounts a new church should join.
+ *
+ * Pure, and exported so the rule can be tested: a paid account wins over an
+ * unpaid one, and otherwise the first (oldest) wins. Of two candidates the
+ * one carrying the Stripe subscription is the one a renewal will touch, and
+ * attaching a church to the other would leave it quietly outside the thing
+ * being paid for — visible to nobody until the bill arrives.
+ *
+ * Expects the list already ordered oldest-first.
+ */
+export function pickOwnersAccount<T extends { planId?: string; status?: string }>(
+  accounts: T[],
+): T | undefined {
+  return (
+    accounts.find((a) => a.planId === "standard" && a.status !== "cancelled") ??
+    accounts[0]
+  );
+}
+
 /** The account a church belongs to, creating a free one if it has none yet. */
 export async function ensureAccountFor(
   organizationId: mongoose.Types.ObjectId | string,
@@ -26,6 +46,36 @@ export async function ensureAccountFor(
     const existing = await Account.findById(organization.accountId);
     if (existing) return existing;
   }
+
+  /*
+   * ONE ACCOUNT PER OWNER, not one per church.
+   *
+   * This used to look only at `organization.accountId`, so an owner who
+   * created a SECOND church outside the branch-invite flow got a second
+   * Account — and with it a second free plan, a second slot and a second
+   * thirty-day trial. The whole slot model says the opposite: an Account
+   * owns the subscription and Organizations consume its slots, so a second
+   * church is meant to cost a slot, not arrive with a plan of its own.
+   *
+   * The invite path never had this problem because it attaches a branch to
+   * `ctx.account._id` explicitly. This closes the other door.
+   *
+   * A paid account wins over an unpaid one, and the oldest wins among
+   * equals: of two candidates the one carrying the Stripe subscription is
+   * the one a renewal will touch, and attaching a church to the other would
+   * leave it quietly outside the thing being paid for.
+   */
+  const ownersAccount = pickOwnersAccount(
+    await Account.find({ ownerId }).sort({ createdAt: 1 }),
+  );
+  if (ownersAccount) {
+    if (organization) {
+      organization.accountId = ownersAccount._id as any;
+      await organization.save();
+    }
+    return ownersAccount;
+  }
+
   // A church from before accounts existed: give it a free one in passing, so
   // this is not a migration everybody has to wait for.
   //

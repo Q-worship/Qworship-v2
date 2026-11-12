@@ -5,6 +5,7 @@ import {
 import { capabilitiesForAccount } from '../src/modules/billing/capability.service.js';
 import { noticesSettledBy, trialGrantFor, trialNoticeDue } from '../src/modules/billing/trial.service.js';
 import { hoursPerChurchOf, isTrialing, trialDaysRemaining } from '../src/modules/organization/account.model.js';
+import { pickOwnersAccount } from '../src/modules/organization/account.service.js';
 
 /**
  * The plan rules, exercised without a database or a server.
@@ -233,6 +234,51 @@ check(
   'sending the 7-day notice settles only itself',
   JSON.stringify(noticesSettledBy(7)) === JSON.stringify([7]),
   'the later notices must still be free to fire',
+);
+
+// ── One account per owner ──────────────────────────────────────────────────
+//
+// A second account for the same person is a second free plan, a second slot
+// and a second trial. ensureAccountFor used to create one whenever an owner
+// made a church outside the branch-invite flow.
+
+check(
+  'an owner with no account gets nothing to join',
+  pickOwnersAccount([]) === undefined,
+);
+check(
+  'a single account is the one to join',
+  pickOwnersAccount([{ planId: 'free', status: 'active', tag: 'a' }])?.tag === 'a',
+);
+check(
+  'the PAID account wins, even when it is newer',
+  pickOwnersAccount([
+    { planId: 'free', status: 'active', tag: 'free' },
+    { planId: 'standard', status: 'active', tag: 'paid' },
+  ])?.tag === 'paid',
+  'a church attached to the other one sits outside the subscription being paid for',
+);
+check(
+  'a cancelled paid account does not win',
+  pickOwnersAccount([
+    { planId: 'free', status: 'active', tag: 'free' },
+    { planId: 'standard', status: 'cancelled', tag: 'dead' },
+  ])?.tag === 'free',
+);
+check(
+  'a past_due paid account still wins',
+  pickOwnersAccount([
+    { planId: 'free', status: 'active', tag: 'free' },
+    { planId: 'standard', status: 'past_due', tag: 'paid' },
+  ])?.tag === 'paid',
+  'a failed card is not a reason to move a church off the plan it belongs to',
+);
+check(
+  'among equals the oldest wins',
+  pickOwnersAccount([
+    { planId: 'free', status: 'active', tag: 'older' },
+    { planId: 'free', status: 'active', tag: 'newer' },
+  ])?.tag === 'older',
 );
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

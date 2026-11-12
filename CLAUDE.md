@@ -185,35 +185,48 @@ it once the legacy readers are gone.
 Roughly in the order worth doing. None is release-blocking; the two that were
 (entitlement reconciliation, and having any scheduler at all) are done.
 
-### 1. Run `migrate:account-trials` before this ships
+### 1. Trial grace is capped, but nothing enforces the cap
 
-Not optional, and not yet done. `ensureAccountFor` decides a trial when it
-CREATES an account, reading the owner's legacy `trialStatus` / `trialEndDate`
-— but accounts already in the database never take that path, so without this
-script anyone mid-trial loses their remaining days on deploy day.
+`migrate:account-trials` has been RUN against production: six accounts kept
+the legacy trial days they were owed. Re-running it is a no-op.
 
-    pnpm --filter @qworship/server migrate:account-trials --dry-run   # read only
-    pnpm --filter @qworship/server migrate:account-trials             # applies
+One account then carried 33 days because the old extend button had been
+pressed repeatedly, and was capped by hand to 30. Nothing stops that
+recurring if a long `trialEndDate` is ever written again — the cap was a
+one-off script, not a rule. `pnpm audit:trials` is how you would notice.
 
-A dry run on 2026-11-11 found **6 accounts**, all carrying a live legacy
-trial ending 5–15 December, none skipped. Some run past thirty days because
-those people had used the old extend button; the script honours whatever they
-have rather than truncating it. Idempotent — it matches on `trialStartedAt`
-not existing, so a second pass finds nothing.
+### 2. Two owners hold more than one account
 
-### 2. Gift stacking
+`pnpm --filter @qworship/server audit:trials` lists trials and flags this.
+An Account owns the subscription and Organizations consume its slots, so a
+second account for the same person is a second free plan, a second slot and a
+second trial.
+
+**The cause is fixed**: `ensureAccountFor` looked only at
+`organization.accountId`, so an owner creating a second church outside the
+branch-invite flow got a whole new account. It now joins the owner's existing
+one — paid first, then oldest, a rule `pickOwnersAccount` holds and tests
+cover. No new duplicates can appear.
+
+**The existing two are deliberately left alone.** Merging them means
+re-pointing an Organization at the other Account, which takes the owner over
+their slot count on a plan they are already using. That is a conversation
+with a real church, not a script, and the same judgement `charge.refunded`
+makes about an already-redeemed gift.
+
+### 3. Gift stacking
 
 `redeemGift` refuses an account with a live Stripe subscription but not one with
 an already-redeemed gift, so a second code silently overwrites the first's
 `expiresAt`. Either refuse, or extend the existing expiry.
 
-### 3. Billing visibility
+### 4. Billing visibility
 
 Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 4. Trial notices reach the app only, never an inbox
+### 5. Trial notices reach the app only, never an inbox
 
 In-app notices now go out at **7 days, 1 day and the day itself**
 (`sendTrialEndingNotices`, hourly). Each milestone is claimed with a
@@ -231,16 +244,17 @@ Stripe's own `trial_period_days` is still unused — our trial is ours, held on
 the Account, and does not require a card. That is deliberate; revisit only if
 card-up-front trials are wanted.
 
-### 5. Dashboard configuration (not code)
+### 6. Dashboard configuration (not code)
 
 - **Adaptive Pricing** must be switched on in the Stripe Dashboard — it is a
   setting, not an API call, and the whole currency approach depends on it. Note
   Nigeria is *not* in its supported list and needs manual `currency_options`.
 - **Billing Portal** must be enabled, or "Manage payment method" errors.
 - **Production webhook endpoint** with the nine handled events, and its own
-  signing secret. The CLI secret is local-only.
+  signing secret. DONE — configured on the production host. The CLI secret
+  remains local-only.
 
-### 6. Deferred features
+### 7. Deferred features
 
 - **Auto-refill / "Emergency Sunday Buffer"** from the design: buy hours
   automatically instead of stopping. Deliberately not built — it charges a card
@@ -254,10 +268,15 @@ card-up-front trials are wanted.
 - **Email.** `notificationPreferences` now gates in-app notices only; no billing
   email is sent at all. `modules/auth/email.service.ts` has the transport.
 
-### 7. Known gaps in testing
+### 8. Known gaps in testing
 
 - `pnpm test:capabilities` covers the plan/feature matrix, trial eligibility,
-  trial expiry and the hours rules. Pure, so it needs no database or server.
+  trial expiry, the hours rules, the trial-notice thresholds and the
+  one-account-per-owner rule. Pure, so it needs no database or server.
+- `pnpm audit:trials` is read-only and needs a database. It reports remaining
+  trial grace and flags owners holding several accounts. Read the LEFT
+  column, not RAN: a trial inheriting a legacy start date shows a long run
+  without having had one.
 - `pnpm test:usage` covers range resolution for every option the usage screen
   offers (7/30/90 days, weekly, monthly, custom, Sunday-to-Sunday), and needs
   no database.
