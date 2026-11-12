@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import qworshipLogo from "@assets/Group 1_1754122708985.png";
 import { AccountMenu } from "@/features/dashboard/components/AccountMenu";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { useUpgradePrompt } from "@/components/upgrade/UpgradeContext";
 
 export interface AppHeaderProps {
   isBuildMode: boolean;
@@ -169,6 +171,11 @@ export function AppHeader({
   setIsNotificationsModalOpen,
   handleLogout,
 }: AppHeaderProps) {
+  // Sermons are the one menu entry a plan can withhold.
+  const { can } = useCapabilities();
+  const { openUpgrade } = useUpgradePrompt();
+  const canUseSermons = can("sermons");
+
   return (
     <div
       className={`fixed top-0 left-0 right-0 z-50 ${!isBuildMode ? "blur-sm" : ""}`}>
@@ -228,6 +235,15 @@ export function AppHeader({
             <div key={item.name} className="relative">
               <button
                 onClick={() => {
+                  // Sermons are Standard. Gated here as well as on the
+                  // server, because being sent to a page that then refuses
+                  // every request is a worse way to learn it than a locked
+                  // menu item that says what it costs.
+                  if (item.name === "Sermons" && !canUseSermons) {
+                    openUpgrade("sermons");
+                    setActiveDropdown(null);
+                    return;
+                  }
                   setActiveTab(item.name);
                   if (item.name === "Project") {
                     setActiveDropdown(
@@ -267,10 +283,15 @@ export function AppHeader({
                   else if (item.name === "Settings")
                     setActiveDropdown("Settings");
                 }}
+                title={item.name === "Sermons" && !canUseSermons
+                  ? "Q-worship sermons come with Standard"
+                  : undefined}
                 className={`text-sm font-medium px-3 py-2 rounded relative ${
-                  activeTab === item.name
-                    ? "text-white bg-[#3d2f5f]"
-                    : "text-gray-300 hover:text-white"
+                  item.name === "Sermons" && !canUseSermons
+                    ? "text-gray-500 hover:text-gray-400"
+                    : activeTab === item.name
+                      ? "text-white bg-[#3d2f5f]"
+                      : "text-gray-300 hover:text-white"
                 }`}>
                 {item.name}
                 {item.notification && (

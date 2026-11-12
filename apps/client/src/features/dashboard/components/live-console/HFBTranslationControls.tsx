@@ -22,6 +22,9 @@ import {
   type BibleVersionCode,
 } from "../../data/bibleTranslations";
 import { useHFBStore } from "../../hooks/useHFBStore";
+import { bibleVersionNeedsPlan } from "@qworship/shared";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { useUpgradePrompt } from "@/components/upgrade/UpgradeContext";
 import { useBibleProjectionStore } from "@/stores/useBibleProjectionStore";
 
 interface HFBTranslationControlsProps {
@@ -45,6 +48,23 @@ export function HFBTranslationControls({
   const [saving, setSaving] = useState(false);
   const activeCode = (activeVersion || hfbStore.hfbVersion).toLowerCase() as BibleVersionCode;
 
+  /*
+   * Free keeps KJV; the rest come with Standard.
+   *
+   * This control was missed when the other version pickers were locked,
+   * because it is data-driven from BIBLE_TRANSLATIONS rather than a literal
+   * list of codes — so a grep for the usual array found nothing here.
+   *
+   * It matters more than the others: the Live Console reads chapters from a
+   * local IndexedDB cache and only falls back to the gated API on a miss, so
+   * for any translation already downloaded there is NO server request to
+   * refuse. Here, the UI gate is the enforcement.
+   */
+  const { can } = useCapabilities();
+  const { openUpgrade } = useUpgradePrompt();
+  const canUseAllVersions = can("bible.allVersions");
+  const lockedFor = (code: string) => bibleVersionNeedsPlan(code) && !canUseAllVersions;
+
   const pinned = useMemo(
     () => hfbStore.hfbPinnedVersions
       .map(code => BIBLE_TRANSLATIONS.find(item => item.code === code))
@@ -66,6 +86,13 @@ export function HFBTranslationControls({
 
   const selectVersion = async (version: BibleVersionCode) => {
     setMoreOpen(false);
+    // Checked here as well as on each control, so no path to a locked
+    // translation is left open — the dropdown, the pinned row and anything
+    // added later all come through this one function.
+    if (lockedFor(version)) {
+      openUpgrade("bible.allVersions");
+      return;
+    }
     if (onVersionSelect) {
       await onVersionSelect(version);
       return;
@@ -161,14 +188,20 @@ export function HFBTranslationControls({
             key={item.code}
             onClick={() => void selectVersion(item.code)}
             className={`flex-1 py-1.5 text-[11px] font-bold rounded transition-all tracking-wide ${
-              activeCode === item.code ? "text-white" : "text-gray-300 hover:brightness-110"
+              lockedFor(item.code)
+                ? "text-gray-500"
+                : activeCode === item.code ? "text-white" : "text-gray-300 hover:brightness-110"
             }`}
-            style={activeCode === item.code
-              ? accent === "cyan"
-                ? { background: "#0e7490", boxShadow: "0 0 8px rgba(14,116,144,0.5)" }
-                : { background: "#6366f1", boxShadow: "0 0 8px rgba(99,102,241,0.5)" }
-              : { background: "#0d1020", border: "1px solid rgba(255,255,255,0.08)" }}
-            title={item.displayName}
+            style={lockedFor(item.code)
+              ? { background: "#0d1020", border: "1px solid rgba(255,255,255,0.04)", opacity: 0.5 }
+              : activeCode === item.code
+                ? accent === "cyan"
+                  ? { background: "#0e7490", boxShadow: "0 0 8px rgba(14,116,144,0.5)" }
+                  : { background: "#6366f1", boxShadow: "0 0 8px rgba(99,102,241,0.5)" }
+                : { background: "#0d1020", border: "1px solid rgba(255,255,255,0.08)" }}
+            title={lockedFor(item.code)
+              ? `${item.displayName} — comes with Standard`
+              : item.displayName}
           >
             {item.abbreviation}
           </button>
@@ -208,10 +241,19 @@ export function HFBTranslationControls({
                       activeCode === item.code ? "bg-cyan-950/50" : ""
                     }`}
                   >
-                    <span className="w-24 shrink-0 py-2 rounded-md bg-[#100326] text-center text-xs font-bold text-purple-200">
+                    <span className={`w-24 shrink-0 py-2 rounded-md bg-[#100326] text-center text-xs font-bold ${
+                      lockedFor(item.code) ? "text-purple-200/40" : "text-purple-200"
+                    }`}>
                       {item.abbreviation}
                     </span>
-                    <span className="min-w-0 text-xs leading-snug text-purple-100/70">{item.displayName}</span>
+                    <span className={`min-w-0 text-xs leading-snug ${
+                      lockedFor(item.code) ? "text-purple-100/35" : "text-purple-100/70"
+                    }`}>{item.displayName}</span>
+                    {lockedFor(item.code) && (
+                      <span className="ml-auto shrink-0 rounded-full bg-[#8b3dff]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b388ff]">
+                        Standard
+                      </span>
+                    )}
                   </DropdownMenuItem>
                 ))}
               </div>
@@ -248,7 +290,10 @@ export function HFBTranslationControls({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[430px] overflow-y-auto pr-1">
               {BIBLE_TRANSLATIONS.map(item => {
                 const checked = draftPinned.includes(item.code);
-                const disabled = !checked && draftPinned.length >= 6;
+                // Pinning a translation the plan does not include would put a
+                // locked button in the top bar permanently.
+                const locked = lockedFor(item.code);
+                const disabled = locked || (!checked && draftPinned.length >= 6);
                 return (
                   <div
                     key={item.code}
@@ -271,6 +316,11 @@ export function HFBTranslationControls({
                     <Switch checked={checked} disabled={disabled} tabIndex={-1} />
                     <strong className="w-16 text-xs text-purple-100">{item.abbreviation}</strong>
                     <span className="text-[11px] text-purple-100/55">{item.displayName}</span>
+                    {locked && (
+                      <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#b388ff]">
+                        Standard
+                      </span>
+                    )}
                   </div>
                 );
               })}

@@ -1,5 +1,7 @@
 import { useLiveConsoleStore } from "../../hooks/useLiveConsoleStore";
 import { useLowerThirdStore } from "@/stores/useLowerThirdStore";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { useUpgradePrompt } from "@/components/upgrade/UpgradeContext";
 import { useHFBStore } from "../../hooks/useHFBStore";
 import { Radio, Settings, Image, X, Eye, EyeOff } from "lucide-react";
 import { SongLyricsBody } from "@/features/songs/SongLyricsBody";
@@ -12,6 +14,9 @@ export function LiveConsoleRightPanel({ liveWindow }: RightPanelProps) {
   const store = useLiveConsoleStore();
   const hfbStore = useHFBStore();
   const { isVisible, setIsVisible, activeData } = useLowerThirdStore();
+  const { can } = useCapabilities();
+  const { openUpgrade } = useUpgradePrompt();
+  const canUseLowerThirds = can("lowerThird.builder");
 
   return (
     <div className="w-[380px] shrink-0 flex flex-col bg-[#0d0d1a] border-l border-gray-800 overflow-hidden">
@@ -146,15 +151,29 @@ export function LiveConsoleRightPanel({ liveWindow }: RightPanelProps) {
           <div className="flex items-center justify-between" style={{ marginBottom: '-3px' }}>
             <span className="text-[10px] font-bold tracking-widest text-gray-500 uppercase">Lower Third</span>
             <div className="flex items-center gap-1">
+              {/* Lower thirds are Standard — every one of their routes is
+                  gated, so pushing one here would 402 in front of a
+                  congregation. Locked rather than hidden: a volunteer who
+                  cannot find them raises a ticket, one who sees them locked
+                  knows what Standard buys. */}
+              {!canUseLowerThirds && (
+                <span className="rounded-full bg-[#8b3dff]/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#b388ff]">
+                  Standard
+                </span>
+              )}
               <button
-                onClick={() => setIsVisible(!isVisible)}
+                onClick={() => canUseLowerThirds
+                  ? setIsVisible(!isVisible)
+                  : openUpgrade("lowerThird.builder")}
                 className={`p-1 rounded transition-colors ${isVisible ? 'text-green-400 hover:text-green-300 hover:bg-green-900/30' : 'text-gray-600 hover:text-gray-400 hover:bg-gray-800'}`}
                 title={isVisible ? 'Hide lower third' : 'Show lower third'}
               >
                 {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
               <button
-                onClick={() => store.setIsLowerThirdSettingsOpen(true)}
+                onClick={() => canUseLowerThirds
+                  ? store.setIsLowerThirdSettingsOpen(true)
+                  : openUpgrade("lowerThird.builder")}
                 className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
                 title="Lower Third Settings"
               >

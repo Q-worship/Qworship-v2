@@ -240,19 +240,40 @@ wire it only if card-up-front signup is actually wanted.
 Onboarding now DOES check slots: a second church costs one, the first never
 does, and an owner with no account yet always passes.
 
-### 4. Gift stacking
+### 4. The Live Console reads Bible text from IndexedDB, not the API
+
+`fetchHFBChapter` tries a local IndexedDB cache first and only falls back to
+the gated `/api/bible/*` route on a MISS — the log line says "skip cloud
+fallback" in as many words. The workspace also preloads several translations
+at startup regardless of plan.
+
+So for any translation already downloaded, **there is no server request to
+refuse** and `bible.allVersions` is enforced by the UI alone on that path.
+Every version picker is now locked (four of them: the HFB widget, the
+dashboard Scripture row, the on-screen editor, and the Live Console's
+`HFBTranslationControls`), which stops the ordinary case — but it is a UI
+lock, not a gate.
+
+The honest fix is to **stop preloading translations the plan does not
+include**: a free church would simply not hold NIV locally, the cache miss
+would reach the gated route, and the rule would be enforced where it is
+claimed. That is also a startup-time win. Until then, this sits in the same
+category as the canvas and PowerPoint import — and by the rule above, that
+category belongs either enforced or free.
+
+### 5. Gift stacking
 
 `redeemGift` refuses an account with a live Stripe subscription but not one with
 an already-redeemed gift, so a second code silently overwrites the first's
 `expiresAt`. Either refuse, or extend the existing expiry.
 
-### 5. Billing visibility
+### 6. Billing visibility
 
 Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 6. Trial notices reach the app only, never an inbox
+### 7. Trial notices reach the app only, never an inbox
 
 In-app notices now go out at **7 days, 1 day and the day itself**
 (`sendTrialEndingNotices`, hourly). Each milestone is claimed with a
@@ -270,7 +291,7 @@ Stripe's own `trial_period_days` is still unused — our trial is ours, held on
 the Account, and does not require a card. That is deliberate; revisit only if
 card-up-front trials are wanted.
 
-### 7. Dashboard configuration (not code)
+### 8. Dashboard configuration (not code)
 
 - **Adaptive Pricing** must be switched on in the Stripe Dashboard — it is a
   setting, not an API call, and the whole currency approach depends on it. Note
@@ -280,7 +301,7 @@ card-up-front trials are wanted.
   signing secret. DONE — configured on the production host. The CLI secret
   remains local-only.
 
-### 8. Deferred features
+### 9. Deferred features
 
 - **Auto-refill / "Emergency Sunday Buffer"** from the design: buy hours
   automatically instead of stopping. Deliberately not built — it charges a card
@@ -294,7 +315,7 @@ card-up-front trials are wanted.
 - **Email.** `notificationPreferences` now gates in-app notices only; no billing
   email is sent at all. `modules/auth/email.service.ts` has the transport.
 
-### 9. Known gaps in testing
+### 10. Known gaps in testing
 
 - `pnpm test:capabilities` covers the plan/feature matrix, trial eligibility,
   trial expiry, the hours rules, the trial-notice thresholds and the
