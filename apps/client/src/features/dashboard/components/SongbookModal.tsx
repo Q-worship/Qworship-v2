@@ -18,6 +18,8 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { parseLyricsForEditor } from "@/features/songs/songLyrics";
 import { describeSongTime, formatExactTime } from "@/features/songs/songTime";
 import { useNow } from "@/features/songs/useNow";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { useUpgradePrompt } from "@/components/upgrade/UpgradeContext";
 
 // Reads saved lyrics into sections the same way the Song editor does, so the sections (and the
 // verse order tags that point at them) are exactly the ones that were saved
@@ -66,6 +68,11 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
   savedSongs,
   onAddToServiceSection,
 }) => {
+  // Free holds a capped library and cannot bulk import; Standard does both.
+  const { can } = useCapabilities();
+  const { openUpgrade } = useUpgradePrompt();
+  const canImportSongs = can("songs.full");
+
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [sortBy, setSortBy] = useState("Suggested");
@@ -381,11 +388,25 @@ export const SongbookModal: React.FC<SongbookModalProps> = ({
             <PlusIcon size={16} className="mr-2" />
             Add new song
           </Button>
+          {/* Bulk import is Standard, and not only as a feature: one upload
+              would walk straight past the free plan's song cap. Locked here
+              so it is learned from a button rather than from a refusal after
+              choosing a file. */}
           <Button
-            onClick={() => setIsImportModalOpen(true)}
-            className="bg-[#8356F3] hover:bg-[#6d42c7] text-white">
+            onClick={() => canImportSongs
+              ? setIsImportModalOpen(true)
+              : openUpgrade("songs.full")}
+            title={canImportSongs ? undefined : "Importing songs comes with Standard"}
+            className={canImportSongs
+              ? "bg-[#8356F3] hover:bg-[#6d42c7] text-white"
+              : "bg-[#8356F3]/30 text-white/50 hover:bg-[#8356F3]/40"}>
             <Download size={16} className="mr-2" />
             Import song
+            {!canImportSongs && (
+              <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
+                Standard
+              </span>
+            )}
           </Button>
         </div>
       </div>
