@@ -1,8 +1,9 @@
 import { buildUrl } from "@/lib/queryClient";
 import type { SlideImage } from "@/lib/pptxParser";
 
-// Picture data can't live inside the slides themselves, so pictures are uploaded to
-// the user's media library (same endpoint as Import Files) and slides keep URLs.
+// Picture data can't live inside the slides themselves, so pictures are uploaded as media
+// assets (same endpoint as Import Files) and slides keep URLs. They are flagged as belonging
+// to the presentation, so they work like any asset but do not show up in "My Assets".
 
 // The server re-compresses and stores the files of one request one after another, so
 // the speed-up comes from several requests in flight at once, each carrying one picture.
@@ -41,6 +42,7 @@ const uploadOne = async (image: SlideImage, title: string): Promise<string> => {
       tags: ["Imported Presentation"],
       categories: ["Slides"],
       description: "",
+      hiddenFromLibrary: true,
     }),
   );
 

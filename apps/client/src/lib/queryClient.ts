@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { withoutInternalAssets } from "./mediaVisibility";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -134,7 +135,10 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const body = await res.json();
+    // "My Assets" is the user's own library: the pictures of imported presentations are
+    // stored as assets (the slides load them) but are not listed
+    return queryKey[0] === "/api/user-media-assets" ? withoutInternalAssets(body) : body;
   };
 
 // Admin query function (now identical to getQueryFn since adminKey bypass was removed)

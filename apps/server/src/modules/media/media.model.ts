@@ -28,12 +28,28 @@ const mediaSchema = new mongoose.Schema({
   cloudKey: { type: String }, // The object key to interact directly mapping to Cloudflare R2
   isPublished: { type: Boolean, default: false },
   isPremium: { type: Boolean, default: false },
-  lastUsed: { type: Date }
+  lastUsed: { type: Date },
+  // Pictures that belong to something else (the slides of an imported PowerPoint). They are
+  // stored and served like any asset, so the slides keep working, but they are not part of the
+  // user's own library and are left out of "My Assets".
+  hiddenFromLibrary: { type: Boolean, default: false }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
+
+/** The tag the PowerPoint import puts on its pictures (rows from before the flag existed have it). */
+export const IMPORTED_PRESENTATION_TAG = 'Imported Presentation';
+
+/**
+ * What belongs in a user's own library: not the pictures of an imported presentation, whether
+ * they carry the flag or only the tag.
+ */
+export const visibleInLibraryFilter = {
+  hiddenFromLibrary: { $ne: true },
+  tags: { $ne: IMPORTED_PRESENTATION_TAG },
+};
 
 // Virtual ID to match frontend id
 mediaSchema.virtual('id').get(function() {

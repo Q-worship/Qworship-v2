@@ -380,8 +380,13 @@ export const QworshipHomeV2Base = (): JSX.Element => {
   // Slide Editor State (selectedSlide migrated)
   // Modal hooks migrated to Context
   const [importReport, setImportReport] = useState<ImportHealthReport | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date(2025, 4, 25)); // May 25, 2025 (Sunday)
-  const [currentMonth, setCurrentMonth] = useState(new Date(2025, 4, 1)); // May 2025
+  // The date shown in the sidebar: today's date until a project's own saved date is loaded (and
+  // for a project created now, its creation date). It used to be a fixed day in May 2025.
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [selectedBibleMode, setSelectedBibleMode] = useState(
     "Classic Hands-free Bible",
   );

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Media } from './media.model.js';
+import { Media, visibleInLibraryFilter } from './media.model.js';
 import path from 'path';
 import fs from 'fs';
 import { objectStorage } from './s3.service.js';
@@ -76,6 +76,8 @@ async function prepareUpload(file: Express.Multer.File, index: number, req: Requ
     description: metadata.description || '',
     tags: metadata.tags || [],
     categories: metadata.categories || [],
+    // Set by the PowerPoint import: its pictures are not part of the user's library
+    hiddenFromLibrary: metadata.hiddenFromLibrary === true,
     processedBuffer,
     finalFileSize,
   };
@@ -153,6 +155,7 @@ export const uploadMedia = async (req: Request, res: Response) => {
         uploadedBy: (req as any).user._id,
         organizationId,
         usageCount: 0,
+        hiddenFromLibrary: item.hiddenFromLibrary,
       });
 
       await newMedia.save();
@@ -196,7 +199,8 @@ export const getUserMediaStats = async (req: Request, res: Response) => {
   try {
     const assetsCount = await Media.countDocuments({
       isCloud: { $ne: true },
-      uploadedBy: (req as any).user._id
+      uploadedBy: (req as any).user._id,
+      ...visibleInLibraryFilter,
     });
     
     // For now returning basic hasUploadedAssets based on existence
@@ -213,9 +217,12 @@ export const getUserMediaStats = async (req: Request, res: Response) => {
 // 2. List User Media
 export const listUserMedia = async (req: Request, res: Response) => {
   try {
-    const assets = await Media.find({ 
+    // Without the pictures of imported presentations: they are not the user's own library
+    // (the slides still load them by id)
+    const assets = await Media.find({
       isCloud: { $ne: true },
-      uploadedBy: (req as any).user._id 
+      uploadedBy: (req as any).user._id,
+      ...visibleInLibraryFilter,
     }).sort({ createdAt: -1 });
     res.json({ assets });
   } catch (error) {

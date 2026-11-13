@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { buildUrl } from "@/lib/queryClient";
+import { visibleMediaAssets } from "@/lib/mediaVisibility";
 
 // ── Auth Helper ─────────────────────────────────────────────────────────────────
 
@@ -160,7 +161,8 @@ export function BackgroundMediaPicker({
 
       // Server returns { assets: [...] } envelope
       const json = await res.json();
-      const rawAssets: any[] = json.assets ?? json;
+      // (without the pictures of imported presentations: they are not the user's library)
+      const rawAssets: any[] = visibleMediaAssets(json.assets ?? json);
 
       return rawAssets
         .filter((a: any) => {
