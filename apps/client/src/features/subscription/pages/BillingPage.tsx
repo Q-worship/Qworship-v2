@@ -35,7 +35,7 @@ export const BillingPage: React.FC = () => {
   const active: TabSlug = TABS.some((t) => t.slug === requested) ? requested : "";
 
   return (
-    <div className="min-h-full bg-account-bg text-white">
+    <div className="h-full overflow-y-auto hide-scrollbar bg-account-bg text-white">
       {/*
         The export puts this on a 1183px column with 128px between tab labels
         and 38px between the stat tiles — wider and far airier than the
@@ -51,8 +51,9 @@ export const BillingPage: React.FC = () => {
           Review payments, branches, invoices and your plan.
         </p>
 
-        {/* Scrolls rather than squeezing: five tabs do not fit a phone. */}
-        <nav className="mt-[46px] flex gap-8 overflow-x-auto border-b border-white/10 lg:mt-[66px] lg:gap-[128px]">
+        {/* Scrolls rather than squeezing: five tabs do not fit a phone. The
+            scrollbar is hidden so the bar does not grow by its height. */}
+        <nav className="hide-scrollbar mt-[46px] flex gap-8 overflow-x-auto border-b border-white/10 lg:mt-[66px] lg:gap-[128px]">
           {TABS.map((tab) => {
             const isActive = tab.slug === active;
             return (

@@ -42,6 +42,7 @@ const currentUserHandler = [protect, async (req: any, res: any) => {
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         role: req.user.role,
+        churchRole: req.user.churchRole,
         roleId: req.user.roleId?._id ?? req.user.roleId ?? null,
         mustChangePassword: !!req.user.mustChangePassword,
         permissions: req.user.role === 'superadmin' ? ['*'] : (req.user.roleId?.permissions || []),

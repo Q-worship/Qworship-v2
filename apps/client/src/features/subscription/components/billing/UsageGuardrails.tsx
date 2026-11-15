@@ -84,6 +84,9 @@ export const EmergencySundayBuffer: React.FC<{
   const { notifications, setNotification, saving } = usePreferences();
   const purchase = usePurchaseTopUp();
   const price = EMERGENCY_HOURS * OVERAGE_PRICE_PER_HOUR_USD;
+  // The one-click button is the buffer's way out; with the buffer off it is
+  // greyed rather than hidden, so the toggle visibly explains the button.
+  const bufferOn = notifications.autoRefill;
 
   return (
     <section className={cardClass}>
@@ -114,7 +117,7 @@ export const EmergencySundayBuffer: React.FC<{
 
         <button
           type="button"
-          disabled={!church || purchase.isPending}
+          disabled={!bufferOn || !church || purchase.isPending}
           onClick={() =>
             church && purchase.mutate({ organizationId: church.organizationId, hours: EMERGENCY_HOURS })
           }
@@ -128,7 +131,9 @@ export const EmergencySundayBuffer: React.FC<{
         </button>
 
         <p className="text-center text-[11px] leading-5 text-gray-500">
-          {church ? (
+          {!bufferOn ? (
+            <>Turn on the Auto-Refill Buffer to enable one-click emergency top-ups.</>
+          ) : church ? (
             <>
               Billed at {formatUsd(OVERAGE_PRICE_PER_HOUR_USD)}/hr for {church.name} · Hours expire
               with the month and are not transferable

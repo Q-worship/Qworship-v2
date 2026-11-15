@@ -1,5 +1,6 @@
 import { buildUrl } from "@/lib/queryClient";
 import { get, put, readableError } from "@/lib/apiResult";
+import type { ChurchRole } from "@qworship/shared";
 
 /**
  * The signed-in person: their profile, their photo, their password.
@@ -21,6 +22,8 @@ export interface CurrentUser {
   profilePicture?: string;
   /** The authorization role, not a job title. Displayed, never edited here. */
   role: string;
+  /** Job title at the church (`CHURCH_ROLES`). The one role a person picks. */
+  churchRole?: ChurchRole;
   accountType?: string;
   planType?: string;
   emailVerified?: boolean;
@@ -68,6 +71,7 @@ export interface ProfileUpdate {
   lastName?: string;
   phoneNumber?: string;
   bio?: string;
+  churchRole?: ChurchRole;
   username?: string;
   profilePicture?: string;
   /** Partial: the server merges key by key rather than replacing the object. */

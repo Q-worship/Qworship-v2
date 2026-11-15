@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { CHURCH_ROLES, type ChurchRole } from '@qworship/shared';
 
 export interface IUser extends Document {
   username?: string;
@@ -11,6 +12,8 @@ export interface IUser extends Document {
   agreeToMarketing?: boolean;
   organizationName?: string;
   bio?: string;
+  /** Job title at the church, chosen by the person. NOT authorization — see `role`. */
+  churchRole?: ChurchRole;
   accountType?: string;
   isActive?: boolean;
   emailVerified?: boolean;
@@ -73,6 +76,7 @@ const UserSchema = new Schema<IUser>(
     agreeToMarketing: { type: Boolean, default: false },
     organizationName: { type: String },
     bio: { type: String },
+    churchRole: { type: String, enum: CHURCH_ROLES.map((r) => r.value) },
     accountType: { type: String, default: 'free' },
     isActive: { type: Boolean, default: true },
     emailVerified: { type: Boolean, default: false },

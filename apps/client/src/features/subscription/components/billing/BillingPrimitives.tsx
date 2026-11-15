@@ -63,7 +63,7 @@ export const Panel: React.FC<{
 
 /** Tables stay wide and scroll; the page itself must never scroll sideways. */
 export const TableScroll: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="-mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">{children}</div>
+  <div className="hide-scrollbar -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">{children}</div>
 );
 
 export const EmptyState: React.FC<{ title: string; body: string }> = ({ title, body }) => (

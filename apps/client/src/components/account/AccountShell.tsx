@@ -46,7 +46,9 @@ interface AccountPageProps {
  * drops below the fields instead of squeezing them.
  */
 export const AccountPage: React.FC<AccountPageProps> = ({ title, subtitle, breadcrumb, sidecar, children }) => (
-  <div className="min-h-full bg-[#1A102D] bg-profile-bg text-white">
+  // The page is its own scroller, so the shell's container never overflows and
+  // the hidden scrollbar is scoped to account pages rather than every screen.
+  <div className="h-full overflow-y-auto hide-scrollbar bg-[#1A102D] bg-profile-bg text-white">
     {/*
       Geometry taken from the design export: a 1002px content column split
       579 / 101 / 323 between fields, gutter and explainer, under a 45px title

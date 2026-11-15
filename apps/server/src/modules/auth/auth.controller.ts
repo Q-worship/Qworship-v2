@@ -1,3 +1,4 @@
+import { CHURCH_ROLES } from '@qworship/shared';
 import { randomBytes, randomInt } from 'crypto';
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
@@ -36,6 +37,7 @@ function publicUser(user: any) {
     countryCode: user.countryCode,
     referralCode: user.referralCode,
     role: user.role,
+    churchRole: user.churchRole,
     roleId: user.roleId?._id ?? user.roleId ?? null,
     mustChangePassword: !!user.mustChangePassword,
     permissions: user.role === 'superadmin' ? ['*'] : (user.roleId?.permissions || []),
@@ -245,6 +247,16 @@ export const updateProfile = async (req: Request, res: Response) => {
     const allowed = ['firstName', 'lastName', 'profilePicture', 'phoneNumber', 'bio', 'username', 'agreeToMarketing'] as const;
     const update: Record<string, unknown> = {};
     for (const field of allowed) if (req.body[field] !== undefined) update[field] = req.body[field];
+
+    // The job title is validated against the catalogue here, not only by the
+    // schema enum, so an unknown value is a 400 rather than a 500. `role`
+    // (authorization) is deliberately absent from this handler.
+    if (req.body.churchRole !== undefined) {
+      if (!CHURCH_ROLES.some((r) => r.value === req.body.churchRole)) {
+        return res.status(400).json({ success: false, message: 'Unknown role' });
+      }
+      update.churchRole = req.body.churchRole;
+    }
 
     // Preferences are read field by field rather than assigned wholesale: a
     // partial object from the client would otherwise replace the whole

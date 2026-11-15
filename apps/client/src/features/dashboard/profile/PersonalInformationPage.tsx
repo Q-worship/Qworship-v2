@@ -2,34 +2,32 @@ import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CHURCH_ROLES, churchRoleLabel } from "@qworship/shared";
 import { AccountPage, FieldRow, InfoSidecar, fieldInputClass } from "@/components/account/AccountShell";
 import { ACCOUNT_NOTES } from "@/components/account/AccountNotes";
 import { ProfilePhotoField } from "./components/ProfilePhotoField";
 import { useCurrentUser, useUpdateProfile, useUploadProfilePhoto } from "@/hooks/useCurrentUser";
 import { maskEmail, profilePhotoSrc, type ProfileUpdate } from "@/lib/userApi";
+import type { ChurchRole } from "@qworship/shared";
 
 /**
  * Name, contact details and photo.
  *
- * Email and role are shown but locked. Both are refused by the server anyway —
- * `updateProfile` allows only firstName, lastName, profilePicture, phoneNumber,
- * bio and username — so an editable control here would have been a field that
- * silently discarded what you typed. Changing an email needs re-verification,
- * which is a flow, not a text box; `role` is the authorization enum and is not
- * a person's job title.
+ * Email is shown but locked: changing it needs re-verification, which is a
+ * flow, not a text box.
+ *
+ * "Role" is the person's job title at the church (`churchRole`, picked from
+ * `CHURCH_ROLES`), NOT `user.role`. The latter is the authorization enum and
+ * the server refuses it from this form, so a dropdown writing to it would
+ * have been a field that silently discarded what you chose.
  */
 
 /** Rows that save. Keyed by the server's own field names, so nothing maps. */
-type EditableField = Extract<keyof ProfileUpdate, "firstName" | "lastName" | "phoneNumber" | "bio">;
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Administrator",
-  superadmin: "Administrator",
-  pastor: "Pastor",
-  worship_leader: "Worship Leader",
-  member: "Member",
-  user: "Member",
-};
+type EditableField = Extract<
+  keyof ProfileUpdate,
+  "firstName" | "lastName" | "phoneNumber" | "bio" | "churchRole"
+>;
 
 export const PersonalInformationPage: React.FC = () => {
   const { user, isLoading } = useCurrentUser();
@@ -50,8 +48,12 @@ export const PersonalInformationPage: React.FC = () => {
       setDraft(current ?? "");
     },
     onCancel: () => setEditing(null),
-    onSave: () =>
-      saveProfile.mutate({ [field]: draft.trim() }, { onSuccess: () => setEditing(null) }),
+    onSave: () => {
+      // The role dropdown has no "none" option, so an untouched draft is a
+      // cancel, not a request the server would refuse.
+      if (field === "churchRole" && !draft) return setEditing(null);
+      saveProfile.mutate({ [field]: draft.trim() }, { onSuccess: () => setEditing(null) });
+    },
     saving: saveProfile.isPending,
   });
 
@@ -115,16 +117,23 @@ export const PersonalInformationPage: React.FC = () => {
 
           <FieldRow
             label="Role"
-            value={ROLE_LABELS[user?.role ?? ""] ?? user?.role}
-            action={
-              <button
-                type="button"
-                className="text-[15px] font-medium leading-[22px] text-white underline underline-offset-4 transition-colors hover:text-profile-primary"
-              >
-                {user?.role ? "Edit" : "Add"}
-              </button>
-            }
-          />
+            value={churchRoleLabel(user?.churchRole)}
+            empty="Add your role at the church"
+            {...row("churchRole", user?.churchRole)}
+          >
+            <Select value={draft} onValueChange={(v) => setDraft(v as ChurchRole)}>
+              <SelectTrigger className={fieldInputClass} autoFocus>
+                <SelectValue placeholder="Choose a role" />
+              </SelectTrigger>
+              <SelectContent className="border-[#484848] bg-[#2A203C] text-white">
+                {CHURCH_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value} className="focus:bg-[#8356F3]/30 focus:text-white">
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FieldRow>
 
           <FieldRow label="Bio" value={user?.bio} {...row("bio", user?.bio)}>
             <Textarea
