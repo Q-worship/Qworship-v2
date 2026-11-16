@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { PlanOptionCards } from "@/components/plans/PlanOptionCards";
 import { TopUpPacks } from "@/components/plans/TopUpPacks";
 import { useCapabilities } from "@/hooks/useCapabilities";
-import { useBillingOverview, usePurchaseTopUp } from "@/hooks/useBilling";
+import { useBillingOverview, usePurchaseTopUp, useStartSubscription } from "@/hooks/useBilling";
 
 /**
  * The plan chooser, opened from wherever a locked control was pressed.
@@ -34,10 +34,36 @@ export function PlanSelectionModal({ open, onOpenChange, reason }: Props) {
   // unconditional fetch would ask for billing on every page in the app.
   const { overview, canManage } = useBillingOverview(open);
   const purchaseTopUp = usePurchaseTopUp();
+  const startSubscription = useStartSubscription();
 
   const goToBilling = () => {
     onOpenChange(false);
     navigate("/dashboard-subscription/plans");
+  };
+
+  /**
+   * Straight to Stripe, rather than to the billing tab to choose again.
+   *
+   * This used to navigate, on the grounds that a second checkout entry point
+   * is a second place for entitlements to go wrong. It is not: this calls the
+   * same endpoint the billing tab calls, the server prices it from the
+   * catalog, and Standard is still granted only by the signed webhook. What
+   * the modal genuinely lacked was the slot count, which it now has.
+   *
+   * Buying at least as many slots as there are churches, because a network
+   * cannot subscribe to fewer slots than it is already using — the same floor
+   * the billing tab applies.
+   *
+   * Two cases still hand off rather than charge: billing not loaded yet, and
+   * a deployment with no Stripe configured, where the billing screen is the
+   * one place that explains why payment is unavailable.
+   */
+  const chooseStandard = () => {
+    if (!overview || !overview.paymentsEnabled) return goToBilling();
+    startSubscription.mutate({
+      slots: Math.max(1, overview.slotsTotal || 1, overview.churches || 1),
+      interval,
+    });
   };
 
   const feature = reason ? FEATURES[reason] : null;
@@ -83,11 +109,13 @@ export function PlanSelectionModal({ open, onOpenChange, reason }: Props) {
             <PlanOptionCards
               interval={interval}
               currentPlanId={capabilities.planId}
-              // Anyone may look; only billing decides who may buy, and it
-              // re-checks the role server-side when they get there.
-              canManage
-              busy={false}
-              onChoosePaid={goToBilling}
+              // Anyone may look. Once billing has loaded and says this person
+              // cannot buy, the button says so rather than opening a checkout
+              // the server will refuse; until then it stays live, and the
+              // server re-checks the role either way.
+              canManage={overview ? canManage : true}
+              busy={startSubscription.isPending}
+              onChoosePaid={chooseStandard}
               onChooseFree={() => onOpenChange(false)}
             />
           </div>
