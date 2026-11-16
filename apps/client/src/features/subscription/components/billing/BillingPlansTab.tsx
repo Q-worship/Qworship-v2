@@ -11,7 +11,7 @@ import { BillingIntervalToggle } from "./BillingIntervalToggle";
 import { GiftSubscriptionCard } from "./GiftSubscriptionCard";
 import { PlanOptionCards } from "@/components/plans/PlanOptionCards";
 import { AddBranchCard } from "./AddBranchCard";
-import { TopUpPacks } from "./TopUpPacks";
+import { TopUpPacks } from "@/components/plans/TopUpPacks";
 
 /**
  * The Plans tab: what this account is on, what it could be on, and how to buy

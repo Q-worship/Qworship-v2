@@ -3,7 +3,9 @@ import { useLocation } from "wouter";
 import { FEATURES, YEARLY_DISCOUNT, type FeatureId } from "@qworship/shared";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { PlanOptionCards } from "@/components/plans/PlanOptionCards";
+import { TopUpPacks } from "@/components/plans/TopUpPacks";
 import { useCapabilities } from "@/hooks/useCapabilities";
+import { useBillingOverview, usePurchaseTopUp } from "@/hooks/useBilling";
 
 /**
  * The plan chooser, opened from wherever a locked control was pressed.
@@ -28,6 +30,10 @@ export function PlanSelectionModal({ open, onOpenChange, reason }: Props) {
   const [, navigate] = useLocation();
   const { capabilities, isTrialing, trialDaysLeft } = useCapabilities();
   const [interval, setInterval] = useState<"month" | "year">("year");
+  // Only once open: this component is mounted above the router, so an
+  // unconditional fetch would ask for billing on every page in the app.
+  const { overview, canManage } = useBillingOverview(open);
+  const purchaseTopUp = usePurchaseTopUp();
 
   const goToBilling = () => {
     onOpenChange(false);
@@ -85,6 +91,32 @@ export function PlanSelectionModal({ open, onOpenChange, reason }: Props) {
               onChooseFree={() => onOpenChange(false)}
             />
           </div>
+
+          {/*
+            Hours, under the plans and clearly separated from them. They are a
+            different purchase — the notice inside TopUpPacks says so before
+            any button — and they only make sense once there is a church to
+            spend them on, so this is absent rather than empty while billing
+            loads or for an account with no branches resolved yet.
+          */}
+          {overview && overview.branches.length > 0 && (
+            <section className="mt-14 border-t border-white/10 pt-10">
+              <h3 className="text-center text-xl font-bold sm:text-2xl">
+                Our pay as you go packages
+              </h3>
+              <div className="mt-8">
+                <TopUpPacks
+                  planId={overview.planId}
+                  branches={overview.branches}
+                  canManage={canManage}
+                  busy={purchaseTopUp.isPending}
+                  onBuy={(organizationId, hours) =>
+                    purchaseTopUp.mutate({ organizationId, hours })
+                  }
+                />
+              </div>
+            </section>
+          )}
         </div>
       </DialogContent>
     </Dialog>

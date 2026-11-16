@@ -33,8 +33,15 @@ import {
  * at. A top-up touches hours and money, so it invalidates all three.
  */
 
-export function useBillingOverview() {
-  const query = useQuery({ queryKey: BILLING_OVERVIEW_KEY, queryFn: fetchBillingOverview });
+/**
+ * `enabled` exists for callers mounted at the app root. The plan modal lives
+ * above the router so any locked control can open it, which means it renders
+ * on every page — fetching billing from there unconditionally would put a
+ * request behind every navigation, including during a live service. It asks
+ * only once it is actually open.
+ */
+export function useBillingOverview(enabled = true) {
+  const query = useQuery({ queryKey: BILLING_OVERVIEW_KEY, queryFn: fetchBillingOverview, enabled });
   return {
     ...query,
     overview: query.data?.overview,
