@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import { FREE_HOURS, TRIAL_DAYS } from '@qworship/shared';
 import { useAuthStore } from '@/features/auth/auth.store';
 import { useContinueFree } from '@/hooks/useBilling';
+import { useUpgradePrompt } from '@/components/upgrade/UpgradeContext';
 import { useToast } from '@/hooks/use-toast';
 import { images } from '@/lib/theme';
 
@@ -25,6 +26,11 @@ export default function TrialExpiredPage() {
   const user = useAuthStore((state) => state.user);
   const { toast } = useToast();
   const continueFree = useContinueFree();
+  // The same plan chooser a locked control opens, rather than a second one
+  // built for this screen: a church comparing plans here and then from the
+  // Live Console must not be shown two different products. The modal hands
+  // off to billing for checkout, so there is still only one way to pay.
+  const { openUpgrade } = useUpgradePrompt();
 
   const [settled, setSettled] = useState(false);
 
@@ -48,7 +54,7 @@ export default function TrialExpiredPage() {
   };
 
   if (settled) {
-    return <FreePlanConfirmed onContinue={() => navigate('/project-selection')} onUpgrade={() => navigate('/dashboard-subscription/plans')} />;
+    return <FreePlanConfirmed onContinue={() => navigate('/project-selection')} onUpgrade={() => openUpgrade()} />;
   }
 
   return (
@@ -73,7 +79,7 @@ export default function TrialExpiredPage() {
       <div className="mt-12 flex flex-col items-center gap-5">
         <button
           type="button"
-          onClick={() => navigate('/dashboard-subscription/plans')}
+          onClick={() => openUpgrade()}
           className="w-full max-w-sm rounded-lg bg-[#8b3dff] px-8 py-4 text-base font-bold text-white transition hover:bg-[#7a2df0]"
         >
           Upgrade now
