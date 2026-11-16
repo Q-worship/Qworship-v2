@@ -20,7 +20,9 @@
     "test:capabilities": "tsx tests/capabilities.test.ts",
     "migrate:account-trials": "tsx src/scripts/migrate-account-trials.ts",
     "audit:trials": "tsx src/scripts/audit-trials.ts",
-    "merge:duplicate-accounts": "tsx src/scripts/merge-duplicate-accounts.ts"
+    "merge:duplicate-accounts": "tsx src/scripts/merge-duplicate-accounts.ts",
+    "backfill:settled-trials": "tsx src/scripts/backfill-settled-trials.ts",
+    "set:trial-flag": "tsx src/scripts/set-trial-flag.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1020.0",

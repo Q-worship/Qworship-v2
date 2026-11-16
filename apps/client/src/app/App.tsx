@@ -86,11 +86,27 @@ const PresentationsMock = () => (
 );
 
 
+/**
+ * Where a church whose trial has ended is still allowed to go.
+ *
+ * The trial-ended redirect below used to cover EVERY authenticated route,
+ * which closed the only two doors out of that screen: "Upgrade now" sent
+ * them to the plans tab and the guard sent them straight back, and
+ * "Continue to dashboard" did the same via /project-selection. The paywall
+ * locked the door to the till.
+ *
+ * So the workspace stays blocked and the ways OUT of the block do not.
+ * Billing is the whole point of the screen; project selection is where
+ * somebody who has just settled onto free is supposed to land.
+ */
+const TRIAL_EXPIRED_ALLOWED = ['/dashboard-subscription', '/project-selection'];
+
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
   const logout = useAuthStore((state) => state.logout);
+  const [location] = useLocation();
   const [isVerifyingSession, setIsVerifyingSession] = React.useState(isAuthenticated);
 
   React.useEffect(() => {
@@ -157,7 +173,9 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   if (isVerifyingSession) return <div className="flex h-screen items-center justify-center bg-[#0d071d]">Checking your session…</div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
   if (user?.onboardingStatus !== 'completed') return <Redirect to="/onboarding" />;
-  if (user?.trialStatus === 'expired') return <Redirect to="/account" />;
+  if (user?.trialStatus === 'expired' && !TRIAL_EXPIRED_ALLOWED.some((path) => location.startsWith(path))) {
+    return <Redirect to="/account" />;
+  }
   
   return (
     <>

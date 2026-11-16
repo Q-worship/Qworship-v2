@@ -5,6 +5,7 @@ import { canWrite, resolveActiveOrganization } from "../organization/organizatio
 import { ensureAccountFor } from "../organization/account.service.js";
 import { capabilitiesForAccount } from "./capability.service.js";
 import { settleToFree } from "./trial.service.js";
+import { syncLegacyEntitlement } from "./entitlement.service.js";
 import { billingOverview, listInvoices, topUpPriceUsd, usageTrend } from "./billing.service.js";
 import { isTestMode, stripeConfigured } from "./stripe.client.js";
 import {
@@ -96,7 +97,14 @@ billingRouter.post("/billing/continue-free", protect, async (req: any, res: any)
   try {
     const ctx = await requireAccount(req, res);
     if (!ctx) return;
-    await settleToFree(ctx.account);
+    // `settleToFree` mirrors the legacy flags itself when it changes
+    // something, and reports false when the account was already on free.
+    // That second case still needs the mirror: an account settled BEFORE the
+    // flags were mirrored correctly is exactly the one stuck on the
+    // trial-ended screen, and pressing the button again is how somebody in
+    // that state would try to get out of it.
+    const changed = await settleToFree(ctx.account);
+    if (!changed) await syncLegacyEntitlement(ctx.account);
     res.json({ success: true, capabilities: capabilitiesForAccount(ctx.account) });
   } catch (error) {
     console.error("Error settling account onto free:", error);

@@ -1,6 +1,8 @@
 import type { UsageQuery } from "@/lib/billingApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { getCurrentUser } from "@/lib/authApi";
+import { useAuthStore } from "@/features/auth/auth.store";
 import {
   BILLING_INVOICES_KEY,
   BILLING_OVERVIEW_KEY,
@@ -234,14 +236,30 @@ export function useRedeemGift() {
  * Invalidates capabilities as well as the billing reads: the whole point of
  * the change is that premium controls must now render locked, and a stale
  * capability cache would leave them live until the next refetch.
+ *
+ * It also re-reads the user, and must. The route guard decides whether this
+ * person is still a lapsed trial from the cached `trialStatus` in the auth
+ * store, so leaving it stale sent somebody who had just settled onto free
+ * straight back to the screen they had settled from. The refresh is awaited
+ * rather than fired off, so the screen that navigates afterwards is deciding
+ * on the new answer and not the old one.
  */
 export function useContinueFree() {
   const queryClient = useQueryClient();
+  const setAuth = useAuthStore((state) => state.setAuth);
   return useMutation({
     mutationFn: continueOnFreePlan,
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: CAPABILITIES_KEY });
       queryClient.invalidateQueries({ queryKey: BILLING_OVERVIEW_KEY });
+      try {
+        const response = await getCurrentUser();
+        setAuth(response.user as any);
+      } catch {
+        // The account IS on free either way — the server settled it before
+        // answering. A failed refresh only means the guard is working from
+        // the old flag until the next load, which the guard now survives.
+      }
     },
   });
 }
