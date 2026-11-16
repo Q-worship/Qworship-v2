@@ -91,15 +91,19 @@ const PresentationsMock = () => (
  *
  * The trial-ended redirect below used to cover EVERY authenticated route,
  * which closed the only two doors out of that screen: "Upgrade now" sent
- * them to the plans tab and the guard sent them straight back, and
- * "Continue to dashboard" did the same via /project-selection. The paywall
- * locked the door to the till.
+ * them to the plans tab and the guard sent them straight back. The paywall
+ * locked the door to the till. So billing is allowed through and the
+ * workspace stays blocked.
  *
- * So the workspace stays blocked and the ways OUT of the block do not.
- * Billing is the whole point of the screen; project selection is where
- * somebody who has just settled onto free is supposed to land.
+ * /project-selection is deliberately NOT here, though the other door leads
+ * to it. Sign-in lands an onboarded user on exactly that path, so allowing
+ * it let every expired trial walk straight past this screen at login — the
+ * gate open on the one route everybody arrives through. It does not need
+ * allowing: "Continue to dashboard" is only reachable after the account has
+ * settled onto free, which clears the flag, so by then this guard no longer
+ * applies to them at all.
  */
-const TRIAL_EXPIRED_ALLOWED = ['/dashboard-subscription', '/project-selection'];
+const TRIAL_EXPIRED_ALLOWED = ['/dashboard-subscription'];
 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);

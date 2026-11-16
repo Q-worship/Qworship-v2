@@ -256,9 +256,14 @@ export function useContinueFree() {
         const response = await getCurrentUser();
         setAuth(response.user as any);
       } catch {
-        // The account IS on free either way — the server settled it before
-        // answering. A failed refresh only means the guard is working from
-        // the old flag until the next load, which the guard now survives.
+        // The refresh is how the guard learns, so a failure here cannot be
+        // shrugged off: it would bounce somebody who has just settled right
+        // back to the screen they settled from. This is not a guess at the
+        // server's state — the settle returned 200, so the flag IS cleared
+        // there, and we are writing down what we already know rather than
+        // hoping. The next load reconciles it either way.
+        const cached = useAuthStore.getState().user;
+        if (cached) setAuth({ ...cached, trialStatus: 'cancelled' });
       }
     },
   });
