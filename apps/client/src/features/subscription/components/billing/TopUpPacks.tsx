@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Info } from "lucide-react";
 import {
   OVERAGE_PRICE_PER_HOUR_USD, TOP_UP_VALID_DAYS, TOP_UP_PACKS, TOP_UP_PRESET_HOURS, formatUsd, topUpPrice,
+  FREE_BIBLE_VERSION, SLOT_PRICE_USD,
 } from "@qworship/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +22,12 @@ import type { BranchHourUsage } from "@/lib/accountApi";
  * with no destination is not a thing this system can carry out.
  */
 export const TopUpPacks: React.FC<{
+  planId: "free" | "standard";
   branches: BranchHourUsage[];
   canManage: boolean;
   busy: boolean;
   onBuy: (organizationId: string, hours: number) => void;
-}> = ({ branches, canManage, busy, onBuy }) => {
+}> = ({ planId, branches, canManage, busy, onBuy }) => {
   // Default to whichever church is closest to running out — the one a person
   // opening this section is most likely here to rescue.
   const neediest = branches.reduce(
@@ -44,6 +46,7 @@ export const TopUpPacks: React.FC<{
 
   return (
     <div className="space-y-6">
+      <HoursOnlyNotice planId={planId} />
       {branches.length > 1 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl bg-account-card p-4">
           <label htmlFor="topup-church" className="text-sm text-gray-400">
@@ -146,6 +149,37 @@ export const TopUpPacks: React.FC<{
         </Button>
       </article>
     </div>
+  );
+};
+
+/**
+ * Says plainly what top-ups do not do.
+ *
+ * Hours and features are separate purchases, and the names work against us:
+ * "pay as you go" beside a plan card reads like a cheaper way onto the plan.
+ * Somebody on free could reasonably buy three hours expecting the product to
+ * open up, and instead get three more hours of the same KJV-only Bible they
+ * already had. That is a refund and a bad afternoon, so it is said before
+ * the buttons rather than in a tooltip after them.
+ *
+ * Shown only to free accounts. A church already on Standard HAS the features;
+ * telling it what it is not buying would be noise about a thing it owns.
+ */
+const HoursOnlyNotice: React.FC<{ planId: "free" | "standard" }> = ({ planId }) => {
+  if (planId === "standard") return null;
+  return (
+    <aside className="flex items-start gap-3 rounded-xl border border-[#ffb020]/30 bg-[#ffb020]/[0.07] p-4">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#ffb020]" aria-hidden />
+      <div className="text-[13px] leading-relaxed text-gray-300">
+        <p className="font-semibold text-white">These buy hours, not Standard.</p>
+        <p className="mt-1">
+          Extra hours extend hands-free Bible and transcription on your current plan. They do
+          not unlock the Standard feature set — your hands-free Bible stays on{" "}
+          {FREE_BIBLE_VERSION.toUpperCase()}, and storage, branches and the rest are unchanged. To open those
+          up, choose Standard at {formatUsd(SLOT_PRICE_USD)} a month above.
+        </p>
+      </div>
+    </aside>
   );
 };
 

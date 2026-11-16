@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
+import { TOP_UP_VALID_DAYS } from "@qworship/shared";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
   useBillingOverview, useCancelSubscription, usePurchaseTopUp, useStartSubscription,
@@ -110,12 +111,20 @@ export const BillingPlansTab: React.FC = () => {
 
       <section>
         <SectionHeading>Pay as you go top-up packs</SectionHeading>
+        {/*
+          "Expire at the end of the month" was the ORIGINAL rule and is no
+          longer true — hours last TOP_UP_VALID_DAYS from payment, which is
+          what the cards themselves say. Leaving the old sentence here had
+          this section contradicting its own buttons, and in the direction
+          that reads as a worse deal than the one being sold.
+        */}
         <p className="mt-2 max-w-[640px] text-sm text-gray-400">
           Extra hours for a Sunday that runs long. They belong to the church you buy them for and
-          expire at the end of the month.
+          last {TOP_UP_VALID_DAYS} days from the moment you pay.
         </p>
         <div className="mt-6">
           <TopUpPacks
+            planId={overview.planId}
             branches={overview.branches}
             canManage={canManage}
             busy={busy}
