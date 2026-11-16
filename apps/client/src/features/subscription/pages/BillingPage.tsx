@@ -6,6 +6,7 @@ import { BillingUsageTab } from "../components/billing/BillingUsageTab";
 import { BillingBranchesTab } from "../components/billing/BillingBranchesTab";
 import { BillingHistoryTab } from "../components/billing/BillingHistoryTab";
 import { BillingPlansTab } from "../components/billing/BillingPlansTab";
+import { CheckoutReturnBanner } from "../components/billing/CheckoutReturnBanner";
 
 /**
  * Payments & billing, as five tabs under one route.
@@ -44,6 +45,15 @@ export const BillingPage: React.FC = () => {
       */}
       <div className="mx-auto w-full max-w-[1247px] p-4 sm:p-6 lg:px-8 lg:pb-8 lg:pt-14">
         <AccountBreadcrumb page="Payments & billing" />
+
+        {/*
+          Above the title, because it answers the question the person arrived
+          with. Stripe returns to three different tabs depending on what was
+          bought, so it is mounted on the page rather than inside any one tab.
+        */}
+        <div className="mt-6">
+          <CheckoutReturnBanner />
+        </div>
         <h1 className="mt-[26px] text-[32px] font-bold leading-[1.1] tracking-tight text-white sm:text-[45px]">
           Payments &amp; billing
         </h1>

@@ -42,6 +42,23 @@ export const TopUpPacks: React.FC<{
   const [customHours, setCustomHours] = useState(5);
   const chosen = branches.find((b) => b.organizationId === target);
 
+  // WHICH button was pressed, not merely that one was. `busy` is a single
+  // mutation shared by every card, so spending it directly put "Opening
+  // checkout…" on all four at once and made it look as though pressing one
+  // had bought all of them. The others still go disabled — two checkouts at
+  // once is not a thing anybody means to start — they just stay legible.
+  // Keyed by SOURCE, not by hours: a custom top-up of 3 and the 3-hour pack
+  // are different buttons, and a number alone would light both.
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => {
+    if (!busy) setPending(null);
+  }, [busy]);
+
+  const buy = (key: string, hours: number) => {
+    setPending(key);
+    onBuy(target, hours);
+  };
+
   if (branches.length === 0) return null;
 
   return (
@@ -92,9 +109,11 @@ export const TopUpPacks: React.FC<{
               <Button
                 className="mt-8 w-full bg-[#8356F3] text-white hover:bg-[#7245e2] disabled:opacity-40"
                 disabled={busy || !canManage || !target}
-                onClick={() => onBuy(target, pack.hours)}
+                onClick={() => buy(`pack-${pack.hours}`, pack.hours)}
               >
-                {busy ? "Opening checkout…" : `Buy for ${formatUsd(topUpPrice(pack.hours))}`}
+                {busy && pending === `pack-${pack.hours}`
+                  ? "Opening checkout…"
+                  : `Buy for ${formatUsd(topUpPrice(pack.hours))}`}
               </Button>
             </div>
           </article>
@@ -143,9 +162,11 @@ export const TopUpPacks: React.FC<{
         <Button
           className="mt-6 w-full bg-[#8356F3] text-white hover:bg-[#7245e2] disabled:opacity-40 sm:w-auto sm:px-10"
           disabled={busy || !canManage || !target || customHours < 1 || customHours > 100}
-          onClick={() => onBuy(target, customHours)}
+          onClick={() => buy("custom", customHours)}
         >
-          {busy ? "Opening checkout…" : `Top up ${formatUsd(topUpPrice(customHours || 0))}`}
+          {busy && pending === "custom"
+            ? "Opening checkout…"
+            : `Top up ${formatUsd(topUpPrice(customHours || 0))}`}
         </Button>
       </article>
     </div>

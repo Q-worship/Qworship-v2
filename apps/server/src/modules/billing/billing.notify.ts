@@ -1,6 +1,7 @@
 import { IAccount } from "../organization/account.model.js";
 import { User } from "../auth/auth.model.js";
 import { createNotification } from "../notifications/notification.service.js";
+import { emailConfigured, sendTrialEndingEmail } from "../auth/email.service.js";
 
 /**
  * Telling a church what just happened to its billing.
@@ -32,7 +33,7 @@ const OPT_IN = new Set<NoticeKind>(["autoRefill"]);
  */
 async function recipient(account: IAccount, kind: NoticeKind) {
   const owner = await User.findById(account.ownerId).select(
-    "_id notificationPreferences",
+    "_id email firstName notificationPreferences",
   );
   if (!owner) return null;
   const prefs = owner.notificationPreferences;
@@ -87,8 +88,50 @@ export async function notifyTrialEnding(
       icon: "Clock",
       actionUrl: "/dashboard-subscription/plans",
     });
+
+    await emailTrialEnding(owner, daysLeft);
   } catch (error) {
     console.error("[Billing] Could not notify trial ending:", error);
+  }
+}
+
+/**
+ * The same warning, to an inbox.
+ *
+ * The in-app notice only reaches a church that opens Q-worship that week. A
+ * church that does not log in between Monday and Sunday was told nothing at
+ * all and met the trial-ended screen mid-service — which is the whole reason
+ * these notices exist.
+ *
+ * Gated on BOTH preferences, because they are different questions: `trial`
+ * is whether to hear about this at all (already checked by `recipient`), and
+ * `email` is whether this person takes mail. Absent means yes for both.
+ *
+ * Isolated in its own try/catch rather than sharing the caller's. The
+ * milestone has already been CLAIMED by the time we get here, so a thrown
+ * mailer would lose the in-app notice that was sent a line earlier and no
+ * retry would ever re-send either.
+ */
+async function emailTrialEnding(
+  owner: { email?: string; firstName?: string; notificationPreferences?: { email?: boolean } },
+  daysLeft: number,
+): Promise<void> {
+  if (!owner.email) return;
+  if (owner.notificationPreferences?.email === false) return;
+  // Checked rather than caught: this runs hourly, and an unconfigured dev box
+  // would otherwise print a stack trace every hour for a non-problem.
+  if (!emailConfigured()) return;
+
+  const appUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+  try {
+    await sendTrialEndingEmail(
+      owner.email,
+      owner.firstName,
+      daysLeft,
+      `${appUrl}/dashboard-subscription/plans`,
+    );
+  } catch (error) {
+    console.error("[Billing] Could not email trial ending notice:", error);
   }
 }
 

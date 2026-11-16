@@ -35,6 +35,80 @@ export async function verifyEmailTransport() {
   await createTransport().verify();
 }
 
+/**
+ * Whether mail can be sent at all.
+ *
+ * `smtpConfig` throws when the Brevo variables are missing, which is right
+ * for a password reset — that must not fail silently — but wrong for a
+ * scheduled sweep, where it would log a stack trace every hour on any
+ * machine without SMTP configured. Callers that run on a timer check first.
+ */
+export function emailConfigured(): boolean {
+  return Boolean(
+    process.env.BREVO_SMTP_SERVER && process.env.BREVO_LOGIN && process.env.BREVO_SMTP_KEY,
+  );
+}
+
+/**
+ * The trial is running out, sent to the account owner's inbox.
+ *
+ * The in-app notice has always existed and reaches a church only if somebody
+ * opens Q-worship that week. A church that does not log in between Monday and
+ * Sunday got no warning at all, then met the trial-ended screen mid-service.
+ * This is the half of that feature that reaches people who are not looking.
+ *
+ * Deliberately NOT a bill. Nothing is owed, nothing is charged, and the free
+ * plan catches them either way — so it says what carries on as well as what
+ * stops, and the one action is a link.
+ */
+export async function sendTrialEndingEmail(
+  to: string,
+  firstName: string | undefined,
+  daysLeft: number,
+  upgradeUrl: string,
+) {
+  const when = daysLeft === 0 ? 'today' : daysLeft === 1 ? 'tomorrow' : `in ${daysLeft} days`;
+  const subject =
+    daysLeft === 0
+      ? 'Your Q-Worship free trial ends today'
+      : `Your Q-Worship free trial ends ${when}`;
+
+  const text =
+    `Hello ${firstName || 'there'},
+
+` +
+    `Your Q-Worship trial ends ${when}.
+
+` +
+    `Nothing disappears when it does. Your projects, songs and media stay exactly where ` +
+    `they are, and your church carries on free with the KJV hands-free Bible.
+
+` +
+    `Upgrading keeps the rest: every Bible version, lower thirds, sermons, PowerPoint ` +
+    `import, the cloud collections and more hours each month.
+
+` +
+    `Choose a plan: ${upgradeUrl}
+
+` +
+    `If you would rather stay on the free plan, you need do nothing at all.`;
+
+  await createTransport().sendMail({
+    from: sender(),
+    to: { address: to, name: firstName || to },
+    subject,
+    text,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#111111">
+      <h2 style="margin:0 0 16px">Your free trial ends ${escapeHtml(when)}</h2>
+      <p>Hello ${escapeHtml(firstName || 'there')},</p>
+      <p><strong>Nothing disappears when it does.</strong> Your projects, songs and media stay exactly where they are, and your church carries on free with the KJV hands-free Bible.</p>
+      <p>Upgrading keeps the rest: every Bible version, lower thirds, sermons, PowerPoint import, the cloud collections and more hours each month.</p>
+      <p style="margin:24px 0"><a href="${escapeHtml(upgradeUrl)}" style="display:inline-block;padding:12px 20px;background:#6d28d9;color:#fff;text-decoration:none;border-radius:8px">Choose a plan</a></p>
+      <p style="color:#6b7280;font-size:13px">If you would rather stay on the free plan, you need do nothing at all.</p>
+    </div>`,
+  });
+}
+
 export async function sendVerificationEmail(to: string, firstName: string | undefined, code: string) {
   const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://qworship.com').replace(/\/$/, '');
   const codeCells = code.split('').map((digit, index) => `<td style="width:54px;height:68px;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:21px;font-weight:600;color:#111111;border-right:${index === code.length - 1 ? '0' : '1px solid #dedfe5'};">${digit}</td>`).join('');
