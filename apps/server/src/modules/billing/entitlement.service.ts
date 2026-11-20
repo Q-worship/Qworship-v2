@@ -17,16 +17,47 @@ import { User } from "../auth/auth.model.js";
  */
 export async function syncLegacyEntitlement(account: IAccount): Promise<void> {
   try {
-    const churches = await Organization.find({ accountId: account._id }).select("_id").lean();
-    if (churches.length === 0) return;
-
-    const memberships = await Membership.find({
-      organizationId: { $in: churches.map((c) => c._id) },
-    })
-      .select("userId")
+    const churches = await Organization.find({ accountId: account._id })
+      .select("_id ownerId")
       .lean();
 
-    const userIds = [...new Set(memberships.map((m) => String(m.userId)))];
+    const memberships = churches.length
+      ? await Membership.find({
+          organizationId: { $in: churches.map((c) => c._id) },
+        })
+          .select("userId")
+          .lean()
+      : [];
+
+    /*
+     * OWNERS COUNT, MEMBERSHIP ROW OR NOT.
+     *
+     * This used to read Memberships alone and return early on an empty set,
+     * which left a whole class of people permanently on the trial-ended
+     * screen: four accounts in production own a church and have NO
+     * membership row at all. For them the settle wrote the account, the
+     * route called this mirror, and it returned before touching
+     * `trialStatus` — so "Continue with the free plan" answered 200, the
+     * screen said the free plan was in place, `/me` still said "expired",
+     * and the next route bounced them back. Pressing it again changed
+     * nothing, because nothing here depended on the press.
+     *
+     * An owner is entitled to their own account's plan whether or not
+     * anybody ever wrote them a Membership, so the account owner and each
+     * church's owner are unioned in. This only ever ADDS people who already
+     * hold the entitlement being mirrored; it cannot reach a stranger.
+     */
+    const userIds = [
+      ...new Set(
+        [
+          account.ownerId,
+          ...churches.map((c) => c.ownerId),
+          ...memberships.map((m) => m.userId),
+        ]
+          .filter(Boolean)
+          .map((id) => String(id)),
+      ),
+    ];
     if (userIds.length === 0) return;
 
     const paid = account.planId === "standard" && account.status !== "cancelled";

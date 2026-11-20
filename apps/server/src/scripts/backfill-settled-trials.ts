@@ -51,9 +51,33 @@ async function run() {
     const memberships: any[] = await Membership.find({ userId: user._id })
       .select('organizationId')
       .lean();
-    const churches: any[] = await Organization.find({
-      _id: { $in: memberships.map((m) => m.organizationId) },
-    })
+    /*
+     * CHURCHES THEY OWN COUNT TOO, MEMBERSHIP ROW OR NOT.
+     *
+     * Resolving by Membership alone sent a whole class of people down the
+     * `accounts.length === 0` path below and reported them as "no account
+     * could be resolved": four owners in production hold a church and have
+     * NO membership row at all. They were the most stuck of anybody — not
+     * merely unfixed by this script, but unfixable by pressing the button
+     * either, since the mirror used to read memberships the same way.
+     *
+     * An owner sits on their church's account whether or not anybody wrote
+     * them a Membership, so both routes are unioned. This only ADDS accounts
+     * the user genuinely sits on; the `every(...)` settled check below still
+     * decides, so a church owner carrying a live trial elsewhere is skipped
+     * exactly as a member would be.
+     */
+    const ownedChurches: any[] = await Organization.find({ ownerId: user._id })
+      .select('_id')
+      .lean();
+    const churchIds = [
+      ...new Set(
+        [...memberships.map((m) => m.organizationId), ...ownedChurches.map((c) => c._id)]
+          .filter(Boolean)
+          .map((id) => String(id)),
+      ),
+    ];
+    const churches: any[] = await Organization.find({ _id: { $in: churchIds } })
       .select('accountId')
       .lean();
     const accountIds = churches.map((c) => c.accountId).filter(Boolean);
