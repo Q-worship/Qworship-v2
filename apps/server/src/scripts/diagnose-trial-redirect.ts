@@ -4,31 +4,44 @@ import { Account } from '../modules/organization/account.model.js';
 import { Organization } from '../modules/organization/organization.model.js';
 import { Membership } from '../modules/organization/membership.model.js';
 import { User } from '../modules/auth/auth.model.js';
+import { capabilitiesForAccount } from '../modules/billing/capability.service.js';
 
 dotenv.config();
 
 /**
- * READ ONLY. Why one person is — or is not — stuck on the trial-ended screen.
+ * READ ONLY. Why one person is — or is not — held on the trial-ended screen.
  *
- * Writes nothing, anywhere. It replays the two decisions by hand against the
- * rows as they actually are:
+ * Writes nothing, anywhere. It replays the decision by hand against the rows
+ * as they actually are.
  *
- *   1. AuthGuard, which redirects to /account on `user.trialStatus ===
- *      "expired"` and reads NOTHING else — not the account, not the plan.
- *   2. "Continue with the free plan", which is the only thing that ever
- *      clears that flag, and which clears it only under conditions this
- *      prints one by one.
+ * WHAT THE GUARD READS, AND WHAT IT NO LONGER READS.
+ *
+ * `AuthGuard` used to redirect on `user.trialStatus === "expired"` — a
+ * per-user flag that no system owned. It now asks `capabilities.trialExpired`,
+ * computed from the ACCOUNT. This script asks the same way, by calling
+ * `capabilitiesForAccount` rather than reimplementing it: a diagnostic
+ * carrying its own copy of the rule is how you end up confidently reporting a
+ * lock-out that no longer exists.
+ *
+ * `trialStatus` is still printed, because admin listings and reporting read
+ * it and a stale one is worth noticing. It is NOT what gates anybody. If it
+ * disagrees with the account below, the account is right and
+ * `backfill:settled-trials` is how you reconcile it.
  *
  * Run with: pnpm --filter @qworship/server diagnose:redirect <email>
  *           pnpm --filter @qworship/server diagnose:redirect --stuck
+ *
+ * Note --stuck selects on the LEGACY flag, so it finds people whose flag is
+ * stale as well as anybody actually held — which is the point. Read the
+ * verdict, not the selection.
  */
 
 async function diagnose(user: any) {
   const line = (k: string, v: unknown) => console.log(`  ${k.padEnd(26)} ${String(v)}`);
   console.log(`\n────────────────────────────────────────────────────────`);
   console.log(`USER  ${user.email}  (${user._id})`);
-  line('trialStatus', user.trialStatus);
-  line('trialEndDate', user.trialEndDate ?? '—');
+  line('trialStatus (legacy)', `${user.trialStatus}  — reporting only, gates nothing`);
+  line('trialEndDate (legacy)', user.trialEndDate ?? '—');
   line('subscriptionStatus', user.subscriptionStatus);
   line('onboardingStatus', user.onboardingStatus);
   line('activeOrganizationId', user.activeOrganizationId ?? '— (none)');
@@ -38,13 +51,7 @@ async function diagnose(user: any) {
   line('memberships', memberships.length);
   line('churches owned', ownedOrgs.length);
 
-  // --- 1. What the client guard does, on this row alone. ---
-  const guardBlocks = user.trialStatus === 'expired';
-  console.log(`\n  CLIENT GUARD: ${guardBlocks
-    ? 'REDIRECTS every route except /dashboard-subscription to /account'
-    : 'lets them through'}`);
-
-  // --- 2. Which church (and account) a billing call would resolve. ---
+  // --- 1. Which church a request of theirs resolves. ---
   let resolvedOrgId: any = null;
   let resolution = '';
   if (user.activeOrganizationId) {
@@ -57,62 +64,64 @@ async function diagnose(user: any) {
     else if (ownedOrgs.length) { resolvedOrgId = ownedOrgs[0]._id; resolution = 'legacy owner church, adopted in passing'; }
     else { resolution = 'no church at all'; }
   }
-  console.log(`  RESOLVES CHURCH VIA: ${resolution}`);
+  console.log(`\n  RESOLVES CHURCH VIA: ${resolution}`);
 
-  if (!resolvedOrgId) {
-    console.log('  => /billing/continue-free answers 400 "No church resolved for this request".');
-    console.log('     The button shows an error toast and the flag is NEVER cleared. STUCK.');
+  const org: any = resolvedOrgId
+    ? await Organization.findById(resolvedOrgId).select('_id name accountId ownerId').lean()
+    : null;
+  if (org) {
+    line('church', `${org.name} (${org._id})`);
+    line('church.accountId', org.accountId ?? '— (none yet)');
+  }
+
+  // --- 2. The account, exactly as the capabilities endpoint would find it. ---
+  //
+  // `capabilitiesFor` reads `organization.accountId` and nothing else. A
+  // church without one answers UNRESOLVED, so the owner's other accounts are
+  // deliberately NOT consulted here: guessing would report a verdict the
+  // product never reaches.
+  const account: any = org?.accountId ? await Account.findById(org.accountId).lean() : null;
+
+  if (!account) {
+    console.log('  ACCOUNT: none the endpoint could resolve.');
+    console.log('  => Capabilities answer UNRESOLVED, so `trialExpired` is false and the');
+    console.log('     guard lets them through on the free feature set. NOT held.');
+    console.log('     An account is created on their next billing call, and the mirror');
+    console.log('     corrects the legacy flag then — no second trial, since the flag it');
+    console.log('     reads says this account has had one.');
     return;
   }
 
-  const org: any = await Organization.findById(resolvedOrgId).select('_id name accountId ownerId').lean();
-  line('church', `${org?.name} (${org?._id})`);
-  line('church.accountId', org?.accountId ?? '— (none yet)');
-
-  // --- 3. The account that church sits on. ---
-  const ownersAccounts = await Account.find({ ownerId: org?.ownerId }).sort({ createdAt: 1 }).lean();
-  const account: any = org?.accountId
-    ? await Account.findById(org.accountId).lean()
-    : ownersAccounts.filter((a) => a.status !== 'cancelled').find((a) => a.planId === 'standard')
-      ?? ownersAccounts.filter((a) => a.status !== 'cancelled')[0]
-      ?? ownersAccounts[0];
-
-  if (!account) { console.log('  => No account at all; one would be created on the next billing call.'); return; }
   line('account', account._id);
   line('account.planId / status', `${account.planId} / ${account.status}`);
   line('account.trialEndsAt', account.trialEndsAt ?? '—');
-  line("owner's live accounts", ownersAccounts.filter((a) => a.status !== 'cancelled').length);
 
-  // --- 4. Replay settleToFree + syncLegacyEntitlement, without writing. ---
-  const wouldSettle = !(account.planId === 'standard')
-    && !(account.status === 'active' && account.planId === 'free');
-  const paid = account.planId === 'standard' && account.status !== 'cancelled';
-  const settledOnFree = account.planId === 'free' && account.status === 'active' && !paid;
+  const caps = capabilitiesForAccount(account);
+  console.log('');
+  line('capabilities.planId', caps.planId);
+  line('capabilities.trialing', caps.trialing);
+  line('capabilities.trialExpired', caps.trialExpired);
 
-  const churchesOnAccount = await Organization.find({ accountId: account._id }).select('_id').lean();
-  const memberIds = churchesOnAccount.length
-    ? (await Membership.find({ organizationId: { $in: churchesOnAccount.map((c) => c._id) } }).select('userId').lean())
-        .map((m) => String(m.userId))
-    : [];
-  const mirrorReachesUser = memberIds.includes(String(user._id));
+  // --- 3. The verdict, from the one field the guard actually reads. ---
+  console.log(`\n  CLIENT GUARD: ${caps.trialExpired
+    ? 'HOLDS them on /account — every route but /dashboard-subscription'
+    : 'lets them through'}`);
 
-  console.log('\n  PRESSING "Continue with the free plan":');
-  console.log(`    settleToFree would change the account   ${wouldSettle}`);
-  console.log(`    mirror sees it as settled-on-free       ${wouldSettle ? true : settledOnFree}`);
-  console.log(`    churches found under the account        ${churchesOnAccount.length}`);
-  console.log(`    this user is among its members          ${mirrorReachesUser}`);
+  if (caps.trialExpired) {
+    console.log('    The trial has lapsed and the account has not settled. This is the');
+    console.log('    window before the hourly sweep (`expireLapsedTrials`) moves it onto');
+    console.log('    free — or it is a sweep that is not running. Check the scheduler');
+    console.log('    before assuming anybody is stuck: settling is what releases them,');
+    console.log('    and "Continue with the free plan" does the same thing on demand.');
+  } else if (caps.planId === 'free' && !caps.trialing) {
+    console.log('    Settled on free. A free church is a customer in good standing, not');
+    console.log('    a lapsed trial, so there is nothing to clear and nothing to press.');
+  }
 
-  const clears = (wouldSettle || settledOnFree) && mirrorReachesUser && user.trialStatus === 'expired';
-  if (!guardBlocks) {
-    console.log('    => Nothing to clear; this person is not being redirected.');
-  } else if (clears) {
-    console.log('    => The flag WOULD be cleared to "cancelled". They get out.');
-  } else if (paid) {
-    console.log('    => Account is PAID, so the mirror sets trialStatus "converted". They get out,');
-    console.log('       but only once a billing call runs the mirror — the guard never asks the account.');
-  } else {
-    console.log('    => NOTHING CLEARS THE FLAG. The screen says the free plan is in place,');
-    console.log('       /me still answers "expired", and the next route bounces them back. STUCK.');
+  if (user.trialStatus === 'expired' && !caps.trialExpired) {
+    console.log('\n  STALE FLAG: `trialStatus` still reads "expired" while the account says');
+    console.log('    otherwise. Harmless to the guard, which no longer reads it, but admin');
+    console.log('    listings and reporting do. `backfill:settled-trials` reconciles it.');
   }
 }
 
@@ -125,7 +134,7 @@ async function run() {
     ? await User.find({ trialStatus: 'expired' }).select('email trialStatus trialEndDate subscriptionStatus onboardingStatus activeOrganizationId').lean()
     : await User.find({ email: { $in: args.map((a) => a.toLowerCase()) } }).lean();
 
-  if (!users.length) { console.log('No matching user. Pass an email, or --stuck for everyone carrying the flag.'); process.exit(1); }
+  if (!users.length) { console.log('No matching user. Pass an email, or --stuck for everyone carrying the legacy flag.'); process.exit(1); }
   console.log(`\n${users.length} user(s) to look at. Nothing below writes anything.`);
   for (const user of users) await diagnose(user);
   console.log('\n');

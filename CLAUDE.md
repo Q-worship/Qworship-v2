@@ -160,6 +160,34 @@ webhook mirrors the plan onto those flags via
 widen access**, or a release becomes an outage. The mirror is temporary; delete
 it once the legacy readers are gone.
 
+**The client no longer reads those flags at all.** `AuthGuard` decided who was
+locked out of the product from `user.trialStatus === 'expired'` and produced
+three lock-outs in a row doing it — the mirror never wrote the flag, then the
+guard allowed the wrong routes, then the mirror could not see church owners.
+Each fix moved the failure, because the guard was deciding from a copy. It now
+reads `capabilities.trialExpired`, computed from the Account in
+`capability.service.ts`. Two rules follow from that and should not be
+regressed:
+
+- **A church settled onto free is NOT expired**, so it is not redirected.
+  Free is a real plan; arriving on it is not a lock-out. Gating on "has ever
+  trialed" would hold every post-trial free church forever. Because
+  `expireLapsedTrials` sweeps hourly, the trial-ended screen is a short-lived
+  state — the window between lapsing and settling — not a place to be
+  stranded.
+- **No answer is not a lock-out.** `trialExpired` is false while the query is
+  in flight and false for an unresolvable church, so the failure mode is
+  somebody keeping the page they asked for. Same trade hours and storage make.
+
+What remains on the legacy flags is reporting: admin listings and the usage
+screens. `backfill:settled-trials` reconciles a stale one (it widens to
+churches a user OWNS, not just ones they are a member of — four owners in
+production had no Membership row at all), and `diagnose:redirect <email>` or
+`--stuck` prints both answers side by side for one person. The latter calls
+`capabilitiesForAccount` rather than reimplementing the rule, deliberately: a
+diagnostic carrying its own copy is how you end up reporting a lock-out that
+no longer exists.
+
 ### Local development
 
 - Stripe webhooks need `stripe listen --api-key $STRIPE_SECRET_KEY --forward-to
@@ -261,19 +289,34 @@ claimed. That is also a startup-time win. Until then, this sits in the same
 category as the canvas and PowerPoint import — and by the rule above, that
 category belongs either enforced or free.
 
-### 5. Gift stacking
+### 5. Five churches carry no `accountId`, and that is now harmless
+
+Found while auditing the trial redirect: five owners hold a church whose
+`accountId` was never set, and four of them have no Membership row to their
+own church either. They were the worst-affected by the redirect defects and
+are the reason `backfill:settled-trials` and the entitlement mirror both
+resolve churches a user OWNS rather than only ones they are a member of.
+
+Nothing is owed here. `capabilitiesFor` reads `organization.accountId` and
+answers UNRESOLVED without one, which means the free feature set and no
+redirect, and `ensureAccountFor` creates the account on their next billing
+call — `trialGrantFor` reads their legacy `expired` flag at that moment, so
+they land on free rather than earning a second trial. Recorded because "no
+account could be resolved" in an audit looks like a defect and is not one.
+
+### 6. Gift stacking
 
 `redeemGift` refuses an account with a live Stripe subscription but not one with
 an already-redeemed gift, so a second code silently overwrites the first's
 `expiresAt`. Either refuse, or extend the existing expiry.
 
-### 6. Billing visibility
+### 7. Billing visibility
 
 Read endpoints in `billing.routes.ts` use `requireAccount(req, res)` with
 `needsWrite: false`, so **any member** sees invoices, spend and payment method.
 Probably should be owner/admin only.
 
-### 7. Trial notices reach the app only, never an inbox
+### 8. Trial notices reach the app only, never an inbox
 
 In-app notices now go out at **7 days, 1 day and the day itself**
 (`sendTrialEndingNotices`, hourly). Each milestone is claimed with a
@@ -291,7 +334,7 @@ Stripe's own `trial_period_days` is still unused — our trial is ours, held on
 the Account, and does not require a card. That is deliberate; revisit only if
 card-up-front trials are wanted.
 
-### 8. Dashboard configuration (not code)
+### 9. Dashboard configuration (not code)
 
 - **Adaptive Pricing** must be switched on in the Stripe Dashboard — it is a
   setting, not an API call, and the whole currency approach depends on it. Note
@@ -301,7 +344,7 @@ card-up-front trials are wanted.
   signing secret. DONE — configured on the production host. The CLI secret
   remains local-only.
 
-### 9. Deferred features
+### 10. Deferred features
 
 - **Auto-refill / "Emergency Sunday Buffer"** from the design: buy hours
   automatically instead of stopping. Deliberately not built — it charges a card
@@ -315,11 +358,15 @@ card-up-front trials are wanted.
 - **Email.** `notificationPreferences` now gates in-app notices only; no billing
   email is sent at all. `modules/auth/email.service.ts` has the transport.
 
-### 10. Known gaps in testing
+### 11. Known gaps in testing
 
 - `pnpm test:capabilities` covers the plan/feature matrix, trial eligibility,
-  trial expiry, the hours rules, the trial-notice thresholds and the
-  one-account-per-owner rule. Pure, so it needs no database or server.
+  trial expiry, the hours rules, the trial-notice thresholds, the
+  one-account-per-owner rule and `trialExpired` — the field the client route
+  guard reads, so its seven cases are the ones that decide whether anybody
+  can reach the product at all (lapsed-and-unsettled, running,
+  settled-on-free, paid with a stale trial date, `past_due`, `cancelled`,
+  never-trialed). Pure, so it needs no database or server.
 - `pnpm audit:trials` is read-only and needs a database. It reports remaining
   trial grace and flags owners holding several accounts. Read the LEFT
   column, not RAN: a trial inheriting a legacy start date shows a long run
