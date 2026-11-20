@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useBibleSync } from "@/hooks/useBibleSync";
 import { useSongSync } from "@/hooks/useSongSync";
+import { useCapabilities } from "@/hooks/useCapabilities";
 import { useBibleRAMCache } from "@/features/dashboard/hooks/useBibleRAMCache";
 import { useSongRAMCache } from "@/features/dashboard/hooks/useSongRAMCache";
 import { SyncLoadingOverlay } from "@/features/dashboard/components/SyncLoadingOverlay";
@@ -100,8 +101,8 @@ const PresentationsMock = () => (
  * it let every expired trial walk straight past this screen at login — the
  * gate open on the one route everybody arrives through. It does not need
  * allowing: "Continue to dashboard" is only reachable after the account has
- * settled onto free, which clears the flag, so by then this guard no longer
- * applies to them at all.
+ * settled onto free, by which point the account says so and this guard no
+ * longer applies to them at all.
  */
 const TRIAL_EXPIRED_ALLOWED = ['/dashboard-subscription'];
 
@@ -112,6 +113,9 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   const logout = useAuthStore((state) => state.logout);
   const [location] = useLocation();
   const [isVerifyingSession, setIsVerifyingSession] = React.useState(isAuthenticated);
+  // Cached hard and already read across the app, so this costs no extra
+  // request on a normal navigation.
+  const { trialExpired } = useCapabilities({ enabled: isAuthenticated });
 
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -177,7 +181,30 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   if (isVerifyingSession) return <div className="flex h-screen items-center justify-center bg-[#0d071d]">Checking your session…</div>;
   if (!isAuthenticated) return <Redirect to="/login" />;
   if (user?.onboardingStatus !== 'completed') return <Redirect to="/onboarding" />;
-  if (user?.trialStatus === 'expired' && !TRIAL_EXPIRED_ALLOWED.some((path) => location.startsWith(path))) {
+  /*
+   * ASK THE ACCOUNT, NOT A LEGACY USER FLAG.
+   *
+   * This read `user.trialStatus === 'expired'` — a per-user field that no
+   * system owned, that billing did not write, and that exactly one button
+   * ever cleared. Three defects came out of that arrangement in a row: the
+   * mirror never wrote the flag, then this guard allowed the wrong routes,
+   * then the mirror could not see church owners. Each one stranded real
+   * churches here with no way out, and each fix moved the failure rather
+   * than ending it, because the guard was always deciding from a copy.
+   *
+   * `trialExpired` comes from the Account, which is the thing that actually
+   * owns the trial. Two consequences worth stating plainly:
+   *
+   *   - A church that has SETTLED onto free is not expired, so it is not
+   *     redirected. Free is a real plan, and arriving on it is not a
+   *     lock-out. The hourly sweep settles lapsed trials, so this screen is
+   *     now a short-lived state rather than somewhere to get stuck.
+   *   - No answer yet means no redirect. `trialExpired` is false while the
+   *     query is in flight and false for a request whose church could not
+   *     be resolved, so the failure mode is somebody keeping the page they
+   *     asked for — never a bounce we cannot justify.
+   */
+  if (trialExpired && !TRIAL_EXPIRED_ALLOWED.some((path) => location.startsWith(path))) {
     return <Redirect to="/account" />;
   }
   

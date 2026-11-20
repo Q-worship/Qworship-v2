@@ -22,6 +22,24 @@ export interface Capabilities {
   trialing: boolean;
   /** Whole days left in the trial, 0 when not trialing. */
   trialDaysLeft: number;
+  /**
+   * This account's one trial has run out and nothing has replaced it yet.
+   *
+   * The authoritative answer to a question the client used to ask a legacy
+   * user flag: `user.trialStatus === "expired"`, which no system owned and
+   * which only one button ever cleared. Three separate defects came out of
+   * that — the flag was never written, then the route guard allowed the
+   * wrong paths, then the mirror could not see church owners — and each one
+   * stranded real churches on the trial-ended screen with no way out.
+   *
+   * True only in the window between a trial lapsing and the account
+   * settling: the hourly sweep (`expireLapsedTrials`) moves it onto free,
+   * and a settled free account is NOT in this state. That matters — a free
+   * church is a paying-nothing customer in good standing, not a lapsed
+   * trial, and gating on "has ever trialed" would lock every one of them
+   * out forever.
+   */
+  trialExpired: boolean;
   features: FeatureMap;
   /**
    * Whether we actually worked out which church this request belongs to.
@@ -40,6 +58,10 @@ export interface Capabilities {
 const UNRESOLVED: Capabilities = {
   planId: "free",
   trialing: false,
+  // Not "no trial has expired" — "we cannot tell". The client redirect reads
+  // this, and bouncing somebody we failed to place is the same refusal hours
+  // and storage already decline to make.
+  trialExpired: false,
   trialDaysLeft: 0,
   features: featureMapFor("free"),
   resolved: false,
@@ -66,9 +88,21 @@ export function capabilitiesForAccount(account: {
   const paid = account.planId === "standard" && account.status !== "cancelled";
   const planId = paid ? "standard" : "free";
 
+  // Still marked trialing, with the date behind us: lapsed, and not yet
+  // settled by the sweep or by the person choosing. Both halves again, for
+  // the reason `isTrialing` needs both — status alone goes stale the moment
+  // a trial lapses, and a past date on a settled or paid account means
+  // nothing at all.
+  const trialExpired =
+    !paid &&
+    account.status === "trialing" &&
+    Boolean(account.trialEndsAt) &&
+    new Date(account.trialEndsAt as any) <= new Date();
+
   return {
     planId,
     trialing,
+    trialExpired,
     trialDaysLeft: trialing ? trialDaysRemaining(account) : 0,
     features: featureMapFor(planId, trialing),
     resolved: true,
@@ -91,7 +125,7 @@ export async function capabilitiesFor(req: Request): Promise<Capabilities> {
   // Staff see the whole product; they are not a revenue case.
   if (user.role === "admin" || user.role === "superadmin") {
     return {
-      planId: "standard", trialing: false, trialDaysLeft: 0,
+      planId: "standard", trialing: false, trialExpired: false, trialDaysLeft: 0,
       features: featureMapFor("standard"), resolved: true,
     };
   }

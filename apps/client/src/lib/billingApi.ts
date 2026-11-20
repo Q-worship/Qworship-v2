@@ -245,6 +245,13 @@ export interface Capabilities {
   planId: "free" | "standard";
   trialing: boolean;
   trialDaysLeft: number;
+  /**
+   * This church's one trial has run out and nothing has replaced it yet.
+   *
+   * What the route guard reads. A SETTLED free church is not in this state,
+   * so arriving on the free plan is not a lock-out.
+   */
+  trialExpired: boolean;
   features: FeatureMap;
 }
 

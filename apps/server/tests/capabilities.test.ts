@@ -133,6 +133,52 @@ check(
   'only a confident verdict may refuse anybody',
 );
 
+// ── Whether the trial-ended screen applies ────────────────────────────────
+//
+// `trialExpired` is what the client route guard reads. It replaced
+// `user.trialStatus`, a legacy per-user flag that no system owned and that
+// produced three separate lock-outs, so these are the cases that decide
+// whether somebody can reach the product at all.
+
+check(
+  'a lapsed, unsettled trial is expired',
+  capabilitiesForAccount({ planId: 'free', status: 'trialing', trialEndsAt: inDays(-1) }).trialExpired === true,
+  'the window between a trial running out and the sweep settling it',
+);
+
+check(
+  'a running trial is not expired',
+  capabilitiesForAccount({ planId: 'free', status: 'trialing', trialEndsAt: inDays(5) }).trialExpired === false,
+);
+
+check(
+  'a church settled onto free is NOT expired',
+  capabilitiesForAccount({ planId: 'free', status: 'active', trialEndsAt: inDays(-30) }).trialExpired === false,
+  'free is a real plan; arriving on it is not a lock-out',
+);
+
+check(
+  'a paying church is never expired, whatever its trial says',
+  capabilitiesForAccount({ planId: 'standard', status: 'trialing', trialEndsAt: inDays(-1) }).trialExpired === false,
+  'this is exactly the case that refused a paying church with 402 TRIAL_EXPIRED',
+);
+
+check(
+  'a past_due church is not expired',
+  capabilitiesForAccount({ planId: 'standard', status: 'past_due', trialEndsAt: inDays(-1) }).trialExpired === false,
+);
+
+check(
+  'a cancelled account is not held on the trial screen',
+  capabilitiesForAccount({ planId: 'standard', status: 'cancelled', trialEndsAt: inDays(-1) }).trialExpired === false,
+  'it has lost its features, but the way back is the plans tab, not a bounce',
+);
+
+check(
+  'an account that never trialed is not expired',
+  capabilitiesForAccount({ planId: 'free', status: 'active' }).trialExpired === false,
+);
+
 // ── The canvas is free, in full ────────────────────────────────────────────
 
 check(

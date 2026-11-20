@@ -18,18 +18,28 @@ import { CAPABILITIES_KEY, fetchCapabilities, type Capabilities } from "@/lib/bi
 const ASSUME_FREE: Capabilities = {
   planId: "free",
   trialing: false,
+  // Locking a control before the answer arrives costs nothing. REDIRECTING
+  // before it arrives would throw somebody off the page they asked for, so
+  // this one assumption has to point the other way.
+  trialExpired: false,
   trialDaysLeft: 0,
   features: Object.fromEntries(
     Object.keys(FEATURES).map((id) => [id, false]),
   ) as Capabilities["features"],
 };
 
-export function useCapabilities() {
+/**
+ * `enabled` exists for the route guard, which renders before we know whether
+ * anybody is signed in: asking a protected endpoint on behalf of a visitor
+ * would spend a 401 on every public page that happens to mount the guard.
+ */
+export function useCapabilities({ enabled = true }: { enabled?: boolean } = {}) {
   const query = useQuery({
     queryKey: CAPABILITIES_KEY,
     queryFn: fetchCapabilities,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    enabled,
   });
 
   const capabilities = query.data?.capabilities ?? ASSUME_FREE;
@@ -48,6 +58,15 @@ export function useCapabilities() {
     isTrialing: capabilities.trialing,
     trialDaysLeft: capabilities.trialDaysLeft,
     isFree: capabilities.planId === "free" && !capabilities.trialing,
+    /**
+     * Whether the trial has lapsed with nothing chosen yet.
+     *
+     * `isLoading` comes with it because the route guard must not act on the
+     * placeholder above: no answer yet is not the same as "no trial has
+     * expired", and the difference decides whether somebody keeps the page
+     * they asked for.
+     */
+    trialExpired: capabilities.trialExpired,
   };
 }
 
