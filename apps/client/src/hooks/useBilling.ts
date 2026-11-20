@@ -256,7 +256,17 @@ export function useContinueFree() {
   const setAuth = useAuthStore((state) => state.setAuth);
   return useMutation({
     mutationFn: continueOnFreePlan,
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      // WRITE THE ANSWER IN, do not merely ask for it again. The response
+      // body already carries the authoritative capabilities, and the route
+      // guard reads this cache to decide redirects: an invalidation whose
+      // refetch then fails (offline blip, a 500, the 400 a multi-church
+      // owner gets) leaves React Query serving the PREVIOUS value, which
+      // still says the trial has expired — and the guard sends somebody who
+      // has just settled onto free straight back to the screen they settled
+      // from. That is the loop this whole change exists to end, arriving by
+      // cache instead of by a user flag.
+      if (data?.capabilities) queryClient.setQueryData(CAPABILITIES_KEY, data);
       queryClient.invalidateQueries({ queryKey: CAPABILITIES_KEY });
       queryClient.invalidateQueries({ queryKey: BILLING_OVERVIEW_KEY });
       try {

@@ -50,6 +50,33 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
  * fallback. The order matters: this must only ever widen access during the
  * transition, never narrow it, or a release turns into an outage for everyone
  * whose account row has not caught up.
+ *
+ * WHICH IS WHY THIS NO LONGER REFUSES ANYBODY, and that needs saying plainly
+ * rather than being inferred from the absence of a 402.
+ *
+ * The fallback was still narrowing access in one case, and it was the worst
+ * one. A church whose `accountId` was never set cannot be placed, so
+ * `accountAccess` could not grant — and the legacy flags then refused it with
+ * `402 TRIAL_EXPIRED` on all 33 of these routes. Five owners were in exactly
+ * that state in production. Once the client route guard stopped reading the
+ * legacy flag they could open the app and every gated call failed underneath
+ * them, which is worse than an honest wall.
+ *
+ * It also contradicted the other half of the same system: capability.service
+ * answers UNRESOLVED for a church it cannot place and documents, in as many
+ * words, that a gate may not refuse on that basis — the same trade hours and
+ * storage already make, where an attribution gap is a reporting problem and
+ * not a reason to refuse somebody mid-service. Two entitlement paths giving
+ * opposite answers to the same input is the bug this file's own comment says
+ * it exists to fix.
+ *
+ * So what remains here is PASSES only. An account that exists grants access;
+ * the legacy flags can still grant it; and a caller nobody can place is let
+ * through rather than refused. Nothing is given away by that: being "in" has
+ * meant very little since free became a real plan, and what a plan actually
+ * withholds is decided per feature in capability.service.ts, which refuses
+ * only on a verdict it is confident about. Genuine suspension is upstream in
+ * `protect`, which turns away an inactive or unverified user outright.
  */
 export const requireProductAccess = async (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
@@ -64,12 +91,21 @@ export const requireProductAccess = async (req: Request, res: Response, next: Ne
   // Legacy flags, for accounts that predate billing or could not be resolved.
   if (user.subscriptionStatus === 'active' || user.trialStatus === 'converted') return next();
   if (user.trialStatus === 'active' && user.trialEndDate && user.trialEndDate > new Date()) return next();
+
+  // A legacy trial whose date has passed: settle the flag so admin listings
+  // and reporting stop calling it live. Fires once — the condition is false
+  // on every later request — and it decides nothing here, since this now
+  // passes either way. The Account is what the product reads.
   if (user.trialStatus === 'active') {
     user.trialStatus = 'expired';
     user.subscriptionStatus = 'inactive';
     await user.save();
   }
-  return res.status(402).json({ success: false, message: 'Your free trial has expired', errorType: 'TRIAL_EXPIRED' });
+
+  // Nobody could be placed, so nobody is refused. See the note above: this
+  // is deliberate, not an oversight, and `requireFeature` is where a plan
+  // actually withholds something.
+  return next();
 };
 
 /**

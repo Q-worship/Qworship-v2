@@ -28,7 +28,11 @@ interface Props {
 
 export function PlanSelectionModal({ open, onOpenChange, reason }: Props) {
   const [, navigate] = useLocation();
-  const { capabilities, isTrialing, trialDaysLeft } = useCapabilities();
+  // Only once open, for the same reason the overview below is gated: this
+  // component is mounted above the router, so an unconditional read asks a
+  // PROTECTED endpoint on every page in the app — including the public ones,
+  // where it spends a 401 on a visitor who is not signed in at all.
+  const { capabilities, isTrialing, trialDaysLeft } = useCapabilities({ enabled: open });
   const [interval, setInterval] = useState<"month" | "year">("year");
   // Only once open: this component is mounted above the router, so an
   // unconditional fetch would ask for billing on every page in the app.

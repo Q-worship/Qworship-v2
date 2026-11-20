@@ -21,13 +21,30 @@ export async function syncLegacyEntitlement(account: IAccount): Promise<void> {
       .select("_id ownerId")
       .lean();
 
-    const memberships = churches.length
-      ? await Membership.find({
-          organizationId: { $in: churches.map((c) => c._id) },
-        })
-          .select("userId")
-          .lean()
-      : [];
+    /*
+     * AN ACCOUNT WITH NO CHURCHES SPEAKS FOR NOBODY.
+     *
+     * Kept from the original, and worth keeping deliberately rather than by
+     * accident: removing a branch from a network, or joining one
+     * (`branches.routes.ts` repoints `organization.accountId`), can leave an
+     * account behind with no Organizations on it. When such an orphan lapses,
+     * the sweep settles it and would mirror `subscriptionStatus: "inactive"`
+     * onto its owner — who may be a branch owner inside a paying Standard
+     * network, holding their entitlement through a DIFFERENT account. The
+     * flags feed admin listings and reporting, so that is a wrong answer
+     * about a paying customer.
+     *
+     * This is the one case the owner union below must not reach. The churches
+     * are what make an account speak for anybody; the union decides WHO,
+     * among the people a real church accounts for.
+     */
+    if (churches.length === 0) return;
+
+    const memberships = await Membership.find({
+      organizationId: { $in: churches.map((c) => c._id) },
+    })
+      .select("userId")
+      .lean();
 
     /*
      * OWNERS COUNT, MEMBERSHIP ROW OR NOT.

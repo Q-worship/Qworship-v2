@@ -83,12 +83,16 @@ async function diagnose(user: any) {
   const account: any = org?.accountId ? await Account.findById(org.accountId).lean() : null;
 
   if (!account) {
-    console.log('  ACCOUNT: none the endpoint could resolve.');
-    console.log('  => Capabilities answer UNRESOLVED, so `trialExpired` is false and the');
-    console.log('     guard lets them through on the free feature set. NOT held.');
-    console.log('     An account is created on their next billing call, and the mirror');
-    console.log('     corrects the legacy flag then — no second trial, since the flag it');
-    console.log('     reads says this account has had one.');
+    console.log('  ACCOUNT: none on the church yet.');
+    console.log('  => `GET /billing/capabilities` — the route the guard reads — goes');
+    console.log('     through `requireAccount`, so `ensureAccountFor` CREATES the account');
+    console.log('     on that very request and answers with its real capabilities. The');
+    console.log('     account it makes is free (or inherits a legacy trial), never a new');
+    console.log('     thirty days, because `trialGrantFor` reads the owner\'s lapsed flag.');
+    console.log('     So: NOT held, and placed on first page load.');
+    console.log('     Note UNRESOLVED belongs to `capabilitiesFor`, which the FEATURE');
+    console.log('     gates use and which creates nothing. `backfill:church-accounts`');
+    console.log('     places a church whose owner never signs in.');
     return;
   }
 
@@ -97,6 +101,12 @@ async function diagnose(user: any) {
   line('account.trialEndsAt', account.trialEndsAt ?? '—');
 
   const caps = capabilitiesForAccount(account);
+
+  // Staff are short-circuited inside `capabilitiesFor` before any account is
+  // read, so replaying `capabilitiesForAccount` alone would report a hold
+  // that the endpoint never returns for them.
+  const staff = user.role === 'admin' || user.role === 'superadmin';
+  if (staff) caps.trialExpired = false;
   console.log('');
   line('capabilities.planId', caps.planId);
   line('capabilities.trialing', caps.trialing);
@@ -105,7 +115,7 @@ async function diagnose(user: any) {
   // --- 3. The verdict, from the one field the guard actually reads. ---
   console.log(`\n  CLIENT GUARD: ${caps.trialExpired
     ? 'HOLDS them on /account — every route but /dashboard-subscription'
-    : 'lets them through'}`);
+    : `lets them through${staff ? ' (staff: the whole product, no account read)' : ''}`}`);
 
   if (caps.trialExpired) {
     console.log('    The trial has lapsed and the account has not settled. This is the');
@@ -131,7 +141,7 @@ async function run() {
   const stuckMode = process.argv.includes('--stuck');
 
   const users = stuckMode
-    ? await User.find({ trialStatus: 'expired' }).select('email trialStatus trialEndDate subscriptionStatus onboardingStatus activeOrganizationId').lean()
+    ? await User.find({ trialStatus: 'expired' }).select('email role trialStatus trialEndDate subscriptionStatus onboardingStatus activeOrganizationId').lean()
     : await User.find({ email: { $in: args.map((a) => a.toLowerCase()) } }).lean();
 
   if (!users.length) { console.log('No matching user. Pass an email, or --stuck for everyone carrying the legacy flag.'); process.exit(1); }

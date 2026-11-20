@@ -29,9 +29,12 @@ const ASSUME_FREE: Capabilities = {
 };
 
 /**
- * `enabled` exists for the route guard, which renders before we know whether
- * anybody is signed in: asking a protected endpoint on behalf of a visitor
- * would spend a 401 on every public page that happens to mount the guard.
+ * `enabled` is for callers that render before we know whether anybody is
+ * signed in: this endpoint is protected, so asking on a visitor's behalf
+ * spends a 401. The route guard passes `isAuthenticated`, and
+ * `PlanSelectionModal` — mounted above the router, so live on public pages
+ * too — passes whether it is open. Both are needed: one unguarded caller on
+ * this shared key is enough to make the request anyway.
  */
 export function useCapabilities({ enabled = true }: { enabled?: boolean } = {}) {
   const query = useQuery({
@@ -61,10 +64,10 @@ export function useCapabilities({ enabled = true }: { enabled?: boolean } = {}) 
     /**
      * Whether the trial has lapsed with nothing chosen yet.
      *
-     * `isLoading` comes with it because the route guard must not act on the
-     * placeholder above: no answer yet is not the same as "no trial has
-     * expired", and the difference decides whether somebody keeps the page
-     * they asked for.
+     * False while the answer is in flight, by way of the placeholder above —
+     * so a caller gating on this never has to ask whether it is loading. No
+     * answer yet is not the same as "the trial has expired", and the
+     * difference decides whether somebody keeps the page they asked for.
      */
     trialExpired: capabilities.trialExpired,
   };

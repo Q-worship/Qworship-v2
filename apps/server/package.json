@@ -23,7 +23,8 @@
     "merge:duplicate-accounts": "tsx src/scripts/merge-duplicate-accounts.ts",
     "backfill:settled-trials": "tsx src/scripts/backfill-settled-trials.ts",
     "set:trial-flag": "tsx src/scripts/set-trial-flag.ts",
-    "diagnose:redirect": "tsx src/scripts/diagnose-trial-redirect.ts"
+    "diagnose:redirect": "tsx src/scripts/diagnose-trial-redirect.ts",
+    "backfill:church-accounts": "tsx src/scripts/backfill-church-accounts.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1020.0",

@@ -179,6 +179,16 @@ regressed:
   in flight and false for an unresolvable church, so the failure mode is
   somebody keeping the page they asked for. Same trade hours and storage make.
 
+**`requireProductAccess` no longer refuses anybody**, and that is deliberate.
+Its legacy fallback was still narrowing access in one case: a church with no
+`accountId` could not be granted on the account and was then refused by the
+old user flags, which contradicted `capability.service.ts` — that answers
+UNRESOLVED for a church it cannot place and refuses nothing on that basis.
+Two entitlement paths, opposite answers, same input. What is left in the
+middleware is passes only; a plan withholds things through `requireFeature`,
+which refuses only on a confident verdict, and genuine suspension is handled
+upstream in `protect`.
+
 What remains on the legacy flags is reporting: admin listings and the usage
 screens. `backfill:settled-trials` reconciles a stale one (it widens to
 churches a user OWNS, not just ones they are a member of — four owners in
@@ -289,7 +299,7 @@ claimed. That is also a startup-time win. Until then, this sits in the same
 category as the canvas and PowerPoint import — and by the rule above, that
 category belongs either enforced or free.
 
-### 5. Five churches carry no `accountId`, and that is now harmless
+### 5. Five churches carry no `accountId`
 
 Found while auditing the trial redirect: five owners hold a church whose
 `accountId` was never set, and four of them have no Membership row to their
@@ -297,12 +307,35 @@ own church either. They were the worst-affected by the redirect defects and
 are the reason `backfill:settled-trials` and the entitlement mirror both
 resolve churches a user OWNS rather than only ones they are a member of.
 
-Nothing is owed here. `capabilitiesFor` reads `organization.accountId` and
-answers UNRESOLVED without one, which means the free feature set and no
-redirect, and `ensureAccountFor` creates the account on their next billing
-call — `trialGrantFor` reads their legacy `expired` flag at that moment, so
-they land on free rather than earning a second trial. Recorded because "no
-account could be resolved" in an audit looks like a defect and is not one.
+**This was first written up here as harmless. It was not.** The client half
+was fine — `capabilitiesFor` answers UNRESOLVED without an `accountId`, which
+means the free feature set and no redirect. The server half refused them:
+`accountGrantsAccess` cannot grant on a church it cannot place, and the legacy
+fallback in `requireProductAccess` then answered `402 TRIAL_EXPIRED` on all 33
+routes. Once the route guard stopped reading the legacy flag, that became the
+worst of both — an app that opens and then fails on use. The middleware no
+longer refuses an unplaceable caller (see *Two systems, one answer*), so the
+lock-out is gone.
+
+There are **eight such churches**, not five — the five were the owners whose
+legacy flag happened to be `expired`. Four join an account their owner
+already holds; four need a new free one. Two are duplicates of one name under
+one owner, which is worth a look of its own.
+
+They are also mostly self-healing, which the first write-up of this missed in
+the other direction: `GET /billing/capabilities` — the route the guard reads
+on every authenticated page — runs `requireAccount`, so `ensureAccountFor`
+creates and claims the account on that request. `UNRESOLVED` is what
+`capabilitiesFor` answers, and that is the FEATURE gates' path, which creates
+nothing.
+
+Closing the gap deliberately is still worth it, for the church whose owner
+does not sign in and because an unplaceable church has its hours, storage and
+features decided by fallbacks rather than by a plan. `pnpm
+backfill:church-accounts` does it: dry run by default, and the work is done by
+`ensureAccountFor` so a church joins its OWNER'S existing account where there
+is one, the claim stays race-safe, and `trialGrantFor` reads the owner's
+lapsed flag — so nobody earns a second trial out of being migrated.
 
 ### 6. Gift stacking
 
