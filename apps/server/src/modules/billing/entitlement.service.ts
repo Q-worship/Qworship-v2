@@ -34,17 +34,24 @@ export async function syncLegacyEntitlement(account: IAccount): Promise<void> {
      * flags feed admin listings and reporting, so that is a wrong answer
      * about a paying customer.
      *
-     * This is the one case the owner union below must not reach. The churches
-     * are what make an account speak for anybody; the union decides WHO,
-     * among the people a real church accounts for.
+     * This is the one case the owner union below must not reach — in the
+     * LAPSE direction only, which is the direction that does harm. Returning
+     * outright, as this first did, also skipped the `paid` write: an account
+     * that converts to Standard while holding no Organization row (a branch
+     * move repoints `accountId`; `ensureAccountFor` returns an unattached
+     * account when the church lookup comes back empty) would leave its owner
+     * reading `inactive` in the very listings this mirror exists to correct.
+     * So widening still happens, narrowing does not. See `canNarrow` below.
      */
-    if (churches.length === 0) return;
+    const canNarrow = churches.length > 0;
 
-    const memberships = await Membership.find({
-      organizationId: { $in: churches.map((c) => c._id) },
-    })
-      .select("userId")
-      .lean();
+    const memberships = churches.length
+      ? await Membership.find({
+          organizationId: { $in: churches.map((c) => c._id) },
+        })
+          .select("userId")
+          .lean()
+      : [];
 
     /*
      * OWNERS COUNT, MEMBERSHIP ROW OR NOT.
@@ -88,6 +95,9 @@ export async function syncLegacyEntitlement(account: IAccount): Promise<void> {
     // per account, still forever — while nothing reads it as a lock-out.
     const settledOnFree =
       account.planId === "free" && account.status === "active" && !paid;
+
+    // An account with no churches may only ever widen: see `canNarrow`.
+    if (!paid && !canNarrow) return;
 
     await User.updateMany(
       { _id: { $in: userIds } },

@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 import { connectDB } from '../core/db.js';
 import { Organization } from '../modules/organization/organization.model.js';
 import { Account } from '../modules/organization/account.model.js';
-import { ensureAccountFor } from '../modules/organization/account.service.js';
+import { ensureAccountFor, pickOwnersAccount } from '../modules/organization/account.service.js';
+import { entitlementsFor } from '@qworship/shared';
 
 dotenv.config();
 
@@ -56,17 +57,61 @@ async function run() {
   // Reported per church, because "joins the owner's existing account" and
   // "gets a new free one" are different outcomes and the second is the one
   // worth reading twice.
+  //
+  // The destination is worked out with `pickOwnersAccount` — the SAME
+  // function `ensureAccountFor` uses — rather than by re-deriving the rule.
+  // Re-deriving it got this wrong: "oldest live account" is not the rule. A
+  // live STANDARD account wins over an older free one, so for an owner
+  // holding both, a hand-rolled dry run promised the free account and the
+  // apply would have attached the church to the one being paid for. The only
+  // safety gate on this migration is somebody reading the dry run, so it has
+  // to predict what the write does.
+  const skipped: string[] = [];
   for (const church of orphans) {
-    const owners: any[] = await Account.find({ ownerId: church.ownerId })
-      .select('_id planId status')
-      .sort({ createdAt: 1 })
-      .lean();
-    const live = owners.filter((a) => a.status !== 'cancelled');
-    const destination = live.length
-      ? `joins owner's existing account ${live[0]._id} (${live[0].planId}/${live[0].status})`
-      : 'gets a new free account';
     console.log(`  - ${church.name} (${church._id})`);
-    console.log(`      owner ${church.ownerId} — ${destination}`);
+
+    // A legacy row with no owner at all. Mongoose strips an `undefined`
+    // filter value, so `{ ownerId: undefined }` would degrade to `{}` and
+    // report this church joining the oldest account in the DATABASE — a
+    // stranger's. And `ensureAccountFor(id, undefined)` would create an
+    // account owned by nobody.
+    if (!church.ownerId) {
+      console.log('      NO OWNER — skipped. Needs a human: an account is owned by somebody.');
+      skipped.push(String(church._id));
+      continue;
+    }
+
+    const destination = pickOwnersAccount(
+      await Account.find({ ownerId: church.ownerId }).sort({ createdAt: 1 }).lean(),
+    );
+
+    if (!destination) {
+      console.log(`      owner ${church.ownerId} — gets a new free account`);
+      continue;
+    }
+
+    console.log(
+      `      owner ${church.ownerId} — joins existing account ${destination._id}` +
+        ` (${destination.planId}/${destination.status})`,
+    );
+
+    // Flagged, not refused: `ensureAccountFor` attaches a church without
+    // checking slots, so the migration can leave a free account quietly
+    // running two churches — which onboarding would have refused. Whether to
+    // charge for the slot, or leave it, is a billing decision and not this
+    // script's to make.
+    const siblings = await Organization.countDocuments({ accountId: destination._id });
+    const slots = (destination as any).slots ?? entitlementsFor(destination.planId as any).slots;
+    if (siblings + 1 > slots) {
+      console.log(
+        `      OVER ALLOWANCE: would be church ${siblings + 1} on ${slots} slot(s).` +
+          ' Placing it is still better than leaving it unplaceable, but the slot is unpaid.',
+      );
+    }
+  }
+
+  if (skipped.length) {
+    console.log(`\n${skipped.length} church(es) skipped for having no owner.`);
   }
 
   if (!apply) {
@@ -77,6 +122,7 @@ async function run() {
   console.log('\nApplying…\n');
   let placed = 0;
   for (const church of orphans) {
+    if (!church.ownerId) continue;
     try {
       const account = await ensureAccountFor(church._id, church.ownerId);
       const fresh: any = await Organization.findById(church._id).select('accountId').lean();
@@ -93,7 +139,7 @@ async function run() {
     }
   }
 
-  console.log(`\nPlaced ${placed} of ${orphans.length}.\n`);
+  console.log(`\nPlaced ${placed} of ${orphans.filter((c) => c.ownerId).length} with an owner.\n`);
   process.exit(0);
 }
 run().catch((error) => { console.error(error); process.exit(1); });

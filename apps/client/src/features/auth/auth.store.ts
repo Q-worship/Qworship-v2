@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { queryClient } from '@/lib/queryClient';
+import { db } from '@/lib/db';
 
 /*
  * WHOEVER SIGNS IN NEXT MUST NOT INHERIT THE LAST PERSON'S ANSWERS.
@@ -25,6 +26,21 @@ const forgetEverythingCached = () => {
     // Never block a sign-in or sign-out on cache housekeeping.
     console.warn('[auth] Could not clear cached queries', error);
   }
+
+  /*
+   * The song library is NOT in React Query — it is in IndexedDB, keyed by
+   * songId and title with no church dimension at all, and `App.tsx` loads it
+   * into memory at startup before any fingerprint check. So clearing React
+   * Query alone left the previous person's songs rendering on the next
+   * person's dashboard until a revision fetch happened to disagree. Dropped
+   * here, where the session ends.
+   *
+   * Not awaited: a sign-out must not wait on IndexedDB, and the rows are a
+   * disposable offline copy of server data — re-synced on demand.
+   */
+  void db.songs
+    .clear()
+    .catch((error) => console.warn('[auth] Could not clear the offline song cache', error));
 };
 
 interface AuthState {

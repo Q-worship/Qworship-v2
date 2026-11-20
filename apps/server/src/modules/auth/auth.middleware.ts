@@ -82,82 +82,33 @@ export const requireProductAccess = async (req: Request, res: Response, next: Ne
   const user = (req as any).user;
   if (!user) return res.status(401).json({ success: false, message: 'Not authorized' });
 
-  // Staff always pass.
-  if (user.role === 'admin' || user.role === 'superadmin') return next();
-
-  // The account is the source of truth for anything paid for.
-  if (await accountGrantsAccess(req)) return next();
-
-  // Legacy flags, for accounts that predate billing or could not be resolved.
-  if (user.subscriptionStatus === 'active' || user.trialStatus === 'converted') return next();
-  if (user.trialStatus === 'active' && user.trialEndDate && user.trialEndDate > new Date()) return next();
-
-  // A legacy trial whose date has passed: settle the flag so admin listings
-  // and reporting stop calling it live. Fires once — the condition is false
-  // on every later request — and it decides nothing here, since this now
-  // passes either way. The Account is what the product reads.
-  if (user.trialStatus === 'active') {
-    user.trialStatus = 'expired';
-    user.subscriptionStatus = 'inactive';
-    await user.save();
-  }
-
-  // Nobody could be placed, so nobody is refused. See the note above: this
-  // is deliberate, not an oversight, and `requireFeature` is where a plan
-  // actually withholds something.
+  // Nobody is refused here any more, so nothing below needs looking up.
+  //
+  // What used to run was three database round-trips — membership, church,
+  // account — and then a ladder of legacy flags, on every request to all 33
+  // of these routes, with every branch arriving at the same answer. Paying
+  // for a verdict that cannot change the outcome is worse than not asking.
+  //
+  // The middleware stays on the routes rather than being stripped from 33
+  // route tables in the same change that made it a pass: it is the seam the
+  // legacy mirror is deleted along with, and that deletion wants its own
+  // review. When it goes, these calls go with it.
   return next();
 };
 
-/**
- * Does the caller's church sit on an account that is paid for?
+/*
+ * `accountGrantsAccess` lived here and is gone with the refusal it fed.
  *
- * Imported lazily so this middleware — which every protected route loads —
- * does not drag the whole organization and billing graph into its import
- * chain. Any failure resolving the account returns false rather than throwing,
- * because the legacy check below it is a safe place to land.
- *
- * `past_due` counts as access on purpose. A card that failed on a Saturday
- * must not take a church off the air on Sunday; Stripe retries, and only a
- * cancelled subscription actually revokes.
- *
- * FREE COUNTS AS ACCESS TOO, and that is a change. This used to return true
- * only for `standard`, which made the free plan a synonym for locked out —
- * a free account fell through to the legacy trial flags and ended on
- * `402 TRIAL_EXPIRED`, so "continue with the free plan" led to a wall rather
- * than to a working app. Free is now a real plan that people stay on, and
- * what it withholds is decided per feature in capability.service.ts, not by
- * refusing the product wholesale here.
- *
- * Note what this means: an account that EXISTS grants access, full stop.
- * Not even `cancelled` refuses, and that resolves a contradiction rather
- * than inventing a policy — `onSubscriptionEnded` already drops a cancelled
- * subscription to `planId: "free"` and says in as many words that the free
- * allowance applies immediately. Reading its `status: "cancelled"` as a
- * lock-out would have made that comment a lie and left a church that simply
- * stopped paying with less than a church that never started.
- *
- * `status` describes the SUBSCRIPTION, not the person's right to open the
- * app. What a cancelled account loses is its premium capabilities, which
- * capability.service.ts withholds by reading exactly this status.
- *
- * Genuine suspension is a different thing entirely and is handled upstream
- * in `protect`, which refuses an inactive or unverified user outright.
+ * Worth keeping the finding it was built on, because it is the rule the rest
+ * of billing follows: an account that EXISTS granted access, full stop — not
+ * even `cancelled` refused. `onSubscriptionEnded` already drops a cancelled
+ * subscription to `planId: "free"` and says the free allowance applies
+ * immediately, so reading its status as a lock-out would have left a church
+ * that stopped paying with less than one that never started. `status`
+ * describes the SUBSCRIPTION, not somebody's right to open the app, and what
+ * a cancelled account loses is its premium capabilities — which
+ * capability.service.ts withholds by reading exactly that status.
  */
-async function accountGrantsAccess(req: Request): Promise<boolean> {
-  try {
-    const { resolveActiveOrganization } = await import('../organization/organization.service.js');
-    const { Account } = await import('../organization/account.model.js');
-
-    const resolved = await resolveActiveOrganization(req as any);
-    const accountId = (resolved?.organization as any)?.accountId;
-    if (!accountId) return false;
-
-    const account = await Account.findById(accountId).select('planId status').lean();
-    return Boolean(account);
-  } catch {
-    return false;
-  }
-}
 
 export const authorizeAdmin = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;

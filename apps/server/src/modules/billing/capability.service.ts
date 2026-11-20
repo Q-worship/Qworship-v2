@@ -131,8 +131,52 @@ export async function capabilitiesFor(req: Request): Promise<Capabilities> {
   }
 
   try {
-    const { resolveActiveOrganization } = await import("../organization/organization.service.js");
-    const resolved = await resolveActiveOrganization(req as any);
+    const { resolveActiveOrganization, resolveOrganizationForUser } = await import(
+      "../organization/organization.service.js"
+    );
+    let resolved = await resolveActiveOrganization(req as any);
+
+    /*
+     * A HEADER MUST NOT BE ABLE TO BUY THE PRODUCT.
+     *
+     * `UNRESOLVED` makes every feature gate pass — deliberately, so an
+     * attribution gap never stops a service. But resolution reads a
+     * CLIENT-SUPPLIED church id (`x-organization-id`, or the body/query), and
+     * it returns null outright when the caller holds no membership there. So
+     * a free account could name any valid ObjectId it did not belong to,
+     * manufacture the unresolved state on purpose, and walk through every
+     * gate plus the storage guard. One header for the whole Standard set.
+     *
+     * Resolution itself must keep refusing that id — serving another church's
+     * data because somebody asked nicely would be far worse. What is wrong is
+     * letting a refused id decide this caller's PLAN. So when resolution
+     * fails we ask again without the requested id, which answers from their
+     * own active church, their only membership, or a legacy owned church.
+     *
+     * A legitimate header still decides: it only reaches this second attempt
+     * when the first one found nothing.
+     */
+    if (!resolved) {
+      resolved = await resolveOrganizationForUser(user._id, null);
+    }
+
+    /*
+     * Nothing to be unsure ABOUT is not the same as being unsure.
+     *
+     * A caller with no church cannot be mid-service for one, so failing open
+     * protects nobody and hands out Standard to anybody holding no church.
+     * They are free, confidently. Ambiguity — several churches and no active
+     * one — is the case UNRESOLVED exists for, and it still fails open.
+     */
+    if (!resolved) {
+      const { Membership } = await import("../organization/membership.model.js");
+      // Two is all it takes to know it is ambiguous, and resolution counts
+      // them the same way.
+      const held = await Membership.find({ userId: user._id }).limit(2).select("_id").lean();
+      if (held.length < 2) return { ...UNRESOLVED, resolved: true };
+      return UNRESOLVED;
+    }
+
     const accountId = (resolved?.organization as any)?.accountId;
     if (!accountId) return UNRESOLVED;
 

@@ -100,13 +100,16 @@ async function diagnose(user: any) {
   line('account.planId / status', `${account.planId} / ${account.status}`);
   line('account.trialEndsAt', account.trialEndsAt ?? '—');
 
-  const caps = capabilitiesForAccount(account);
-
-  // Staff are short-circuited inside `capabilitiesFor` before any account is
-  // read, so replaying `capabilitiesForAccount` alone would report a hold
-  // that the endpoint never returns for them.
+  // Staff are short-circuited inside `capabilitiesFor` BEFORE any account is
+  // read, and the whole verdict is replaced, not just the hold: they come
+  // back on standard, not trialing, with no days left. Patching one field of
+  // the account's verdict reported a superadmin as sitting on free with that
+  // account's trial figures — wrong, in a script whose only job is to say
+  // what the endpoint returns.
   const staff = user.role === 'admin' || user.role === 'superadmin';
-  if (staff) caps.trialExpired = false;
+  const caps = staff
+    ? { planId: 'standard' as const, trialing: false, trialExpired: false, trialDaysLeft: 0 }
+    : capabilitiesForAccount(account);
   console.log('');
   line('capabilities.planId', caps.planId);
   line('capabilities.trialing', caps.trialing);

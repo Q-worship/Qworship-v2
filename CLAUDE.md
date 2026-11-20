@@ -318,9 +318,16 @@ longer refuses an unplaceable caller (see *Two systems, one answer*), so the
 lock-out is gone.
 
 There are **eight such churches**, not five — the five were the owners whose
-legacy flag happened to be `expired`. Four join an account their owner
-already holds; four need a new free one. Two are duplicates of one name under
-one owner, which is worth a look of its own.
+legacy flag happened to be `expired`. Four need a new free account, three join
+one their owner already holds, and **one has no `ownerId` at all** and is
+skipped: an account is owned by somebody, and guessing is how that church
+would have been attached to a stranger's. Two of the three are duplicates of
+one name under one owner, worth a look of its own, and all three would land
+as church number three on a one-slot free account — so those accounts are
+already running two churches each, which onboarding's slot check would have
+refused. The script flags that and places them anyway; an unplaceable church
+is worse than an unpaid slot, and whether to charge for it is a billing
+decision.
 
 They are also mostly self-healing, which the first write-up of this missed in
 the other direction: `GET /billing/capabilities` — the route the guard reads
