@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Organization } from './organization.model.js';
 import { User } from '../auth/auth.model.js';
 import { canWrite, getMembership, grantMembership } from './organization.service.js';
+import { placeOnAccount } from './account.service.js';
 import { notifyReferralOrgActivated } from '../notifications/notification.service.js';
 
 export const getOrganization = async (req: Request, res: Response) => {
@@ -74,7 +75,10 @@ export const createOrganization = async (req: Request, res: Response) => {
     // 2. The creator becomes its owner.
     await grantMembership(userId, organization._id as any, 'owner');
 
-    // 3. Link the organization back to the user
+    // 3. And it joins an account, before it can be used.
+    await placeOnAccount(organization._id as any, userId);
+
+    // 4. Link the organization back to the user
     await User.findByIdAndUpdate(userId, {
       organizationName: name,
       activeOrganizationId: organization._id

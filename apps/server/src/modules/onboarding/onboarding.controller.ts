@@ -3,7 +3,7 @@ import { Organization } from '../organization/organization.model.js';
 import { User } from '../auth/auth.model.js';
 import { Campaign } from '../referral/campaign.model.js';
 import { grantMembership, resolveActiveOrganization } from '../organization/organization.service.js';
-import { ensureAccountFor, slotUsage } from '../organization/account.service.js';
+import { ensureAccountFor, placeOnAccount, slotUsage } from '../organization/account.service.js';
 import { notifyReferralNewOrganization } from '../notifications/notification.service.js';
 
 const TRIAL_DAYS = 30;
@@ -88,6 +88,7 @@ export async function saveOrganization(req: Request, res: Response) {
 
       organization = await Organization.create({ ...details, ownerId: user._id });
       await grantMembership(user._id, organization._id as any, 'owner');
+      await placeOnAccount(organization._id as any, user._id);
       user.activeOrganizationId = organization._id;
     }
     if (!organization) {

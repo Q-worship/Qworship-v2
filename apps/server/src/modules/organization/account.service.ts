@@ -47,6 +47,39 @@ export function pickOwnersAccount<T extends { planId?: string; status?: string }
   );
 }
 
+/**
+ * Put a NEWLY CREATED church on an account, at creation.
+ *
+ * Both creation paths — onboarding and `POST /organizations` — used to make an
+ * Organization with an `ownerId` and a membership and no `accountId` at all,
+ * leaving every new church outside the billing model until something happened
+ * to call a billing route. That is where the eight unplaceable churches in
+ * production came from, so a one-off migration alone would have been a bucket
+ * under a leak.
+ *
+ * It was also a way through the feature gates. A church with no account
+ * cannot be placed, `capabilitiesFor` answered UNRESOLVED, and an unresolved
+ * verdict passes every gate by design so an attribution gap never stops a
+ * service. Create a church over the API, never touch a billing route, and the
+ * whole Standard set plus unmetered storage was yours.
+ *
+ * Failure does not fail the church. Somebody who has just filled in their
+ * details is not the person to tell about an account row, the next billing
+ * call creates it anyway, and capabilities now read a church without an
+ * account as free rather than unresolved — so the fallback is the right
+ * answer rather than a hole.
+ */
+export async function placeOnAccount(
+  organizationId: mongoose.Types.ObjectId | string,
+  ownerId: mongoose.Types.ObjectId | string,
+): Promise<void> {
+  try {
+    await ensureAccountFor(organizationId, ownerId);
+  } catch (error) {
+    console.error('[Account] Could not place a new church on an account:', error);
+  }
+}
+
 /** The account a church belongs to, creating a free one if it has none yet. */
 export async function ensureAccountFor(
   organizationId: mongoose.Types.ObjectId | string,

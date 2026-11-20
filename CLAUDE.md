@@ -299,7 +299,7 @@ claimed. That is also a startup-time win. Until then, this sits in the same
 category as the canvas and PowerPoint import — and by the rule above, that
 category belongs either enforced or free.
 
-### 5. Five churches carry no `accountId`
+### 5. Churches used to be born with no `accountId`
 
 Found while auditing the trial redirect: five owners hold a church whose
 `accountId` was never set, and four of them have no Membership row to their
@@ -329,8 +329,26 @@ refused. The script flags that and places them anyway; an unplaceable church
 is worse than an unpaid slot, and whether to charge for it is a billing
 decision.
 
-They are also mostly self-healing, which the first write-up of this missed in
-the other direction: `GET /billing/capabilities` — the route the guard reads
+**The cause was church creation itself.** Neither path — onboarding, nor
+`POST /organizations` — called `ensureAccountFor`, so every church was created
+with an `ownerId` and a membership and no account, and stayed that way until
+some billing call happened to run. A migration alone would have been a bucket
+under a leak. Both paths now call `placeOnAccount`, which wraps
+`ensureAccountFor` and swallows failure: the next billing call still creates
+the account, and capabilities read an account-less church as free.
+
+That last part matters, because the gap was also a way through the gates. A
+church with no account could not be placed, `capabilitiesFor` answered
+UNRESOLVED, and an unresolved verdict passes every `requireFeature` by design.
+Create a church over the API, never touch a billing route, and the Standard
+set plus unmetered storage was yours. `capabilitiesFor` now answers **free,
+confidently** for a resolved church with no `accountId` — no account means no
+plan was ever bought, and a paying church always has one, since nothing
+clears an `accountId` and a branch move repoints it. Failing to LOAD the
+account row stays unresolved; that is our failure, not a verdict.
+
+The orphans are also mostly self-healing, which the first write-up of this
+missed in the other direction: `GET /billing/capabilities` — the route the guard reads
 on every authenticated page — runs `requireAccount`, so `ensureAccountFor`
 creates and claims the account on that request. `UNRESOLVED` is what
 `capabilitiesFor` answers, and that is the FEATURE gates' path, which creates

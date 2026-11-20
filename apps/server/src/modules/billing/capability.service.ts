@@ -177,8 +177,25 @@ export async function capabilitiesFor(req: Request): Promise<Capabilities> {
       return UNRESOLVED;
     }
 
+    /*
+     * A CHURCH WITH NO ACCOUNT IS FREE, NOT UNKNOWABLE.
+     *
+     * This answered UNRESOLVED, which passes every gate — so a church that
+     * had never been placed held the Standard set. Both creation paths left
+     * churches exactly there until some billing call happened to run, which
+     * is how eight of them are sitting in production.
+     *
+     * We can be confident here. No account means no plan was ever bought for
+     * this church, and free is what it is owed; a church that IS paying has
+     * an `accountId`, and nothing clears one — a branch move repoints it. So
+     * this says free rather than shrugging, and `placeOnAccount` makes it a
+     * legacy case rather than the state every church starts in.
+     *
+     * Failing to read the ACCOUNT stays unresolved, though: an `accountId`
+     * pointing at a row we cannot load is our failure, not a verdict.
+     */
     const accountId = (resolved?.organization as any)?.accountId;
-    if (!accountId) return UNRESOLVED;
+    if (!accountId) return { ...UNRESOLVED, resolved: true };
 
     const account = await Account.findById(accountId)
       .select("planId status trialEndsAt")
