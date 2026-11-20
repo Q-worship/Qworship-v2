@@ -82,17 +82,29 @@ async function diagnose(user: any) {
   // product never reaches.
   const account: any = org?.accountId ? await Account.findById(org.accountId).lean() : null;
 
+  // Staff first, because `capabilitiesFor` short-circuits them before it
+  // reads a church at all — so the no-account narrative below never applies
+  // to them, whatever their own account says.
+  const staff = user.role === 'admin' || user.role === 'superadmin';
+  if (staff) {
+    console.log('\n  STAFF: capabilities answer standard, not trialing, no days left, and');
+    console.log('    the church is never read. NOT held, and no gate refuses them.');
+    return;
+  }
+
   if (!account) {
     console.log('  ACCOUNT: none on the church yet.');
-    console.log('  => `GET /billing/capabilities` — the route the guard reads — goes');
-    console.log('     through `requireAccount`, so `ensureAccountFor` CREATES the account');
-    console.log('     on that very request and answers with its real capabilities. The');
-    console.log('     account it makes is free (or inherits a legacy trial), never a new');
-    console.log('     thirty days, because `trialGrantFor` reads the owner\'s lapsed flag.');
-    console.log('     So: NOT held, and placed on first page load.');
-    console.log('     Note UNRESOLVED belongs to `capabilitiesFor`, which the FEATURE');
-    console.log('     gates use and which creates nothing. `backfill:church-accounts`');
-    console.log('     places a church whose owner never signs in.');
+    console.log('  => NOT held. `GET /billing/capabilities` — the route the guard reads —');
+    console.log('     goes through `requireAccount`, so `ensureAccountFor` CREATES the');
+    console.log('     account on that very request. It is free, or inherits a legacy');
+    console.log('     trial; never a fresh thirty days, since `trialGrantFor` reads the');
+    console.log('     owner\'s lapsed flag.');
+    console.log('     THE FEATURE GATES REFUSE, THOUGH, and that is current: a resolved');
+    console.log('     church with no account now reads as FREE confidently rather than');
+    console.log('     unresolved, so premium features answer 402 FEATURE_NOT_IN_PLAN');
+    console.log('     until the account exists. New churches are placed at creation');
+    console.log('     (`placeOnAccount`); `backfill:church-accounts` covers the legacy');
+    console.log('     rows, including a church whose owner never signs in.');
     return;
   }
 
@@ -100,16 +112,9 @@ async function diagnose(user: any) {
   line('account.planId / status', `${account.planId} / ${account.status}`);
   line('account.trialEndsAt', account.trialEndsAt ?? '—');
 
-  // Staff are short-circuited inside `capabilitiesFor` BEFORE any account is
-  // read, and the whole verdict is replaced, not just the hold: they come
-  // back on standard, not trialing, with no days left. Patching one field of
-  // the account's verdict reported a superadmin as sitting on free with that
-  // account's trial figures — wrong, in a script whose only job is to say
-  // what the endpoint returns.
-  const staff = user.role === 'admin' || user.role === 'superadmin';
-  const caps = staff
-    ? { planId: 'standard' as const, trialing: false, trialExpired: false, trialDaysLeft: 0 }
-    : capabilitiesForAccount(account);
+  // Staff returned above, before any of this: `capabilitiesFor` replaces
+  // their verdict whole rather than patching a field of the account's.
+  const caps = capabilitiesForAccount(account);
   console.log('');
   line('capabilities.planId', caps.planId);
   line('capabilities.trialing', caps.trialing);
@@ -118,7 +123,7 @@ async function diagnose(user: any) {
   // --- 3. The verdict, from the one field the guard actually reads. ---
   console.log(`\n  CLIENT GUARD: ${caps.trialExpired
     ? 'HOLDS them on /account — every route but /dashboard-subscription'
-    : `lets them through${staff ? ' (staff: the whole product, no account read)' : ''}`}`);
+    : 'lets them through'}`);
 
   if (caps.trialExpired) {
     console.log('    The trial has lapsed and the account has not settled. This is the');

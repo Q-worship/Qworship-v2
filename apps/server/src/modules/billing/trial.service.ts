@@ -35,13 +35,27 @@ export interface TrialGrant {
  * one. The alternative — a fresh thirty days for everybody on the day we
  * deploy — would quietly re-trial the entire existing base, including people
  * who already decided not to pay.
+ *
+ * `startNew: false` is for BULK PLACEMENT, where that alternative is exactly
+ * the risk. 1,661 churches in production have no account, because neither
+ * creation path ever made one, and placing them through the default would
+ * have started a fresh thirty-day trial for some 1,600 owners — a commercial
+ * event wearing a migration's clothes. With it off, a trial already running
+ * is still inherited and nobody is handed a new one.
+ *
+ * It does NOT spend their trial: `trialStartedAt` is left unset, so
+ * `hasEverTrialed` stays false and the ordinary path can still give them
+ * their one run later. Being placed on an account is not using up an offer.
  */
-export function trialGrantFor(user: {
-  trialStatus?: string;
-  trialStartDate?: Date | null;
-  trialEndDate?: Date | null;
-  subscriptionStatus?: string;
-}): TrialGrant {
+export function trialGrantFor(
+  user: {
+    trialStatus?: string;
+    trialStartDate?: Date | null;
+    trialEndDate?: Date | null;
+    subscriptionStatus?: string;
+  },
+  { startNew = true }: { startNew?: boolean } = {},
+): TrialGrant {
   const now = new Date();
 
   // Already converted on the legacy flags: not a trial, and not eligible for
@@ -65,7 +79,10 @@ export function trialGrantFor(user: {
     return { status: "active" };
   }
 
-  // Genuinely new: the full run.
+  // Genuinely new: the full run, unless the caller is placing in bulk and has
+  // said it is not here to hand trials out.
+  if (!startNew) return { status: "active" };
+
   return {
     status: "trialing",
     trialStartedAt: now,

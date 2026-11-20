@@ -252,6 +252,40 @@ check(
   trialGrantFor({ subscriptionStatus: 'active' }).status === 'active',
 );
 
+// ── Bulk placement must not hand out trials ───────────────────────────────
+//
+// 1,661 churches in production have no account, so `backfill:church-accounts`
+// places them with `startNew: false`. At that scale the default would have
+// started a fresh thirty-day trial for some 1,600 owners in one command.
+
+check(
+  'bulk placement does not start a trial for a brand-new owner',
+  trialGrantFor({}, { startNew: false }).status === 'active',
+  'the default gives this user thirty days; placement must not',
+);
+
+check(
+  'bulk placement does not spend the one trial they are still owed',
+  trialGrantFor({}, { startNew: false }).trialStartedAt === undefined,
+  'hasEverTrialed reads trialStartedAt — being placed is not using up an offer',
+);
+
+{
+  const ends = inDays(12);
+  const grant = trialGrantFor({ trialStatus: 'active', trialEndDate: ends }, { startNew: false });
+  check(
+    'bulk placement still inherits a trial already running',
+    grant.status === 'trialing' && grant.trialEndsAt?.getTime() === ends.getTime(),
+    'not starting one is not the same as taking one away',
+  );
+}
+
+check(
+  'the default still grants the full run',
+  trialGrantFor({}).status === 'trialing',
+  'every other caller is unchanged',
+);
+
 // ── Trial-ending notices ───────────────────────────────────────────────────
 
 check('a trial with 10 days left earns no notice yet', trialNoticeDue(10 * 24) === null);

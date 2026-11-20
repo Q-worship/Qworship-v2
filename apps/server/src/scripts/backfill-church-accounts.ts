@@ -3,13 +3,17 @@ import { connectDB } from '../core/db.js';
 import { Organization } from '../modules/organization/organization.model.js';
 import { Account } from '../modules/organization/account.model.js';
 import { ensureAccountFor, pickOwnersAccount } from '../modules/organization/account.service.js';
-import { entitlementsFor } from '@qworship/shared';
+import { accountSlots } from '../modules/organization/account.model.js';
 
 dotenv.config();
 
 /**
- * One-off: give every church without an `accountId` the account it should
- * already have.
+ * Give every church without an `accountId` the account it should already have.
+ *
+ * NOT a handful of stragglers: 1,661 churches across 1,615 owners, because
+ * neither creation path ever placed one (now fixed — see `placeOnAccount`).
+ * Read the dry run before applying it; at that size the summary matters more
+ * than any single line of it.
  *
  * An Account owns the subscription and Organizations consume its slots, so a
  * church with no `accountId` is outside the billing model entirely. Five were
@@ -67,6 +71,21 @@ async function run() {
   // safety gate on this migration is somebody reading the dry run, so it has
   // to predict what the write does.
   const skipped: string[] = [];
+
+  /*
+   * THE PREVIEW HAS TO FOLLOW ITS OWN FOOTPRINTS.
+   *
+   * Queried against the pre-run state alone, the preview lied about exactly
+   * the data this is being run for: two orphan churches under one owner who
+   * holds no account printed "gets a new free account" twice, while the apply
+   * creates one account for the first and attaches the second to it. The
+   * per-destination counts were under-reported the same way. So the preview
+   * carries what it has already decided — the account each owner will end up
+   * with, and how many churches will have landed on each.
+   */
+  const plannedFor = new Map<string, string>();
+  const landingOn = new Map<string, number>();
+
   for (const church of orphans) {
     console.log(`  - ${church.name} (${church._id})`);
 
@@ -81,30 +100,61 @@ async function run() {
       continue;
     }
 
-    const destination = pickOwnersAccount(
-      await Account.find({ ownerId: church.ownerId }).sort({ createdAt: 1 }).lean(),
-    );
+    const ownerKey = String(church.ownerId);
+    const existing: any[] = await Account.find({ ownerId: church.ownerId })
+      .sort({ createdAt: 1 })
+      .lean();
+    let destination: any = pickOwnersAccount(existing as any);
 
-    if (!destination) {
-      console.log(`      owner ${church.ownerId} — gets a new free account`);
-      continue;
+    // An account this run has already decided to create for the same owner.
+    // The key is a sentinel, not an id — nothing exists yet — and it stands
+    // in for the account the apply will make, so the counting below sees the
+    // second orphan land on the first one's account.
+    if (!destination && plannedFor.has(ownerKey)) {
+      const planned = plannedFor.get(ownerKey)!;
+      console.log(
+        `      owner ${ownerKey} — joins the free account this run creates for` +
+          ' their first orphan',
+      );
+      destination = { _id: planned, planId: 'free', status: 'active', slots: 1, bonusSlots: 0 };
+    } else if (!destination) {
+      console.log(`      owner ${ownerKey} — gets a new free account`);
+      const planned = `planned:${ownerKey}`;
+      plannedFor.set(ownerKey, planned);
+      destination = { _id: planned, planId: 'free', status: 'active', slots: 1, bonusSlots: 0 };
+    } else {
+      console.log(
+        `      owner ${ownerKey} — joins existing account ${destination._id}` +
+          ` (${destination.planId}/${destination.status})`,
+      );
     }
-
-    console.log(
-      `      owner ${church.ownerId} — joins existing account ${destination._id}` +
-        ` (${destination.planId}/${destination.status})`,
-    );
 
     // Flagged, not refused: `ensureAccountFor` attaches a church without
     // checking slots, so the migration can leave a free account quietly
     // running two churches — which onboarding would have refused. Whether to
     // charge for the slot, or leave it, is a billing decision and not this
     // script's to make.
-    const siblings = await Organization.countDocuments({ accountId: destination._id });
-    const slots = (destination as any).slots ?? entitlementsFor(destination.planId as any).slots;
-    if (siblings + 1 > slots) {
+    //
+    // Capacity is `accountSlots`, plan slots PLUS any admin grant: reading
+    // `slots` alone called an account with a bonus slot over its allowance
+    // when it was within it.
+    const destKey = String(destination._id);
+    if (!landingOn.has(destKey)) {
+      // A planned account holds nothing yet; a real one is counted once.
+      landingOn.set(
+        destKey,
+        destKey.startsWith('planned:')
+          ? 0
+          : await Organization.countDocuments({ accountId: destination._id }),
+      );
+    }
+    const position = (landingOn.get(destKey) ?? 0) + 1;
+    landingOn.set(destKey, position);
+
+    const capacity = accountSlots(destination);
+    if (position > capacity) {
       console.log(
-        `      OVER ALLOWANCE: would be church ${siblings + 1} on ${slots} slot(s).` +
+        `      OVER ALLOWANCE: would be church ${position} on ${capacity} slot(s).` +
           ' Placing it is still better than leaving it unplaceable, but the slot is unpaid.',
       );
     }
@@ -124,7 +174,17 @@ async function run() {
   for (const church of orphans) {
     if (!church.ownerId) continue;
     try {
-      const account = await ensureAccountFor(church._id, church.ownerId);
+      // NO NEW TRIALS. There are 1,661 of these churches across 1,615
+      // owners, so the default — a fresh thirty days for anybody who has
+      // never trialed — would start roughly 1,600 trials in one command.
+      // Placing a church is a data fix; handing out the product for a month
+      // is a commercial decision and not this script's to make. A trial
+      // already in flight is still inherited, and nobody's eligibility is
+      // spent: `trialStartedAt` stays unset, so they can still have their
+      // one run through the ordinary path.
+      const account = await ensureAccountFor(church._id, church.ownerId, {
+        startNewTrial: false,
+      });
       const fresh: any = await Organization.findById(church._id).select('accountId').lean();
       const ok = String(fresh?.accountId) === String(account._id);
       console.log(`  ${ok ? 'OK  ' : 'HM  '} ${church.name} -> ${account._id} (${account.planId}/${account.status})`);

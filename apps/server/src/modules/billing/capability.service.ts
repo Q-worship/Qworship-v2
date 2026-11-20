@@ -110,6 +110,45 @@ export function capabilitiesForAccount(account: {
 }
 
 /**
+ * The most generous verdict among the churches one person belongs to.
+ *
+ * For the ambiguous caller only — several churches, none marked active — where
+ * the alternative was passing every gate unconditionally. Generous on purpose:
+ * this must never refuse somebody a feature one of their own churches pays
+ * for, since we cannot tell which of them they are working in. It only
+ * narrows the case where NONE of them pays for it.
+ */
+async function bestOfTheirChurches(userId: unknown): Promise<Capabilities> {
+  const { Membership } = await import("../organization/membership.model.js");
+  const { Organization } = await import("../organization/organization.model.js");
+
+  const memberships = await Membership.find({ userId: userId as any })
+    .select("organizationId")
+    .lean();
+  const churches = await Organization.find({
+    _id: { $in: memberships.map((m) => m.organizationId) },
+  })
+    .select("accountId")
+    .lean();
+  const accountIds = churches.map((c: any) => c.accountId).filter(Boolean);
+  if (accountIds.length === 0) return { ...UNRESOLVED, resolved: true };
+
+  const accounts = await Account.find({ _id: { $in: accountIds } })
+    .select("planId status trialEndsAt")
+    .lean();
+
+  let best: Capabilities = { ...UNRESOLVED, resolved: true };
+  for (const account of accounts) {
+    const verdict = capabilitiesForAccount(account);
+    // Standard beats a trial beats free, and that order falls out of counting
+    // the features each verdict grants rather than ranking plan names here.
+    const granted = (c: Capabilities) => Object.values(c.features).filter(Boolean).length;
+    if (granted(verdict) > granted(best)) best = verdict;
+  }
+  return best;
+}
+
+/**
  * Resolve the caller's capabilities.
  *
  * An unresolvable request comes back as the free set flagged
@@ -170,11 +209,30 @@ export async function capabilitiesFor(req: Request): Promise<Capabilities> {
      */
     if (!resolved) {
       const { Membership } = await import("../organization/membership.model.js");
-      // Two is all it takes to know it is ambiguous, and resolution counts
-      // them the same way.
-      const held = await Membership.find({ userId: user._id }).limit(2).select("_id").lean();
-      if (held.length < 2) return { ...UNRESOLVED, resolved: true };
-      return UNRESOLVED;
+      const held = await Membership.find({ userId: user._id })
+        .limit(2)
+        .select("organizationId")
+        .lean();
+
+      // NONE, not "fewer than two". Somebody holding exactly one membership
+      // reaches here only when their church could not be LOADED — a deleted
+      // or mis-referenced row — and that caller genuinely is unknowable, so
+      // refusing them would be the mid-service refusal this file forbids.
+      if (held.length === 0) return { ...UNRESOLVED, resolved: true };
+
+      /*
+       * Ambiguous: several churches and no active one. Failing open here
+       * handed the whole Standard set to anybody in that state — and
+       * `activeOrganizationId` is only ever written when somebody CREATES a
+       * church, so a volunteer invited to two and owning neither sits here
+       * permanently, no header needed.
+       *
+       * So answer with the BEST plan among their own churches instead. It
+       * cannot refuse anybody something one of their churches is entitled
+       * to, which is what the no-refusal rule protects, and it stops being a
+       * way to hold Standard while paying for nothing.
+       */
+      return await bestOfTheirChurches(user._id);
     }
 
     /*

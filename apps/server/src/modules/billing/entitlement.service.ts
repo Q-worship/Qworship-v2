@@ -1,4 +1,4 @@
-import { IAccount } from "../organization/account.model.js";
+import { Account, IAccount } from "../organization/account.model.js";
 import { Organization } from "../organization/organization.model.js";
 import { Membership } from "../organization/membership.model.js";
 import { User } from "../auth/auth.model.js";
@@ -96,8 +96,49 @@ export async function syncLegacyEntitlement(account: IAccount): Promise<void> {
     const settledOnFree =
       account.planId === "free" && account.status === "active" && !paid;
 
-    // An account with no churches may only ever widen: see `canNarrow`.
-    if (!paid && !canNarrow) return;
+    /*
+     * An account with no churches may narrow only its OWNER, and only when
+     * nothing else is keeping them entitled.
+     *
+     * `canNarrow` alone was too blunt in both directions. Skipping the write
+     * entirely left the owner of an orphaned Standard account reading
+     * `active` and `converted` for good once Stripe cancelled it — nothing
+     * else would ever correct that row. Writing unconditionally was the
+     * original bug: a branch owner whose church moved onto somebody else's
+     * account would be stamped `inactive` while working inside a paying
+     * network.
+     *
+     * Both are the same person in different circumstances, so the question is
+     * not who they are but whether any OTHER live account still speaks for
+     * them. One query answers it, and only on this path.
+     */
+    if (!paid && !canNarrow) {
+      const theirChurches = await Organization.find({ ownerId: account.ownerId })
+        .select("accountId")
+        .lean();
+      const elsewhere = await Membership.find({ userId: account.ownerId })
+        .select("organizationId")
+        .lean();
+      const reachable = await Organization.find({
+        _id: { $in: elsewhere.map((m) => m.organizationId) },
+      })
+        .select("accountId")
+        .lean();
+
+      const otherAccountIds = [...theirChurches, ...reachable]
+        .map((c: any) => String(c.accountId))
+        .filter((id) => id && id !== "undefined" && id !== String(account._id));
+
+      if (otherAccountIds.length > 0) {
+        const live = await Account.countDocuments({
+          _id: { $in: otherAccountIds },
+          status: { $ne: "cancelled" },
+        });
+        // Somebody else's plan still covers them; this orphan does not get to
+        // say otherwise.
+        if (live > 0) return;
+      }
+    }
 
     await User.updateMany(
       { _id: { $in: userIds } },

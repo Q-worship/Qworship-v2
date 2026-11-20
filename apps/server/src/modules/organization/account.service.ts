@@ -84,6 +84,13 @@ export async function placeOnAccount(
 export async function ensureAccountFor(
   organizationId: mongoose.Types.ObjectId | string,
   ownerId: mongoose.Types.ObjectId | string,
+  /**
+   * `startNewTrial: false` places a church without ever STARTING a trial — a
+   * trial already running is still inherited. For bulk placement, where the
+   * default would start one for every owner who has never had one. It does
+   * not consume anybody's eligibility; see `trialGrantFor`.
+   */
+  { startNewTrial = true }: { startNewTrial?: boolean } = {},
 ): Promise<IAccount> {
   const organization = await Organization.findById(organizationId);
   if (organization?.accountId) {
@@ -133,7 +140,7 @@ export async function ensureAccountFor(
   const owner = await User.findById(ownerId)
     .select("trialStatus trialStartDate trialEndDate subscriptionStatus")
     .lean();
-  const trial = trialGrantFor(owner || {});
+  const trial = trialGrantFor(owner || {}, { startNew: startNewTrial });
   const account = await Account.create({
     ownerId,
     planId: "free",

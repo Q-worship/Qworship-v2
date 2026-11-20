@@ -317,17 +317,25 @@ worst of both — an app that opens and then fails on use. The middleware no
 longer refuses an unplaceable caller (see *Two systems, one answer*), so the
 lock-out is gone.
 
-There are **eight such churches**, not five — the five were the owners whose
-legacy flag happened to be `expired`. Four need a new free account, three join
-one their owner already holds, and **one has no `ownerId` at all** and is
-skipped: an account is owned by somebody, and guessing is how that church
-would have been attached to a stranger's. Two of the three are duplicates of
-one name under one owner, worth a look of its own, and all three would land
-as church number three on a one-slot free account — so those accounts are
-already running two churches each, which onboarding's slot check would have
-refused. The script flags that and places them anyway; an unplaceable church
-is worse than an unpaid slot, and whether to charge for it is a billing
-decision.
+**There are 1,661 such churches across 1,615 owners** — not the handful first
+written up here. That figure was a misread of a dry run; the real one is what
+you would expect from a cause that was in church CREATION, since nearly every
+church in the database went through it. 1,611 need a brand-new account, 42
+join one the run creates for the same owner, 7 join one their owner already
+holds, 1 has no `ownerId` at all and is skipped (an account is owned by
+somebody, and guessing is how that church would have joined a stranger's), and
+49 land over their slot allowance — placed anyway and flagged, since an
+unplaceable church is worse than an unpaid slot, but whether to charge for the
+slot is a billing decision.
+
+**At that size the placement must not hand out trials.** `ensureAccountFor`
+defaults to `trialGrantFor`, which gives a fresh thirty days to anybody with
+no legacy trial flags — so applying this the obvious way would have started
+roughly 1,600 trials in one command: a commercial event wearing a migration's
+clothes. The script passes `startNewTrial: false`. A trial already running is
+still inherited, and nobody's eligibility is spent — `trialStartedAt` stays
+unset, so `hasEverTrialed` is false and they can still have their one run the
+ordinary way. Covered by `test:capabilities`.
 
 **The cause was church creation itself.** Neither path — onboarding, nor
 `POST /organizations` — called `ensureAccountFor`, so every church was created

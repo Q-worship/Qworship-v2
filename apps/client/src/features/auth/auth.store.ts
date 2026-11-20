@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { queryClient } from '@/lib/queryClient';
 import { db } from '@/lib/db';
+import { useSongRAMCache } from '@/features/dashboard/hooks/useSongRAMCache';
+import { useBibleRAMCache } from '@/features/dashboard/hooks/useBibleRAMCache';
 
 /*
  * WHOEVER SIGNS IN NEXT MUST NOT INHERIT THE LAST PERSON'S ANSWERS.
@@ -32,12 +34,25 @@ const forgetEverythingCached = () => {
    * songId and title with no church dimension at all, and `App.tsx` loads it
    * into memory at startup before any fingerprint check. So clearing React
    * Query alone left the previous person's songs rendering on the next
-   * person's dashboard until a revision fetch happened to disagree. Dropped
-   * here, where the session ends.
+   * person's dashboard until a revision fetch happened to disagree.
    *
-   * Not awaited: a sign-out must not wait on IndexedDB, and the rows are a
-   * disposable offline copy of server data — re-synced on demand.
+   * BOTH COPIES, and the in-memory one first, because that is the copy that
+   * renders. `loadFromDisk` short-circuits on `isBooted`, which nothing ever
+   * resets, so emptying the Dexie table alone would leave the previous
+   * person's songs in `dictionary`/`songList` and no path back: the startup
+   * load returns early, and `/project-selection` — the one place a revision
+   * sync runs — can be skipped entirely by a stored presentation id.
+   *
+   * Not awaited: a sign-out must not wait on IndexedDB, and these rows are a
+   * disposable offline copy of server data, re-synced on demand.
    */
+  try {
+    useSongRAMCache.setState({ isBooted: false, isBooting: false, dictionary: {}, songList: [] });
+    useBibleRAMCache.setState({ isBooted: false, isBooting: false, dictionary: {} });
+  } catch (error) {
+    console.warn('[auth] Could not reset the in-memory caches', error);
+  }
+
   void db.songs
     .clear()
     .catch((error) => console.warn('[auth] Could not clear the offline song cache', error));
