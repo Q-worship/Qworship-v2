@@ -63,7 +63,19 @@ async function migrate() {
       continue;
     }
 
-    const grant = trialGrantFor(owner);
+    /*
+     * INHERIT ONLY, NEVER START.
+     *
+     * This script exists to carry legacy user-level trials onto accounts
+     * that predate them — six of them, when it was run. With the default it
+     * would also hand a FRESH thirty days to any account whose owner carries
+     * no legacy flags, which was harmless while that set was six and is not
+     * now: `backfill:church-accounts` creates roughly 1,600 accounts with no
+     * `trialStartedAt`, and this script selects on exactly that. A re-run
+     * would have started a trial for every one of them, which is the
+     * opposite of what its own header promises.
+     */
+    const grant = trialGrantFor(owner, { startNew: false });
 
     if (grant.status === 'trialing') {
       account.status = 'trialing';

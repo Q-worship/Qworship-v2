@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { registerSessionCache } from '../../../lib/sessionCaches';
 import { db } from '../../../lib/db';
 
 export interface MemoryVerse {
@@ -136,3 +137,13 @@ export const useBibleRAMCache = create<RAMCacheStore>((set, get) => ({
     });
   },
 }));
+
+/*
+ * Same reasoning as the song cache: `isBooted` gates the disk load, so the
+ * in-memory copy has to be dropped when a session ends. `db.verses` is
+ * deliberately NOT cleared — Bible text belongs to nobody in particular and
+ * the next load repopulates from it.
+ */
+registerSessionCache('bible', () =>
+  useBibleRAMCache.setState({ isBooted: false, isBooting: false, dictionary: {} }),
+);

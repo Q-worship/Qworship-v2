@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import { queryClient } from '@/lib/queryClient';
 import { db } from '@/lib/db';
-import { useSongRAMCache } from '@/features/dashboard/hooks/useSongRAMCache';
-import { useBibleRAMCache } from '@/features/dashboard/hooks/useBibleRAMCache';
+import { resetSessionCaches } from '@/lib/sessionCaches';
 
 /*
  * WHOEVER SIGNS IN NEXT MUST NOT INHERIT THE LAST PERSON'S ANSWERS.
@@ -46,12 +45,10 @@ const forgetEverythingCached = () => {
    * Not awaited: a sign-out must not wait on IndexedDB, and these rows are a
    * disposable offline copy of server data, re-synced on demand.
    */
-  try {
-    useSongRAMCache.setState({ isBooted: false, isBooting: false, dictionary: {}, songList: [] });
-    useBibleRAMCache.setState({ isBooted: false, isBooting: false, dictionary: {} });
-  } catch (error) {
-    console.warn('[auth] Could not reset the in-memory caches', error);
-  }
+  // Through the registry in `lib`, not by importing the dashboard: auth
+  // reaching into another feature is the cross-feature import this project
+  // checks for. Each cache registers its own reset.
+  resetSessionCaches();
 
   void db.songs
     .clear()

@@ -43,9 +43,16 @@ export interface TrialGrant {
  * event wearing a migration's clothes. With it off, a trial already running
  * is still inherited and nobody is handed a new one.
  *
- * It does NOT spend their trial: `trialStartedAt` is left unset, so
- * `hasEverTrialed` stays false and the ordinary path can still give them
- * their one run later. Being placed on an account is not using up an offer.
+ * `trialStartedAt` is left unset, so `hasEverTrialed` stays false and the
+ * account is still ELIGIBLE for a trial. Be careful what that does and does
+ * not mean, because the first version of this comment claimed more than is
+ * true: nothing in the product currently STARTS a trial on an existing
+ * account. This function is called from exactly two places — `ensureAccountFor`
+ * when it creates an account, and `migrate:account-trials` — and there is no
+ * start-trial route at all. So for an owner placed in bulk, the thirty days
+ * they would have received on their first billing-page load are withheld, not
+ * deferred. Giving them back needs either a trial-start path or a deliberate
+ * decision not to; it is not something this flag arranges on its own.
  */
 export function trialGrantFor(
   user: {

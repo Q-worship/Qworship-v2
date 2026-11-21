@@ -330,12 +330,26 @@ slot is a billing decision.
 
 **At that size the placement must not hand out trials.** `ensureAccountFor`
 defaults to `trialGrantFor`, which gives a fresh thirty days to anybody with
-no legacy trial flags — so applying this the obvious way would have started
-roughly 1,600 trials in one command: a commercial event wearing a migration's
-clothes. The script passes `startNewTrial: false`. A trial already running is
-still inherited, and nobody's eligibility is spent — `trialStartedAt` stays
-unset, so `hasEverTrialed` is false and they can still have their one run the
-ordinary way. Covered by `test:capabilities`.
+no legacy trial flags — so applying this the obvious way would start roughly
+1,600 trials in one command: a commercial event wearing a migration's clothes.
+The script passes `startNewTrial: false`, and a trial already running is still
+inherited. Covered by `test:capabilities`.
+
+**Be clear about the cost, which an earlier note here got wrong.** It said
+those owners keep their eligibility and can have their run "the ordinary way
+later". The account does stay eligible — `trialStartedAt` is unset, so
+`hasEverTrialed` is false — but **nothing acts on eligibility**: `trialGrantFor`
+is called only when an account is CREATED (and by `migrate:account-trials`),
+and there is no start-trial route anywhere. So those owners do not get the
+thirty days later; they lose the ones they would have been given on their
+first billing-page load. Whether that is the right trade is a decision for
+whoever runs the script, which is the other reason the dry run is the gate.
+
+**`migrate:account-trials` now inherits only, never starts** (`startNew:
+false`). Its note below still says re-running it is a no-op — that was true of
+the six accounts it was written for, and would have stopped being true the
+moment this backfill created ~1,600 accounts with no `trialStartedAt`, which
+is exactly what that script selects on. It would have trialed all of them.
 
 **The cause was church creation itself.** Neither path — onboarding, nor
 `POST /organizations` — called `ensureAccountFor`, so every church was created

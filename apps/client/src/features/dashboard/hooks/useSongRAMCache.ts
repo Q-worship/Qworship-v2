@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { db } from '../../../lib/db';
+import { registerSessionCache } from '../../../lib/sessionCaches';
 
 interface SongDictionary {
   [songId: string]: any;
@@ -79,3 +80,13 @@ export const useSongRAMCache = create<SongRAMCacheStore>((set, get) => ({
     set({ dictionary: dict, songList: list });
   }
 }));
+
+/*
+ * The dictionary is this session's, and `loadFromDisk` short-circuits on
+ * `isBooted` — which nothing else ever resets. So emptying the Dexie table at
+ * sign-out was not enough: the previous person's songs stayed in memory and
+ * the startup load returned early. Registered so the session end clears both.
+ */
+registerSessionCache('songs', () =>
+  useSongRAMCache.setState({ isBooted: false, isBooting: false, dictionary: {}, songList: [] }),
+);

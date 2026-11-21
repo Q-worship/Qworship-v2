@@ -4,7 +4,7 @@ import { Account } from '../modules/organization/account.model.js';
 import { Organization } from '../modules/organization/organization.model.js';
 import { Membership } from '../modules/organization/membership.model.js';
 import { User } from '../modules/auth/auth.model.js';
-import { capabilitiesForAccount } from '../modules/billing/capability.service.js';
+import { bestOfTheirChurches, capabilitiesForAccount } from '../modules/billing/capability.service.js';
 
 dotenv.config();
 
@@ -89,6 +89,28 @@ async function diagnose(user: any) {
   if (staff) {
     console.log('\n  STAFF: capabilities answer standard, not trialing, no days left, and');
     console.log('    the church is never read. NOT held, and no gate refuses them.');
+    return;
+  }
+
+  /*
+   * Ambiguous: several churches and none marked active, so resolution
+   * returns nothing and capabilities are answered from the BEST plan among
+   * their own churches. Printed by calling that function, not by describing
+   * it — the script said "the feature gates refuse" for these callers while
+   * the endpoint was handing some of them the whole Standard set.
+   */
+  if (!org && memberships.length > 1) {
+    const best = await bestOfTheirChurches(user._id);
+    console.log('  AMBIGUOUS: several churches, none active. Resolution returns nothing,');
+    console.log('    so capabilities answer with the best plan among their churches:');
+    line('  planId', best.planId);
+    line('  trialing', best.trialing);
+    line('  trialExpired', best.trialExpired);
+    line('  resolved', best.resolved);
+    console.log(`  CLIENT GUARD: ${best.trialExpired ? 'HOLDS them on /account' : 'lets them through'}`);
+    console.log(`  FEATURE GATES: ${best.resolved
+      ? 'enforce that plan'
+      : 'pass — their churches could not be loaded at all'}`);
     return;
   }
 

@@ -118,7 +118,7 @@ export function capabilitiesForAccount(account: {
  * for, since we cannot tell which of them they are working in. It only
  * narrows the case where NONE of them pays for it.
  */
-async function bestOfTheirChurches(userId: unknown): Promise<Capabilities> {
+export async function bestOfTheirChurches(userId: unknown): Promise<Capabilities> {
   const { Membership } = await import("../organization/membership.model.js");
   const { Organization } = await import("../organization/organization.model.js");
 
@@ -130,6 +130,18 @@ async function bestOfTheirChurches(userId: unknown): Promise<Capabilities> {
   })
     .select("accountId")
     .lean();
+
+  /*
+   * NO CHURCH ROWS IS A DIFFERENT ANSWER FROM NO ACCOUNTS ON THEM.
+   *
+   * Memberships pointing at Organizations that cannot be loaded — deleted or
+   * mis-referenced — is a caller we genuinely cannot place, and refusing
+   * them is the mid-service refusal this file forbids. Churches that load
+   * but hold no account are the ordinary unplaced case, and free is the
+   * confident answer there.
+   */
+  if (churches.length === 0) return UNRESOLVED;
+
   const accountIds = churches.map((c: any) => c.accountId).filter(Boolean);
   if (accountIds.length === 0) return { ...UNRESOLVED, resolved: true };
 
@@ -137,13 +149,22 @@ async function bestOfTheirChurches(userId: unknown): Promise<Capabilities> {
     .select("planId status trialEndsAt")
     .lean();
 
+  // Paid outranks a trial outranks free, explicitly. Counting granted
+  // features cannot tell paid from trialing — a trial IS the Standard set —
+  // so it kept whichever row Mongo returned first, and a paying customer in
+  // two churches could be told they were on a trial with the sibling's days
+  // remaining.
+  const rank = (c: Capabilities) =>
+    c.planId === "standard" && !c.trialing ? 3 : c.trialing ? 2 : 1;
+
   let best: Capabilities = { ...UNRESOLVED, resolved: true };
+  let bestRank = 0;
   for (const account of accounts) {
     const verdict = capabilitiesForAccount(account);
-    // Standard beats a trial beats free, and that order falls out of counting
-    // the features each verdict grants rather than ranking plan names here.
-    const granted = (c: Capabilities) => Object.values(c.features).filter(Boolean).length;
-    if (granted(verdict) > granted(best)) best = verdict;
+    if (rank(verdict) > bestRank) {
+      best = verdict;
+      bestRank = rank(verdict);
+    }
   }
   return best;
 }

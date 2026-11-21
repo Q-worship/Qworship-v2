@@ -4,6 +4,7 @@ import { Organization } from '../modules/organization/organization.model.js';
 import { Account } from '../modules/organization/account.model.js';
 import { ensureAccountFor, pickOwnersAccount } from '../modules/organization/account.service.js';
 import { accountSlots } from '../modules/organization/account.model.js';
+import { entitlementsFor } from '@qworship/shared';
 
 dotenv.config();
 
@@ -151,7 +152,14 @@ async function run() {
     const position = (landingOn.get(destKey) ?? 0) + 1;
     landingOn.set(destKey, position);
 
-    const capacity = accountSlots(destination);
+    // `accountSlots` is slots + bonusSlots, which is the right CAPACITY —
+    // but schema defaults are not applied to `lean()` reads of rows that
+    // predate the field, so an account with no `slots` would report 0 and
+    // every church landing on it would print an overage. The catalog fills
+    // that in.
+    const capacity =
+      accountSlots(destination) ||
+      entitlementsFor(destination.planId as any).slots + (destination.bonusSlots ?? 0);
     if (position > capacity) {
       console.log(
         `      OVER ALLOWANCE: would be church ${position} on ${capacity} slot(s).` +
@@ -179,9 +187,15 @@ async function run() {
       // never trialed — would start roughly 1,600 trials in one command.
       // Placing a church is a data fix; handing out the product for a month
       // is a commercial decision and not this script's to make. A trial
-      // already in flight is still inherited, and nobody's eligibility is
-      // spent: `trialStartedAt` stays unset, so they can still have their
-      // one run through the ordinary path.
+      // already in flight is still inherited.
+      //
+      // Know what this costs, though: there is no route that starts a trial
+      // on an existing account, so those owners do not get their thirty days
+      // LATER — they lose the ones they would have been given on their first
+      // billing-page load. The account stays eligible (`trialStartedAt`
+      // unset) but nothing acts on eligibility. Whether that is the intended
+      // trade is a decision for whoever runs this, which is the other reason
+      // the dry run is the gate.
       const account = await ensureAccountFor(church._id, church.ownerId, {
         startNewTrial: false,
       });

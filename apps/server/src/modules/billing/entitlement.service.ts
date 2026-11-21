@@ -125,14 +125,29 @@ export async function syncLegacyEntitlement(account: IAccount): Promise<void> {
         .select("accountId")
         .lean();
 
+      /*
+       * Keep the ObjectIds. Stringifying them and filtering for the word
+       * "undefined" let `null` straight through — `Organization.accountId`
+       * is `default: null` in the schema, and 1,661 churches are sitting on
+       * exactly that — so `$in: ["null"]` threw a CastError, the outer catch
+       * swallowed it, and the whole mirror was skipped: the stale flag this
+       * function exists to clear stayed stale.
+       */
       const otherAccountIds = [...theirChurches, ...reachable]
-        .map((c: any) => String(c.accountId))
-        .filter((id) => id && id !== "undefined" && id !== String(account._id));
+        .map((c: any) => c.accountId)
+        .filter((id: any) => id && String(id) !== String(account._id));
 
       if (otherAccountIds.length > 0) {
+        // "Live" means ACTUALLY ENTITLING — paid, or inside a trial. A plain
+        // free account is not somebody's entitlement, and counting it meant
+        // an owner who held one (every owner of a second church holds one)
+        // kept a stale `active`/`converted` for good.
         const live = await Account.countDocuments({
           _id: { $in: otherAccountIds },
-          status: { $ne: "cancelled" },
+          $or: [
+            { planId: "standard", status: { $ne: "cancelled" } },
+            { status: "trialing", trialEndsAt: { $gt: new Date() } },
+          ],
         });
         // Somebody else's plan still covers them; this orphan does not get to
         // say otherwise.
